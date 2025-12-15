@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
-import MonacoEditor, { OnMount, loader } from '@monaco-editor/react'
+import MonacoEditor, { DiffEditor, OnMount, loader } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { X, Circle, AlertTriangle, AlertCircle, RefreshCw, FileCode, ChevronRight, Home } from 'lucide-react'
+import { X, Circle, AlertTriangle, AlertCircle, RefreshCw, FileCode, ChevronRight, Home, GitCommit } from 'lucide-react'
 import { useStore } from '../store'
 import { t } from '../i18n'
 import DiffViewer from './DiffViewer'
@@ -473,6 +473,36 @@ export default function Editor() {
       {/* Editor */}
       <div className="flex-1 relative">
         {activeFile && (
+          activeFile.originalContent ? (
+            <DiffEditor
+                height="100%"
+                language={activeLanguage}
+                original={activeFile.originalContent}
+                modified={activeFile.content}
+                theme="vs-dark"
+                onMount={(editor, monaco) => {
+                    // Hook up the modified editor to our existing refs so commands work
+                    const modifiedEditor = editor.getModifiedEditor()
+                    editorRef.current = modifiedEditor
+                    monacoRef.current = monaco
+                    
+                    // Listen for changes
+                    modifiedEditor.onDidChangeModelContent(() => {
+                        const value = modifiedEditor.getValue()
+                        updateFileContent(activeFile.path, value)
+                    })
+                }}
+                options={{
+                    fontSize: 13,
+                    fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                    fontLigatures: true,
+                    renderSideBySide: true,
+                    readOnly: false,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                }}
+            />
+          ) : (
           <MonacoEditor
             height="100%"
             language={activeLanguage}
@@ -530,6 +560,7 @@ export default function Editor() {
               inlayHints: { enabled: 'on' },
             }}
           />
+          )
         )}
       </div>
     </div>

@@ -92,39 +92,39 @@ export default function SettingsModal() {
   ]
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-editor-sidebar border border-editor-border rounded-2xl w-full max-w-3xl max-h-[85vh] shadow-2xl flex flex-col">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+      <div className="bg-background-secondary border border-border-subtle rounded-xl w-[850px] h-[650px] shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-editor-border flex-shrink-0">
-          <h2 className="text-lg font-semibold">{t('settings', localLanguage)}</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle flex-shrink-0 bg-background/50">
+          <h2 className="text-lg font-semibold text-text-primary">{t('settings', localLanguage)}</h2>
           <div className="flex items-center gap-4">
             {/* Language Selector */}
             <select
               value={localLanguage}
               onChange={(e) => setLocalLanguage(e.target.value as Language)}
-              className="bg-editor-bg border border-editor-border rounded-lg px-3 py-1.5 text-sm"
+              className="bg-surface border border-border-subtle rounded-lg px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent"
             >
               {LANGUAGES.map(lang => (
                 <option key={lang.id} value={lang.id}>{lang.name}</option>
               ))}
             </select>
-            <button onClick={() => setShowSettings(false)} className="p-2 rounded-lg hover:bg-editor-hover">
-              <X className="w-5 h-5 text-editor-text-muted" />
+            <button onClick={() => setShowSettings(false)} className="p-2 rounded-lg hover:bg-surface-hover transition-colors">
+              <X className="w-5 h-5 text-text-muted hover:text-text-primary" />
             </button>
           </div>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar */}
-          <div className="w-48 border-r border-editor-border p-2 flex-shrink-0">
+          <div className="w-48 border-r border-border-subtle p-2 flex-shrink-0 bg-background/30">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${
                   activeTab === tab.id
-                    ? 'bg-editor-accent/20 text-editor-accent'
-                    : 'text-editor-text-muted hover:bg-editor-hover hover:text-editor-text'
+                    ? 'bg-accent/10 text-accent font-medium shadow-sm'
+                    : 'text-text-muted hover:bg-surface-hover hover:text-text-primary'
                 }`}
               >
                 <tab.icon className="w-4 h-4" />
@@ -134,7 +134,7 @@ export default function SettingsModal() {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-6 bg-background custom-scrollbar">
             {activeTab === 'provider' && (
               <ProviderSettings
                 localConfig={localConfig}
@@ -171,14 +171,14 @@ export default function SettingsModal() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-editor-border flex-shrink-0">
-          <button onClick={() => setShowSettings(false)} className="px-4 py-2 rounded-xl text-editor-text-muted hover:text-editor-text">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-subtle flex-shrink-0 bg-background/50">
+          <button onClick={() => setShowSettings(false)} className="px-4 py-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors text-sm">
             {t('cancel', localLanguage)}
           </button>
           <button
             onClick={handleSave}
-            className={`flex items-center gap-2 px-6 py-2 rounded-xl font-medium transition-all ${
-              saved ? 'bg-green-500 text-white' : 'bg-editor-active hover:bg-blue-600 text-white'
+            className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition-all shadow-glow ${
+              saved ? 'bg-status-success text-white' : 'bg-accent hover:bg-accent-hover text-white'
             }`}
           >
             {saved ? <><Check className="w-4 h-4" />{t('saved', localLanguage)}</> : t('saveSettings', localLanguage)}
@@ -195,7 +195,7 @@ function ProviderSettings({
   localConfig, setLocalConfig, showApiKey, setShowApiKey, selectedProvider, language
 }: any) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-text-primary">
       <div>
         <h3 className="text-sm font-medium mb-3">{language === 'zh' ? '选择服务商' : 'Select Provider'}</h3>
         <div className="grid grid-cols-4 gap-2">
@@ -209,8 +209,8 @@ function ProviderSettings({
               })}
               className={`px-3 py-2.5 rounded-lg border text-sm transition-all ${
                 localConfig.provider === provider.id
-                  ? 'border-editor-accent bg-editor-accent/10 text-editor-accent'
-                  : 'border-editor-border hover:border-editor-text-muted text-editor-text-muted'
+                  ? 'border-accent bg-accent/10 text-accent shadow-sm'
+                  : 'border-border-subtle hover:border-text-muted text-text-muted hover:text-text-primary bg-surface'
               }`}
             >
               {provider.name}
@@ -226,7 +226,7 @@ function ProviderSettings({
           <select
             value={localConfig.model}
             onChange={(e) => setLocalConfig({ ...localConfig, model: e.target.value })}
-            className="w-full bg-editor-bg border border-editor-border rounded-lg px-4 py-2.5"
+            className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent"
           >
             {selectedProvider.models.map((model: string) => (
               <option key={model} value={model}>{model}</option>
@@ -238,7 +238,7 @@ function ProviderSettings({
             value={localConfig.model}
             onChange={(e) => setLocalConfig({ ...localConfig, model: e.target.value })}
             placeholder={language === 'zh' ? '输入模型名称' : 'Enter model name'}
-            className="w-full bg-editor-bg border border-editor-border rounded-lg px-4 py-2.5"
+            className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent"
           />
         )}
       </div>
@@ -252,17 +252,17 @@ function ProviderSettings({
             value={localConfig.apiKey}
             onChange={(e) => setLocalConfig({ ...localConfig, apiKey: e.target.value })}
             placeholder={`${selectedProvider?.name || 'Provider'} API Key`}
-            className="w-full bg-editor-bg border border-editor-border rounded-lg px-4 py-2.5 pr-12"
+            className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2.5 pr-12 text-sm text-text-primary focus:outline-none focus:border-accent"
           />
-          <button onClick={() => setShowApiKey(!showApiKey)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-editor-hover">
+          <button onClick={() => setShowApiKey(!showApiKey)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary">
             {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         </div>
         {localConfig.provider !== 'ollama' && (
-          <p className="text-xs text-editor-text-muted mt-2">
+          <p className="text-xs text-text-muted mt-2">
             {language === 'zh' ? '获取 API Key: ' : 'Get API Key: '}
             <a href={BUILTIN_PROVIDERS[localConfig.provider as BuiltinProviderName]?.apiKeyUrl || '#'}
-               target="_blank" className="text-editor-accent hover:underline">
+               target="_blank" className="text-accent hover:underline">
               {BUILTIN_PROVIDERS[localConfig.provider as BuiltinProviderName]?.apiKeyUrl || 'Provider website'}
             </a>
           </p>
@@ -277,9 +277,9 @@ function ProviderSettings({
           value={localConfig.baseUrl || ''}
           onChange={(e) => setLocalConfig({ ...localConfig, baseUrl: e.target.value || undefined })}
           placeholder={localConfig.provider === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com/v1'}
-          className="w-full bg-editor-bg border border-editor-border rounded-lg px-4 py-2.5"
+          className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent"
         />
-        <p className="text-xs text-editor-text-muted mt-2">
+        <p className="text-xs text-text-muted mt-2">
           {language === 'zh' ? '用于 OpenAI 兼容的 API 或本地模型' : 'For OpenAI-compatible APIs or local models'}
         </p>
       </div>
@@ -291,7 +291,7 @@ function ProviderSettings({
 // 编辑器设置组件
 function EditorSettings({ settings, setSettings, language }: any) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-text-primary">
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-sm font-medium mb-2 block">{language === 'zh' ? '字体大小' : 'Font Size'}</label>
@@ -300,7 +300,7 @@ function EditorSettings({ settings, setSettings, language }: any) {
             value={settings.fontSize}
             onChange={(e) => setSettings({ ...settings, fontSize: parseInt(e.target.value) || 14 })}
             min={10} max={24}
-            className="w-full bg-editor-bg border border-editor-border rounded-lg px-4 py-2"
+            className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary focus:outline-none focus:border-accent"
           />
         </div>
         <div>
@@ -308,7 +308,7 @@ function EditorSettings({ settings, setSettings, language }: any) {
           <select
             value={settings.tabSize}
             onChange={(e) => setSettings({ ...settings, tabSize: parseInt(e.target.value) })}
-            className="w-full bg-editor-bg border border-editor-border rounded-lg px-4 py-2"
+            className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary focus:outline-none focus:border-accent"
           >
             <option value={2}>2</option>
             <option value={4}>4</option>
@@ -323,7 +323,7 @@ function EditorSettings({ settings, setSettings, language }: any) {
           <select
             value={settings.wordWrap}
             onChange={(e) => setSettings({ ...settings, wordWrap: e.target.value })}
-            className="w-full bg-editor-bg border border-editor-border rounded-lg px-4 py-2"
+            className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary focus:outline-none focus:border-accent"
           >
             <option value="on">{language === 'zh' ? '开启' : 'On'}</option>
             <option value="off">{language === 'zh' ? '关闭' : 'Off'}</option>
@@ -335,7 +335,7 @@ function EditorSettings({ settings, setSettings, language }: any) {
           <select
             value={settings.lineNumbers}
             onChange={(e) => setSettings({ ...settings, lineNumbers: e.target.value })}
-            className="w-full bg-editor-bg border border-editor-border rounded-lg px-4 py-2"
+            className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary focus:outline-none focus:border-accent"
           >
             <option value="on">{language === 'zh' ? '显示' : 'On'}</option>
             <option value="off">{language === 'zh' ? '隐藏' : 'Off'}</option>
@@ -345,32 +345,32 @@ function EditorSettings({ settings, setSettings, language }: any) {
       </div>
 
       <div className="space-y-3">
-        <label className="flex items-center gap-3 p-3 rounded-lg border border-editor-border hover:border-editor-text-muted cursor-pointer">
+        <label className="flex items-center gap-3 p-3 rounded-lg border border-border-subtle hover:border-text-muted cursor-pointer bg-surface/50 transition-colors">
           <input
             type="checkbox"
             checked={settings.minimap}
             onChange={(e) => setSettings({ ...settings, minimap: e.target.checked })}
-            className="w-4 h-4 rounded"
+            className="w-4 h-4 rounded border-border-subtle text-accent focus:ring-accent"
           />
           <span className="text-sm">{language === 'zh' ? '显示小地图' : 'Show Minimap'}</span>
         </label>
 
-        <label className="flex items-center gap-3 p-3 rounded-lg border border-editor-border hover:border-editor-text-muted cursor-pointer">
+        <label className="flex items-center gap-3 p-3 rounded-lg border border-border-subtle hover:border-text-muted cursor-pointer bg-surface/50 transition-colors">
           <input
             type="checkbox"
             checked={settings.bracketPairColorization}
             onChange={(e) => setSettings({ ...settings, bracketPairColorization: e.target.checked })}
-            className="w-4 h-4 rounded"
+            className="w-4 h-4 rounded border-border-subtle text-accent focus:ring-accent"
           />
           <span className="text-sm">{language === 'zh' ? '括号配对着色' : 'Bracket Pair Colorization'}</span>
         </label>
 
-        <label className="flex items-center gap-3 p-3 rounded-lg border border-editor-border hover:border-editor-text-muted cursor-pointer">
+        <label className="flex items-center gap-3 p-3 rounded-lg border border-border-subtle hover:border-text-muted cursor-pointer bg-surface/50 transition-colors">
           <input
             type="checkbox"
             checked={settings.formatOnSave}
             onChange={(e) => setSettings({ ...settings, formatOnSave: e.target.checked })}
-            className="w-4 h-4 rounded"
+            className="w-4 h-4 rounded border-border-subtle text-accent focus:ring-accent"
           />
           <span className="text-sm">{language === 'zh' ? '保存时格式化' : 'Format on Save'}</span>
         </label>
@@ -381,7 +381,7 @@ function EditorSettings({ settings, setSettings, language }: any) {
         <select
           value={settings.autoSave}
           onChange={(e) => setSettings({ ...settings, autoSave: e.target.value })}
-          className="w-full bg-editor-bg border border-editor-border rounded-lg px-4 py-2"
+          className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary focus:outline-none focus:border-accent"
         >
           <option value="off">{language === 'zh' ? '关闭' : 'Off'}</option>
           <option value="afterDelay">{language === 'zh' ? '延迟后' : 'After Delay'}</option>
@@ -396,35 +396,35 @@ function EditorSettings({ settings, setSettings, language }: any) {
 // Agent 设置组件
 function AgentSettings({ autoApprove, setAutoApprove, aiInstructions, setAiInstructions, language }: any) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-text-primary">
       <div>
         <h3 className="text-sm font-medium mb-3">{language === 'zh' ? '自动审批' : 'Auto Approve'}</h3>
-        <p className="text-xs text-editor-text-muted mb-3">
+        <p className="text-xs text-text-muted mb-3">
           {language === 'zh' ? '启用后，工具调用将自动执行' : 'When enabled, tool calls execute automatically'}
         </p>
         <div className="space-y-2">
-          <label className="flex items-center gap-3 p-3 rounded-lg border border-editor-border hover:border-editor-text-muted cursor-pointer">
-            <input type="checkbox" checked={autoApprove.edits} onChange={(e) => setAutoApprove({ ...autoApprove, edits: e.target.checked })} className="w-4 h-4 rounded" />
+          <label className="flex items-center gap-3 p-3 rounded-lg border border-border-subtle hover:border-text-muted cursor-pointer bg-surface/50 transition-colors">
+            <input type="checkbox" checked={autoApprove.edits} onChange={(e) => setAutoApprove({ ...autoApprove, edits: e.target.checked })} className="w-4 h-4 rounded border-border-subtle text-accent focus:ring-accent" />
             <FileEdit className="w-4 h-4 text-blue-400" />
             <div className="flex-1">
               <span className="text-sm">{language === 'zh' ? '文件编辑' : 'File Edits'}</span>
-              <p className="text-xs text-editor-text-muted">{language === 'zh' ? '创建、修改文件' : 'Create, modify files'}</p>
+              <p className="text-xs text-text-muted">{language === 'zh' ? '创建、修改文件' : 'Create, modify files'}</p>
             </div>
           </label>
-          <label className="flex items-center gap-3 p-3 rounded-lg border border-editor-border hover:border-editor-text-muted cursor-pointer">
-            <input type="checkbox" checked={autoApprove.terminal} onChange={(e) => setAutoApprove({ ...autoApprove, terminal: e.target.checked })} className="w-4 h-4 rounded" />
+          <label className="flex items-center gap-3 p-3 rounded-lg border border-border-subtle hover:border-text-muted cursor-pointer bg-surface/50 transition-colors">
+            <input type="checkbox" checked={autoApprove.terminal} onChange={(e) => setAutoApprove({ ...autoApprove, terminal: e.target.checked })} className="w-4 h-4 rounded border-border-subtle text-accent focus:ring-accent" />
             <Terminal className="w-4 h-4 text-green-400" />
             <div className="flex-1">
               <span className="text-sm">{language === 'zh' ? '终端命令' : 'Terminal Commands'}</span>
-              <p className="text-xs text-editor-text-muted">{language === 'zh' ? '执行 shell 命令' : 'Execute shell commands'}</p>
+              <p className="text-xs text-text-muted">{language === 'zh' ? '执行 shell 命令' : 'Execute shell commands'}</p>
             </div>
           </label>
-          <label className="flex items-center gap-3 p-3 rounded-lg border border-editor-border hover:border-editor-text-muted cursor-pointer">
-            <input type="checkbox" checked={autoApprove.dangerous} onChange={(e) => setAutoApprove({ ...autoApprove, dangerous: e.target.checked })} className="w-4 h-4 rounded" />
+          <label className="flex items-center gap-3 p-3 rounded-lg border border-border-subtle hover:border-text-muted cursor-pointer bg-surface/50 transition-colors">
+            <input type="checkbox" checked={autoApprove.dangerous} onChange={(e) => setAutoApprove({ ...autoApprove, dangerous: e.target.checked })} className="w-4 h-4 rounded border-border-subtle text-accent focus:ring-accent" />
             <AlertTriangle className="w-4 h-4 text-red-400" />
             <div className="flex-1">
               <span className="text-sm">{language === 'zh' ? '危险操作' : 'Dangerous Operations'}</span>
-              <p className="text-xs text-editor-text-muted">{language === 'zh' ? '删除文件等' : 'Delete files, etc.'}</p>
+              <p className="text-xs text-text-muted">{language === 'zh' ? '删除文件等' : 'Delete files, etc.'}</p>
             </div>
           </label>
         </div>
@@ -432,14 +432,14 @@ function AgentSettings({ autoApprove, setAutoApprove, aiInstructions, setAiInstr
 
       <div>
         <h3 className="text-sm font-medium mb-3">{language === 'zh' ? 'AI 自定义指令' : 'AI Custom Instructions'}</h3>
-        <p className="text-xs text-editor-text-muted mb-3">
+        <p className="text-xs text-text-muted mb-3">
           {language === 'zh' ? '这些指令会添加到每次对话的系统提示词中' : 'These instructions are added to every conversation'}
         </p>
         <textarea
           value={aiInstructions}
           onChange={(e) => setAiInstructions(e.target.value)}
           placeholder={language === 'zh' ? '例如：使用中文回复，代码注释用英文...' : 'e.g., Always use TypeScript, prefer functional components...'}
-          className="w-full h-32 bg-editor-bg border border-editor-border rounded-lg px-4 py-3 text-sm resize-none"
+          className="w-full h-32 bg-surface border border-border-subtle rounded-lg px-4 py-3 text-sm text-text-primary focus:outline-none focus:border-accent resize-none"
         />
       </div>
     </div>
@@ -468,14 +468,14 @@ function KeybindingsSettings({ language }: { language: Language }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-editor-text-muted">
+      <p className="text-xs text-text-muted">
         {language === 'zh' ? '快捷键暂不支持自定义，以下是默认快捷键列表' : 'Keybindings are not customizable yet. Here are the defaults:'}
       </p>
       <div className="space-y-1">
         {shortcuts.map((s, i) => (
-          <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-editor-hover">
-            <span className="text-sm text-editor-text-muted">{s.action}</span>
-            <kbd className="px-2 py-1 text-xs font-mono bg-editor-bg border border-editor-border rounded">{s.keys}</kbd>
+          <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-surface-hover text-text-primary">
+            <span className="text-sm text-text-muted">{s.action}</span>
+            <kbd className="px-2 py-1 text-xs font-mono bg-surface border border-border-subtle rounded">{s.keys}</kbd>
           </div>
         ))}
       </div>

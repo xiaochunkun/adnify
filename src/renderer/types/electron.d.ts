@@ -74,6 +74,7 @@ export interface ElectronAPI {
     writeTerminal: (data: string) => Promise<void>
     resizeTerminal: (cols: number, rows: number) => Promise<void>
 	killTerminal: () => void
+    executeCommand: (command: string, cwd?: string) => Promise<{ output: string; errorOutput: string; exitCode: number }>
 	onTerminalData: (callback: (data: string) => void) => () => void
 }
 

@@ -170,6 +170,33 @@ class GitService {
 	}
 
 	/**
+	 * 获取 HEAD 版本的文件内容
+	 */
+	async getHeadFileContent(absolutePath: string): Promise<string | null> {
+		if (!this.workspacePath) return null
+        // Convert to relative path if needed, though git show HEAD:path expects relative from root
+        let relativePath = absolutePath
+        if (absolutePath.startsWith(this.workspacePath)) {
+             relativePath = absolutePath.slice(this.workspacePath.length)
+             if (relativePath.startsWith('/') || relativePath.startsWith('\\')) {
+                 relativePath = relativePath.slice(1)
+             }
+        }
+        // Normalize slashes
+        relativePath = relativePath.replace(/\\/g, '/')
+
+		try {
+			const result = await window.electronAPI.executeCommand(
+				`git show HEAD:"${relativePath}"`,
+				this.workspacePath
+			)
+			return result.exitCode === 0 ? result.output : ''
+		} catch {
+			return ''
+		}
+	}
+
+	/**
 	 * 暂存文件
 	 */
 	async stageFile(filePath: string): Promise<boolean> {

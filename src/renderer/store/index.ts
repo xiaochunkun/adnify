@@ -48,7 +48,7 @@ interface EditorState {
 	expandedFolders: Set<string>
 
 	// Editor
-	openFiles: { path: string; content: string; isDirty: boolean }[]
+	openFiles: { path: string; content: string; isDirty: boolean; originalContent?: string }[]
 	activeFilePath: string | null
 
 	// Chat
@@ -81,7 +81,7 @@ interface EditorState {
 	setWorkspacePath: (path: string | null) => void
 	setFiles: (files: FileItem[]) => void
 	toggleFolder: (path: string) => void
-	openFile: (path: string, content: string) => void
+	openFile: (path: string, content: string, originalContent?: string) => void
 	closeFile: (path: string) => void
 	setActiveFile: (path: string | null) => void
 	updateFileContent: (path: string, content: string) => void
@@ -169,13 +169,17 @@ export const useStore = create<EditorState>((set) => ({
 	setActiveSidePanel: (panel) => set({ activeSidePanel: panel }),
 
 	// Editor actions
-	openFile: (path, content) => set((state) => {
+	openFile: (path, content, originalContent) => set((state) => {
 		const existing = state.openFiles.find(f => f.path === path)
 		if (existing) {
-			return { activeFilePath: path }
+            // Update content/mode if reopening
+            const updatedFiles = state.openFiles.map(f => 
+                f.path === path ? { ...f, content, originalContent } : f
+            )
+			return { activeFilePath: path, openFiles: updatedFiles }
 		}
 		return {
-			openFiles: [...state.openFiles, { path, content, isDirty: false }],
+			openFiles: [...state.openFiles, { path, content, isDirty: false, originalContent }],
 			activeFilePath: path,
 		}
 	}),
