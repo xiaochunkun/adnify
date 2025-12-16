@@ -79,6 +79,7 @@ export class LLMService {
 				messages,
 				tools,
 				systemPrompt,
+				maxTokens: config.maxTokens,
 				signal: this.currentAbortController.signal,
 
 				onStream: (chunk) => {

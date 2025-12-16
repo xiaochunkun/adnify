@@ -25,3 +25,6 @@ out/
 /release
 /config.json
 /.adnify
+/system_prompts_leaks-main
+/void-main
+/package-lock.json

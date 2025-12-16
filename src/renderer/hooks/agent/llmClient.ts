@@ -7,11 +7,19 @@ import { getEditorConfig } from '../../config/editorConfig'
 
 const getRequestTimeout = () => getEditorConfig().performance.requestTimeoutMs
 
+// 消息内容类型（支持文本和图片）
+export type MessageContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64' | 'url'; media_type: string; data: string } }
+
+export type MessageContent = string | MessageContentPart[]
+
 export interface LLMMessageForSend {
   role: 'user' | 'assistant' | 'system' | 'tool'
-  content: string
+  content: MessageContent
   toolCallId?: string
   toolName?: string
+  rawParams?: Record<string, unknown>  // 工具调用的原始参数
 }
 
 export interface ToolDefinitionForSend {
@@ -107,7 +115,7 @@ export async function sendToLLM(params: SendToLLMParams): Promise<SendToLLMResul
     window.electronAPI
       .sendMessage({
         config: params.config,
-        messages: params.messages,
+        messages: params.messages as any, // 类型兼容，但 TS 无法推断
         tools: params.tools,
         systemPrompt: params.systemPrompt,
       })

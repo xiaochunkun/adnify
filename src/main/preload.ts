@@ -48,9 +48,16 @@ interface LLMResult {
 	}
 }
 
+// 消息内容类型（支持文本和图片）
+type MessageContentPart =
+	| { type: 'text'; text: string }
+	| { type: 'image'; source: { type: 'base64' | 'url'; media_type: string; data: string } }
+
+type MessageContent = string | MessageContentPart[]
+
 interface LLMMessage {
 	role: 'user' | 'assistant' | 'system' | 'tool'
-	content: string
+	content: MessageContent
 	toolCallId?: string
 	toolName?: string
 }

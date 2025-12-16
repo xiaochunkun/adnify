@@ -50,7 +50,7 @@ export class OpenAIProvider extends BaseProvider {
 	}
 
 	async chat(params: ChatParams): Promise<void> {
-		const { model, messages, tools, systemPrompt, signal, onStream, onToolCall, onComplete, onError } = params
+		const { model, messages, tools, systemPrompt, maxTokens, signal, onStream, onToolCall, onComplete, onError } = params
 
 		try {
 			this.log('info', 'Starting chat', { model, messageCount: messages.length })
@@ -62,25 +62,51 @@ export class OpenAIProvider extends BaseProvider {
 				openaiMessages.push({ role: 'system', content: systemPrompt })
 			}
 
-			for (const msg of messages) {
+			// 按照 void 的方式处理消息：遇到 tool 消息时，修改前一个 assistant 消息添加 tool_calls
+			for (let i = 0; i < messages.length; i++) {
+				const msg = messages[i]
+				
 				if (msg.role === 'tool') {
+					// 找到最近的 assistant 消息并添加 tool_calls
+					let foundAssistant = false
+					for (let j = openaiMessages.length - 1; j >= 0; j--) {
+						const prevMsg = openaiMessages[j]
+						if (prevMsg?.role === 'assistant' && msg.toolCallId && msg.toolName) {
+							// 如果还没有 tool_calls，初始化
+							if (!prevMsg.tool_calls) {
+								prevMsg.tool_calls = []
+							}
+							// 检查是否已经添加过这个 tool_call
+							const alreadyExists = prevMsg.tool_calls.some(tc => tc.id === msg.toolCallId)
+							if (!alreadyExists) {
+								// 添加 tool_call 到 assistant 消息
+								prevMsg.tool_calls.push({
+									id: msg.toolCallId,
+									type: 'function',
+									function: {
+										name: msg.toolName,
+										arguments: JSON.stringify(msg.rawParams || {}),
+									}
+								})
+							}
+							foundAssistant = true
+							break
+						}
+					}
+					
+					if (!foundAssistant) {
+						this.log('warn', 'No assistant message found for tool message, skipping', { 
+							toolCallId: msg.toolCallId,
+							toolName: msg.toolName 
+						})
+						continue
+					}
+					
+					// 添加 tool 消息
 					openaiMessages.push({
 						role: 'tool',
 						content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
 						tool_call_id: msg.toolCallId!,
-					})
-				} else if (msg.role === 'assistant' && msg.toolName) {
-					openaiMessages.push({
-						role: 'assistant',
-						content: null,
-						tool_calls: [{
-							id: msg.toolCallId!,
-							type: 'function',
-							function: {
-								name: msg.toolName,
-								arguments: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-							}
-						}]
 					})
 				} else if (msg.role === 'user') {
 					openaiMessages.push({
@@ -101,6 +127,8 @@ export class OpenAIProvider extends BaseProvider {
 				model,
 				messages: openaiMessages,
 				stream: true,
+				// 使用配置的 maxTokens，默认 8192（足够大多数工具调用）
+				max_tokens: maxTokens || 8192,
 			}
 
 			if (convertedTools && convertedTools.length > 0) {
@@ -153,6 +181,16 @@ export class OpenAIProvider extends BaseProvider {
 										toolCalls.push(finalToolCall)
 										onStream({ type: 'tool_call_end', toolCall: finalToolCall })
 										onToolCall(finalToolCall)
+									} else if (currentToolCall.name) {
+										// 解析失败
+										const errorToolCall: ToolCall = {
+											id: currentToolCall.id,
+											name: currentToolCall.name,
+											arguments: { _parseError: true }
+										}
+										toolCalls.push(errorToolCall)
+										onStream({ type: 'tool_call_end', toolCall: errorToolCall })
+										onToolCall(errorToolCall)
 									}
 								}
 								currentToolCall = {
@@ -208,6 +246,16 @@ export class OpenAIProvider extends BaseProvider {
 					toolCalls.push(finalToolCall)
                     onStream({ type: 'tool_call_end', toolCall: finalToolCall })
 					onToolCall(finalToolCall)
+				} else if (currentToolCall.id && currentToolCall.name) {
+					// 解析失败，发送带空参数的工具调用，让前端显示错误
+					const errorToolCall: ToolCall = {
+						id: currentToolCall.id,
+						name: currentToolCall.name,
+						arguments: { _parseError: true, _rawArgs: currentToolCall.argsString.slice(0, 500) }
+					}
+					toolCalls.push(errorToolCall)
+					onStream({ type: 'tool_call_end', toolCall: errorToolCall })
+					onToolCall(errorToolCall)
 				}
 			}
 
@@ -235,20 +283,280 @@ export class OpenAIProvider extends BaseProvider {
 	private finalizeToolCall(tc: { id?: string; name?: string; argsString: string }): ToolCall | null {
 		if (!tc.id || !tc.name) return null
 
+		let argsStr = tc.argsString || '{}'
+		
+		// 预处理：清理各种模型的特殊标记
+		argsStr = this.cleanToolCallArgs(argsStr)
+		
+		// 第一次尝试：直接解析
 		try {
-			const args = JSON.parse(tc.argsString || '{}')
-			return {
-				id: tc.id,
-				name: tc.name,
-				arguments: args
-			}
-		} catch (e) {
-			this.log('warn', 'Failed to parse tool call arguments', { argsString: tc.argsString })
-			return {
-				id: tc.id,
-				name: tc.name,
-				arguments: {}
+			const args = JSON.parse(argsStr)
+			return { id: tc.id, name: tc.name, arguments: args }
+		} catch (firstError) {
+			// 第二次尝试：修复 JSON 中的未转义换行符
+			try {
+				const fixed = this.fixUnescapedNewlines(argsStr)
+				const args = JSON.parse(fixed)
+				this.log('info', 'Fixed JSON with unescaped newlines in tool call')
+				return { id: tc.id, name: tc.name, arguments: args }
+			} catch (secondError) {
+				// 第三次尝试：修复 JSON 中的未转义特殊字符
+				try {
+					const fixed = this.fixMalformedJson(argsStr)
+					const args = JSON.parse(fixed)
+					this.log('info', 'Fixed malformed JSON in tool call')
+					return { id: tc.id, name: tc.name, arguments: args }
+				} catch (thirdError) {
+					const error = thirdError as Error
+					this.log('error', 'Failed to parse tool call arguments', { 
+						error: error.message,
+						argsLength: argsStr.length,
+						argsStart: argsStr.slice(0, 100),
+						argsEnd: argsStr.slice(-100)
+					})
+					return null
+				}
 			}
 		}
+	}
+
+	/**
+	 * 清理工具调用参数中的特殊标记
+	 * 
+	 * 背景：某些 OpenAI 兼容 API（如豆包、DeepSeek）在工具调用参数中
+	 * 会添加非标准的特殊标记，需要清理后才能解析 JSON。
+	 * 
+	 * 这些清理操作是安全的，不会影响标准 OpenAI API 的输出：
+	 * - 标准 OpenAI 输出的 JSON 不会有前导/尾随空白
+	 * - 标准 OpenAI 输出不会包含 <|...|> 格式的标记
+	 */
+	private cleanToolCallArgs(argsStr: string): string {
+		let cleaned = argsStr
+		
+		// 1. 去除开头的空白字符（安全：标准 JSON 不应有前导空白）
+		cleaned = cleaned.trimStart()
+		
+		// 2. 去除特殊标记（如豆包的 <|FunctionCallEnd|>）
+		// 这些标记只会出现在 JSON 外部，不会影响正常 JSON
+		cleaned = cleaned.replace(/<\|[^|]+\|>/g, '')
+		
+		// 3. 去除末尾空白
+		cleaned = cleaned.trimEnd()
+		
+		// 4. 如果清理后不是以 } 结尾，尝试找到最后一个完整的 JSON 对象
+		// 这处理了某些模型在 JSON 后添加额外字符的情况
+		if (cleaned.length > 0 && !cleaned.endsWith('}')) {
+			// 使用括号匹配找到完整的 JSON 对象
+			let braceCount = 0
+			let lastValidEnd = -1
+			let inString = false
+			let escaped = false
+			
+			for (let i = 0; i < cleaned.length; i++) {
+				const char = cleaned[i]
+				
+				if (escaped) {
+					escaped = false
+					continue
+				}
+				
+				if (char === '\\' && inString) {
+					escaped = true
+					continue
+				}
+				
+				if (char === '"') {
+					inString = !inString
+					continue
+				}
+				
+				if (!inString) {
+					if (char === '{') braceCount++
+					else if (char === '}') {
+						braceCount--
+						if (braceCount === 0) {
+							lastValidEnd = i
+						}
+					}
+				}
+			}
+			
+			if (lastValidEnd !== -1) {
+				cleaned = cleaned.slice(0, lastValidEnd + 1)
+			}
+		}
+		
+		return cleaned
+	}
+
+	/**
+	 * 修复 JSON 字符串中的未转义换行符和其他控制字符
+	 */
+	private fixUnescapedNewlines(argsStr: string): string {
+		let inString = false
+		let escaped = false
+		let result = ''
+		
+		for (let i = 0; i < argsStr.length; i++) {
+			const char = argsStr[i]
+			const charCode = char.charCodeAt(0)
+			
+			if (escaped) {
+				result += char
+				escaped = false
+				continue
+			}
+			
+			if (char === '\\') {
+				escaped = true
+				result += char
+				continue
+			}
+			
+			if (char === '"') {
+				inString = !inString
+				result += char
+				continue
+			}
+			
+			// 在字符串内部遇到控制字符，转义它们
+			if (inString) {
+				if (char === '\n') {
+					result += '\\n'
+					continue
+				}
+				if (char === '\r') {
+					result += '\\r'
+					continue
+				}
+				if (char === '\t') {
+					result += '\\t'
+					continue
+				}
+				// 其他控制字符 (0x00-0x1F)
+				if (charCode < 32) {
+					result += `\\u${charCode.toString(16).padStart(4, '0')}`
+					continue
+				}
+			}
+			
+			result += char
+		}
+		
+		return result
+	}
+
+	/**
+	 * 修复格式错误的 JSON
+	 * 处理 LLM 可能生成的各种格式问题
+	 */
+	private fixMalformedJson(argsStr: string): string {
+		// 策略：逐字符解析，修复常见问题
+		let result = ''
+		let inString = false
+		let escaped = false
+		let i = 0
+		
+		while (i < argsStr.length) {
+			const char = argsStr[i]
+			const charCode = char.charCodeAt(0)
+			
+			if (escaped) {
+				// 处理转义序列
+				if (char === 'n' || char === 'r' || char === 't' || char === '"' || 
+					char === '\\' || char === '/' || char === 'b' || char === 'f') {
+					result += char
+				} else if (char === 'u') {
+					// Unicode 转义
+					result += char
+				} else {
+					// 无效的转义序列，保留原样但可能需要修复
+					result += char
+				}
+				escaped = false
+				i++
+				continue
+			}
+			
+			if (char === '\\') {
+				escaped = true
+				result += char
+				i++
+				continue
+			}
+			
+			if (char === '"') {
+				inString = !inString
+				result += char
+				i++
+				continue
+			}
+			
+			if (inString) {
+				// 在字符串内部
+				if (char === '\n') {
+					result += '\\n'
+				} else if (char === '\r') {
+					result += '\\r'
+				} else if (char === '\t') {
+					result += '\\t'
+				} else if (charCode < 32) {
+					// 控制字符
+					result += `\\u${charCode.toString(16).padStart(4, '0')}`
+				} else {
+					result += char
+				}
+			} else {
+				// 在字符串外部
+				result += char
+			}
+			
+			i++
+		}
+		
+		// 如果字符串没有正确闭合，尝试修复
+		if (inString) {
+			result += '"'
+		}
+		
+		// 确保 JSON 对象正确闭合
+		let braceCount = 0
+		let bracketCount = 0
+		inString = false
+		escaped = false
+		
+		for (let j = 0; j < result.length; j++) {
+			const c = result[j]
+			if (escaped) {
+				escaped = false
+				continue
+			}
+			if (c === '\\') {
+				escaped = true
+				continue
+			}
+			if (c === '"') {
+				inString = !inString
+				continue
+			}
+			if (!inString) {
+				if (c === '{') braceCount++
+				else if (c === '}') braceCount--
+				else if (c === '[') bracketCount++
+				else if (c === ']') bracketCount--
+			}
+		}
+		
+		// 添加缺失的闭合括号
+		while (bracketCount > 0) {
+			result += ']'
+			bracketCount--
+		}
+		while (braceCount > 0) {
+			result += '}'
+			braceCount--
+		}
+		
+		return result
 	}
 }

@@ -13,6 +13,7 @@ export interface LLMConfig {
   apiKey: string
   baseUrl?: string
   timeout?: number
+  maxTokens?: number
 }
 
 export interface AutoApproveSettings {
@@ -45,6 +46,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice, [], [], SettingsSl
     provider: 'openai',
     model: 'gpt-4o',
     apiKey: '',
+    maxTokens: 16384, // 默认 16K，确保工具调用有足够空间
   },
   providerConfigs: {},
   showSettings: false,

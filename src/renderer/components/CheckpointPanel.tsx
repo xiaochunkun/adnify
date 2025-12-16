@@ -6,6 +6,7 @@
 import { useState, useCallback, memo } from 'react'
 import { History, RotateCcw, ChevronDown, ChevronUp, FileText, MessageSquare, Wrench, X } from 'lucide-react'
 import { useStore } from '../store'
+import { useChatThreads } from '../hooks/useChatThread'
 import { Checkpoint } from '../agent/toolTypes'
 import { checkpointService } from '../agent/checkpointService'
 import { getFileName } from '../utils/pathUtils'
@@ -103,7 +104,8 @@ interface CheckpointPanelProps {
 }
 
 export default function CheckpointPanel({ onClose }: CheckpointPanelProps) {
-  const { checkpoints, currentCheckpointIdx, addMessage, setCurrentCheckpointIdx } = useStore()
+  const { checkpoints, currentCheckpointIdx, setCurrentCheckpointIdx } = useStore()
+  const { addAssistantMessage } = useChatThreads()
   const [isRollingBack, setIsRollingBack] = useState(false)
 
   const handleRollback = useCallback(async (checkpoint: Checkpoint) => {
@@ -114,10 +116,9 @@ export default function CheckpointPanel({ onClose }: CheckpointPanelProps) {
       const result = await checkpointService.rollbackTo(checkpoint.id)
 
       if (result.success) {
-        addMessage({
-          role: 'assistant',
-          content: `✅ Rolled back to checkpoint: "${checkpoint.description}"\nRestored ${result.restoredFiles.length} file(s).`,
-        })
+        addAssistantMessage(
+          `✅ Rolled back to checkpoint: "${checkpoint.description}"\nRestored ${result.restoredFiles.length} file(s).`
+        )
 
         // 更新当前检查点索引
         const idx = checkpoints.findIndex(c => c.id === checkpoint.id)
@@ -125,21 +126,19 @@ export default function CheckpointPanel({ onClose }: CheckpointPanelProps) {
           setCurrentCheckpointIdx(idx)
         }
       } else {
-        addMessage({
-          role: 'assistant',
-          content: `⚠️ Rollback completed with errors:\n${result.errors.join('\n')}`,
-        })
+        addAssistantMessage(
+          `⚠️ Rollback completed with errors:\n${result.errors.join('\n')}`
+        )
       }
     } catch (error: unknown) {
       const err = error as { message?: string }
-      addMessage({
-        role: 'assistant',
-        content: `❌ Rollback failed: ${err.message}`,
-      })
+      addAssistantMessage(
+        `❌ Rollback failed: ${err.message}`
+      )
     } finally {
       setIsRollingBack(false)
     }
-  }, [isRollingBack, checkpoints, addMessage, setCurrentCheckpointIdx])
+  }, [isRollingBack, checkpoints, addAssistantMessage, setCurrentCheckpointIdx])
 
   if (checkpoints.length === 0) {
     return (

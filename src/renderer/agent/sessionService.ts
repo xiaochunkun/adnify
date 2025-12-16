@@ -1,15 +1,18 @@
 /**
  * 会话管理服务
  * 保存和加载对话历史
+ * 使用 chatThreadService 的消息格式
  */
 
-import { Message, ChatMode, LLMConfig } from '../store'
+import { ChatMode, LLMConfig } from '../store'
+import { ChatMessage, ChatThread, getMessageText as getMsgText, isUserMessage } from './types/chatTypes'
+import { chatThreadService } from './chatThreadService'
 
 export interface ChatSession {
 	id: string
 	name: string
 	mode: ChatMode
-	messages: Message[]
+	messages: ChatMessage[]
 	createdAt: number
 	updatedAt: number
 	config?: Partial<LLMConfig>
@@ -31,21 +34,23 @@ const MAX_SESSIONS = 50
 /**
  * 提取消息文本内容
  */
-function getMessageText(content: Message['content']): string {
-	if (typeof content === 'string') return content
-	return content
-		.filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-		.map(c => c.text)
-		.join('')
+function getMessageText(msg: ChatMessage): string {
+	if (isUserMessage(msg)) {
+		return getMsgText(msg.content)
+	}
+	if ('content' in msg && typeof msg.content === 'string') {
+		return msg.content
+	}
+	return ''
 }
 
 /**
  * 生成会话名称
  */
-function generateSessionName(messages: Message[]): string {
-	const firstUserMessage = messages.find(m => m.role === 'user')
+function generateSessionName(messages: ChatMessage[]): string {
+	const firstUserMessage = messages.find(m => isUserMessage(m))
 	if (firstUserMessage) {
-		const text = getMessageText(firstUserMessage.content)
+		const text = getMessageText(firstUserMessage)
 		const preview = text.slice(0, 50)
 		return preview.length < text.length ? preview + '...' : preview
 	}
@@ -55,10 +60,10 @@ function generateSessionName(messages: Message[]): string {
 /**
  * 获取消息预览
  */
-function getMessagePreview(messages: Message[]): string {
-	const firstUserMessage = messages.find(m => m.role === 'user')
+function getMessagePreview(messages: ChatMessage[]): string {
+	const firstUserMessage = messages.find(m => isUserMessage(m))
 	if (firstUserMessage) {
-		return getMessageText(firstUserMessage.content).slice(0, 100)
+		return getMessageText(firstUserMessage).slice(0, 100)
 	}
 	return ''
 }
@@ -103,10 +108,76 @@ class SessionService {
 	}
 
 	/**
-	 * 保存会话
+	 * 保存当前线程为会话
+	 */
+	async saveCurrentThread(
+		mode: ChatMode,
+		existingId?: string,
+		config?: Partial<LLMConfig>
+	): Promise<string> {
+		const thread = chatThreadService.getCurrentThread()
+		return this.saveThread(thread, mode, existingId, config)
+	}
+
+	/**
+	 * 保存指定线程为会话
+	 */
+	async saveThread(
+		thread: ChatThread,
+		mode: ChatMode,
+		existingId?: string,
+		config?: Partial<LLMConfig>
+	): Promise<string> {
+		const data = await window.electronAPI.getSetting(SESSIONS_KEY)
+		let sessions: ChatSession[] = data && typeof data === 'string' ? JSON.parse(data) : []
+		
+		const now = Date.now()
+		const messages = thread.messages
+		
+		if (existingId) {
+			// 更新现有会话
+			const idx = sessions.findIndex(s => s.id === existingId)
+			if (idx >= 0) {
+				sessions[idx] = {
+					...sessions[idx],
+					messages,
+					mode,
+					updatedAt: now,
+					config,
+				}
+				await window.electronAPI.setSetting(SESSIONS_KEY, JSON.stringify(sessions))
+				return existingId
+			}
+		}
+		
+		// 创建新会话
+		const newSession: ChatSession = {
+			id: crypto.randomUUID(),
+			name: generateSessionName(messages),
+			mode,
+			messages,
+			createdAt: now,
+			updatedAt: now,
+			config,
+		}
+		
+		sessions.unshift(newSession)
+		
+		// 限制会话数量
+		if (sessions.length > MAX_SESSIONS) {
+			sessions = sessions.slice(0, MAX_SESSIONS)
+		}
+		
+		await window.electronAPI.setSetting(SESSIONS_KEY, JSON.stringify(sessions))
+		return newSession.id
+	}
+
+	/**
+	 * 保存会话（兼容旧接口）
+	 * @deprecated 使用 saveCurrentThread 或 saveThread
 	 */
 	async saveSession(
-		messages: Message[],
+		messages: ChatMessage[],
 		mode: ChatMode,
 		existingId?: string,
 		config?: Partial<LLMConfig>
@@ -242,6 +313,22 @@ class SessionService {
 		} catch {
 			return null
 		}
+	}
+
+	/**
+	 * 加载会话到当前线程
+	 */
+	async loadSessionToThread(sessionId: string): Promise<boolean> {
+		const session = await this.getSession(sessionId)
+		if (!session) return false
+
+		// 创建新线程
+		chatThreadService.openNewThread()
+		
+		// 加载消息到线程
+		chatThreadService.loadMessages(session.messages)
+
+		return true
 	}
 }
 

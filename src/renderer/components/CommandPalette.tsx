@@ -10,6 +10,7 @@ import {
   X, Zap, Keyboard
 } from 'lucide-react'
 import { useStore } from '../store'
+import { useChatThreads } from '../hooks/useChatThread'
 import { t } from '../i18n'
 
 interface Command {
@@ -68,13 +69,14 @@ export default function CommandPalette({ onClose, onShowKeyboardShortcuts }: Com
     setTerminalVisible,
     terminalVisible,
     setChatMode,
-    clearMessages,
     clearCheckpoints,
     workspacePath,
     activeFilePath,
     setInputPrompt,
     language,
   } = useStore()
+  
+  const { clearMessages } = useChatThreads()
 
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)

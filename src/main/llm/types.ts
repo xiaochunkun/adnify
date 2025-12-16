@@ -37,6 +37,7 @@ export interface LLMMessage {
 	content: MessageContent
 	toolCallId?: string
 	toolName?: string
+	rawParams?: Record<string, unknown>  // 工具调用的原始参数
 }
 
 export interface ToolDefinition {
@@ -76,6 +77,7 @@ export interface ChatParams {
 	messages: LLMMessage[]
 	tools?: ToolDefinition[]
 	systemPrompt?: string
+	maxTokens?: number
 	signal?: AbortSignal
 	// 回调函数
 	onStream: (chunk: StreamChunk) => void

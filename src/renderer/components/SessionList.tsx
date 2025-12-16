@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { MessageSquare, Trash2, Download, Upload, Plus, X, Clock, Bot, Zap } from 'lucide-react'
 import { sessionService, SessionSummary } from '../agent/sessionService'
 import { useStore } from '../store'
+import { useChatThreads } from '../hooks/useChatThread'
 import { t } from '../i18n'
 
 interface SessionListProps {
@@ -17,7 +18,8 @@ interface SessionListProps {
 export default function SessionList({ onClose, onLoadSession }: SessionListProps) {
 	const [sessions, setSessions] = useState<SessionSummary[]>([])
 	const [loading, setLoading] = useState(true)
-	const { messages, chatMode, currentSessionId, setCurrentSessionId, clearMessages, language } = useStore()
+	const { chatMode, currentSessionId, setCurrentSessionId, language } = useStore()
+	const { messages, openNewThread } = useChatThreads()
 
 	useEffect(() => {
 		loadSessions()
@@ -33,14 +35,15 @@ export default function SessionList({ onClose, onLoadSession }: SessionListProps
 	const handleSaveCurrentSession = async () => {
 		if (messages.length === 0) return
 		
-		const id = await sessionService.saveSession(messages, chatMode, currentSessionId || undefined)
+		const id = await sessionService.saveCurrentThread(chatMode, currentSessionId || undefined)
 		setCurrentSessionId(id)
 		await loadSessions()
 	}
 
 	const handleLoadSession = async (id: string) => {
-		const session = await sessionService.getSession(id)
-		if (session) {
+		const success = await sessionService.loadSessionToThread(id)
+		if (success) {
+			setCurrentSessionId(id)
 			onLoadSession(id)
 		}
 	}
@@ -57,7 +60,7 @@ export default function SessionList({ onClose, onLoadSession }: SessionListProps
 	}
 
 	const handleNewSession = () => {
-		clearMessages()
+		openNewThread()
 		setCurrentSessionId(null)
 		onClose()
 	}

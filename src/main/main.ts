@@ -542,7 +542,8 @@ ipcMain.handle('file:mkdir', async (_, dirPath: string) => {
     try {
         await fsPromises.mkdir(dirPath, { recursive: true })
         return true
-    } catch {
+    } catch (e) {
+        console.error('[File] mkdir error:', dirPath, e)
         return false
     }
 })

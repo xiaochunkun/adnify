@@ -186,7 +186,8 @@ export function buildContextString(
 	semanticResults?: FileContext[],
 	symbolsContext?: string,
 	gitContext?: string,
-	terminalContext?: string
+	terminalContext?: string,
+	stagingFilesContext?: string  // 新增
 ): string {
     let context = '---\n**Context:**\n\n'
     
@@ -194,6 +195,11 @@ export function buildContextString(
         context += projectStructure + '\n\n'
     }
     
+	// Staging files（拖放的文件）
+	if (stagingFilesContext) {
+		context += stagingFilesContext + '\n\n'
+	}
+	
 	// 语义搜索结果
 	if (semanticResults && semanticResults.length > 0) {
 		context += '**Relevant Code (from codebase search):**\n\n'
@@ -379,6 +385,13 @@ export function getTerminalContext(): string {
 	return `**Terminal Output:**\n\`\`\`\n${output}\n\`\`\``
 }
 
+// Staging Selection 类型（从 chatTypes 导入会造成循环依赖，这里简化定义）
+interface StagingSelection {
+	type: 'File' | 'CodeSelection' | 'Folder'
+	uri: string
+	range?: [number, number]
+}
+
 /**
  * 智能收集上下文
  */
@@ -389,6 +402,7 @@ export async function collectContext(
 		includeOpenFiles?: boolean
         includeProjectStructure?: boolean
 		maxChars?: number
+		stagingSelections?: StagingSelection[]  // 添加 staging selections 支持
 	}
 ): Promise<{
 	files: FileContext[]
@@ -397,6 +411,7 @@ export async function collectContext(
 	symbolsContext?: string
 	gitContext?: string
 	terminalContext?: string
+	stagingFilesContext?: string  // 新增：staging files 上下文
 	cleanedMessage: string
 	totalChars: number
 	stats: ContextStats
@@ -523,11 +538,44 @@ export async function collectContext(
 	// 按相关性排序
 	files.sort((a, b) => b.relevance - a.relevance)
 	
+	// 9. 处理 staging selections（拖放的文件）
+	let stagingFilesContext = ''
+	const stagingSelections = options?.stagingSelections || []
+	if (stagingSelections.length > 0) {
+		const stagingParts: string[] = []
+		for (const selection of stagingSelections) {
+			try {
+				const content = await window.electronAPI.readFile(selection.uri)
+				if (content !== null) {
+					if (selection.type === 'CodeSelection' && selection.range) {
+						// 只取选中的行
+						const lines = content.split('\n')
+						const selectedLines = lines.slice(selection.range[0] - 1, selection.range[1])
+						stagingParts.push(
+							`<file path="${selection.uri}" lines="${selection.range[0]}-${selection.range[1]}">\n${selectedLines.join('\n')}\n</file>`
+						)
+						totalChars += selectedLines.join('\n').length + 100
+					} else {
+						stagingParts.push(
+							`<file path="${selection.uri}">\n${content}\n</file>`
+						)
+						totalChars += content.length + 100
+					}
+				}
+			} catch (e) {
+				console.warn(`[Context] Failed to read staging selection: ${selection.uri}`, e)
+			}
+		}
+		if (stagingParts.length > 0) {
+			stagingFilesContext = '<attached_files>\n' + stagingParts.join('\n\n') + '\n</attached_files>'
+		}
+	}
+	
 	// 构建统计信息
 	const stats: ContextStats = {
 		totalChars,
 		maxChars: limits.maxContextChars,
-		fileCount: files.length,
+		fileCount: files.length + stagingSelections.length,
 		maxFiles: limits.maxFiles,
 		messageCount: 0, // 由 useAgent 填充
 		maxMessages: getEditorConfig().ai.maxHistoryMessages,
@@ -535,7 +583,7 @@ export async function collectContext(
 		terminalChars,
 	}
 	
-	return { files, semanticResults, projectStructure, symbolsContext, gitContext, terminalContext, cleanedMessage, totalChars, stats }
+	return { files, semanticResults, projectStructure, symbolsContext, gitContext, terminalContext, stagingFilesContext, cleanedMessage, totalChars, stats }
 }
 
 /**
