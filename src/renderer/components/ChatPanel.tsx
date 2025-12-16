@@ -38,22 +38,29 @@ function ChatMessage({ message }: { message: Message }) {
 
   return (
     <div className={`
-        group flex gap-4 py-6 px-5 transition-colors border-b border-border-subtle/20
-        ${isUser ? 'bg-transparent' : 'bg-transparent'}
-    `}> {/* Avatar */}
+        w-full flex gap-3 px-4 py-4 animate-slide-up
+        ${isUser ? 'flex-row-reverse' : 'flex-row'}
+    `}> 
+      {/* Avatar */}
       <div className={`
-        w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-medium shadow-sm
+        w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium shadow-sm border
         ${isUser 
-            ? 'bg-surface text-text-secondary border border-border-subtle' 
-            : 'bg-gradient-to-br from-accent to-purple-600 text-white shadow-glow border-none'}
-      `}> {isUser ? 'You' : <Sparkles className="w-4 h-4" />} {/* Content */}
+            ? 'bg-surface text-text-secondary border-border-subtle' 
+            : 'bg-gradient-to-br from-accent to-purple-600 text-white border-transparent shadow-glow'}
+      `}> {isUser ? 'You' : <Sparkles className="w-4 h-4" />} 
       </div>
 
-      <div className="flex-1 min-w-0"> {/* Image Grid */}
+      {/* Message Bubble */}
+      <div className={`
+        flex-1 min-w-0 max-w-[85%] rounded-2xl p-4 shadow-sm border
+        ${isUser 
+            ? 'bg-surface-active/50 border-border-subtle rounded-tr-sm' 
+            : 'bg-surface border-border-subtle rounded-tl-sm'}
+      `}>
             {images.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3">
                     {images.map((img: any, i) => (
-                        <div key={i} className="rounded-lg overflow-hidden border border-border-subtle max-w-[240px]">
+                        <div key={i} className="rounded-lg overflow-hidden border border-border-subtle max-w-full">
                             <img 
                                 src={img.source.type === 'base64' ? `data:${img.source.media_type};base64,${img.source.data}` : img.source.data} 
                                 alt="User upload" 
@@ -65,7 +72,7 @@ function ChatMessage({ message }: { message: Message }) {
             )}
 
             <ReactMarkdown
-              className="prose prose-invert prose-sm max-w-none break-words"
+              className="prose prose-invert prose-sm max-w-none break-words leading-relaxed"
               components={{
                 code({ className, children, node, ...props }) {
                   const match = /language-(\w+)/.exec(className || '')
@@ -74,11 +81,11 @@ function ChatMessage({ message }: { message: Message }) {
                   const isInline = !isCodeBlock && !content.includes('\n')
                   
                   return isInline ? (
-                    <code className="bg-surface-active/50 border border-white/5 px-1.5 py-0.5 rounded text-accent font-mono text-xs" {...props}>
+                    <code className="bg-black/30 border border-white/5 px-1.5 py-0.5 rounded text-accent font-mono text-xs" {...props}>
                       {children}
                     </code>
                   ) : (
-                    <div className="relative group/code my-4 rounded-lg overflow-hidden border border-border-subtle bg-[#0d0d0d] shadow-sm">
+                    <div className="relative group/code my-3 rounded-lg overflow-hidden border border-border-subtle bg-[#0d0d0d] shadow-sm">
                         <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 border-b border-white/5">
                             <span className="text-[10px] text-text-muted font-mono">{match?.[1] || 'code'}</span>
                         </div>
@@ -96,10 +103,10 @@ function ChatMessage({ message }: { message: Message }) {
                     </div>
                   )
                 },
-                p: ({children}) => <p className="mb-3 last:mb-0">{children}</p>,
-                ul: ({children}) => <ul className="list-disc pl-4 mb-3 space-y-1 marker:text-text-muted">{children}</ul>,
-                ol: ({children}) => <ol className="list-decimal pl-4 mb-3 space-y-1 marker:text-text-muted">{children}</ol>,
-                a: ({href, children}) => <a href={href} target="_blank" className="text-accent hover:underline">{children}</a>,
+                p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                ul: ({children}) => <ul className="list-disc pl-4 mb-2 space-y-1 marker:text-text-muted">{children}</ul>,
+                ol: ({children}) => <ol className="list-decimal pl-4 mb-2 space-y-1 marker:text-text-muted">{children}</ol>,
+                a: ({href, children}) => <a href={href} target="_blank" className="text-accent hover:underline font-medium transition-colors">{children}</a>,
                 blockquote: ({children}) => <blockquote className="border-l-2 border-accent/50 pl-4 py-1 my-2 bg-accent/5 italic text-text-muted rounded-r">{children}</blockquote>
               }}
             >
@@ -474,15 +481,18 @@ export default function ChatPanel() {
         )}
 
         {messages.length === 0 && hasApiKey && (
-          <div className="h-full flex flex-col items-center justify-center opacity-20 select-none pointer-events-none gap-4">
-             <div className="w-16 h-16 rounded-2xl bg-surface flex items-center justify-center">
-                <Sparkles className="w-8 h-8 text-text-muted" />
+          <div className="h-full flex flex-col items-center justify-center opacity-40 select-none pointer-events-none gap-6 animate-fade-in">
+             <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-surface to-surface-active border border-border-subtle flex items-center justify-center shadow-2xl">
+                <Sparkles className="w-10 h-10 text-accent/80" />
              </div>
-             <p className="text-sm font-medium">How can I help you code today?</p>
+             <div className="text-center">
+                 <p className="text-lg font-semibold text-text-primary mb-1">Adnify Agent</p>
+                 <p className="text-sm text-text-muted">How can I help you build today?</p>
+             </div>
           </div>
         )}
 
-        <div className="divide-y divide-border-subtle/20">
+        <div className="flex flex-col gap-2 pb-4 px-2">
             {messages.map((message) => (
             <ChatMessage key={message.id} message={message} />
             ))}

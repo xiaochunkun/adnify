@@ -1,8 +1,30 @@
-import { GitBranch, AlertCircle, CheckCircle, XCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { GitBranch, AlertCircle, XCircle, Database, Loader2 } from 'lucide-react'
 import { useStore } from '../store'
+import { IndexStatus } from '../types/electron'
 
 export default function StatusBar() {
-  const { language, activeFilePath, isStreaming } = useStore()
+  const { activeFilePath, isStreaming, workspacePath, setShowSettings } = useStore()
+  const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
+
+  // 监听索引状态
+  useEffect(() => {
+    if (!workspacePath) {
+      setIndexStatus(null)
+      return
+    }
+
+    // 获取初始状态
+    window.electronAPI.indexStatus(workspacePath).then(setIndexStatus)
+
+    // 监听进度更新
+    const unsubscribe = window.electronAPI.onIndexProgress(setIndexStatus)
+    return unsubscribe
+  }, [workspacePath])
+
+  const handleIndexClick = () => {
+    setShowSettings(true)
+  }
 
   return (
     <div className="h-6 bg-background-secondary border-t border-border-subtle flex items-center justify-between px-3 text-[11px] select-none text-text-muted">
@@ -12,7 +34,7 @@ export default function StatusBar() {
           <span>main</span>
         </button>
         
-        {/* Diagnostics Placeholder */}
+        {/* Diagnostics */}
         <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 hover:text-text-primary transition-colors cursor-pointer">
                 <XCircle className="w-3 h-3" />
@@ -23,6 +45,34 @@ export default function StatusBar() {
                 <span>0</span>
             </div>
         </div>
+
+        {/* 索引状态 */}
+        {workspacePath && (
+          <button 
+            onClick={handleIndexClick}
+            className="flex items-center gap-1.5 hover:text-text-primary transition-colors"
+            title="Codebase Index"
+          >
+            {indexStatus?.isIndexing ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin text-accent" />
+                <span className="text-accent">
+                  Indexing {indexStatus.indexedFiles}/{indexStatus.totalFiles}
+                </span>
+              </>
+            ) : indexStatus?.totalChunks ? (
+              <>
+                <Database className="w-3 h-3 text-green-400" />
+                <span>{indexStatus.totalChunks} chunks</span>
+              </>
+            ) : (
+              <>
+                <Database className="w-3 h-3 opacity-50" />
+                <span className="opacity-50">Not indexed</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-4">

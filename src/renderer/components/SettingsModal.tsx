@@ -645,15 +645,50 @@ function KeybindingsSettings({ language }: { language: Language }) {
 
 // 系统设置组件
 function SystemSettings({ language }: { language: Language }) {
+  const { workspacePath } = useStore()
   const [dataPath, setDataPath] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  
+  // Embedding 配置状态
+  const [embeddingProviders, setEmbeddingProviders] = useState<{id: string; name: string; description: string; free: boolean}[]>([])
+  const [embeddingConfig, setEmbeddingConfig] = useState<{
+    provider: 'jina' | 'voyage' | 'openai' | 'cohere' | 'huggingface' | 'ollama'
+    apiKey: string
+    model: string
+    baseUrl: string
+  }>({
+    provider: 'jina',
+    apiKey: '',
+    model: '',
+    baseUrl: ''
+  })
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<{success: boolean; latency?: number; error?: string} | null>(null)
+  const [indexStatus, setIndexStatus] = useState<{isIndexing: boolean; totalFiles: number; indexedFiles: number; totalChunks: number} | null>(null)
 
   useEffect(() => {
     window.electronAPI.getDataPath().then(setDataPath)
+    // 加载 Embedding 提供商列表
+    window.electronAPI.indexGetProviders().then(setEmbeddingProviders)
+    // 加载保存的 Embedding 配置
+    window.electronAPI.getSetting('embeddingConfig').then(config => {
+      if (config) setEmbeddingConfig(config as typeof embeddingConfig)
+    })
   }, [])
 
+  // 监听索引进度
+  useEffect(() => {
+    if (!workspacePath) return
+    
+    // 获取初始状态
+    window.electronAPI.indexStatus(workspacePath).then(setIndexStatus)
+    
+    // 监听进度更新
+    const unsubscribe = window.electronAPI.onIndexProgress(setIndexStatus)
+    return unsubscribe
+  }, [workspacePath])
+
   const handleChangePath = async () => {
-    // 复用 openFolder API 来选择目录
     const newPath = await window.electronAPI.openFolder()
     if (newPath && newPath !== dataPath) {
         if (confirm(language === 'zh' 
@@ -672,8 +707,51 @@ function SystemSettings({ language }: { language: Language }) {
     }
   }
 
+  const handleTestConnection = async () => {
+    if (!workspacePath) return
+    setTestingConnection(true)
+    setConnectionStatus(null)
+    
+    // 先更新配置
+    await window.electronAPI.indexUpdateEmbeddingConfig(workspacePath, embeddingConfig)
+    // 测试连接
+    const result = await window.electronAPI.indexTestConnection(workspacePath)
+    setConnectionStatus(result)
+    setTestingConnection(false)
+  }
+
+  const handleSaveEmbeddingConfig = async () => {
+    await window.electronAPI.setSetting('embeddingConfig', embeddingConfig)
+    if (workspacePath) {
+      await window.electronAPI.indexUpdateEmbeddingConfig(workspacePath, embeddingConfig)
+    }
+  }
+
+  const handleStartIndexing = async () => {
+    if (!workspacePath) {
+      alert(language === 'zh' ? '请先打开一个工作区' : 'Please open a workspace first')
+      return
+    }
+    
+    // 保存配置
+    await handleSaveEmbeddingConfig()
+    // 开始索引
+    await window.electronAPI.indexStart(workspacePath)
+  }
+
+  const handleClearIndex = async () => {
+    if (!workspacePath) return
+    if (confirm(language === 'zh' ? '确定要清空索引吗？' : 'Are you sure you want to clear the index?')) {
+      await window.electronAPI.indexClear(workspacePath)
+      setIndexStatus({ isIndexing: false, totalFiles: 0, indexedFiles: 0, totalChunks: 0 })
+    }
+  }
+
+  const selectedProviderInfo = embeddingProviders.find(p => p.id === embeddingConfig.provider)
+
   return (
     <div className="space-y-6 text-text-primary">
+      {/* 数据存储 */}
       <div>
         <h3 className="text-sm font-medium mb-3">{language === 'zh' ? '数据存储' : 'Data Storage'}</h3>
         <p className="text-xs text-text-muted mb-3">
@@ -696,11 +774,148 @@ function SystemSettings({ language }: { language: Language }) {
                     : (language === 'zh' ? '更改目录' : 'Change Directory')}
             </button>
         </div>
-        <p className="text-xs text-text-muted mt-2">
-            {language === 'zh' 
-                ? '当前配置将自动迁移到新目录。' 
-                : 'Current configuration will be automatically migrated to the new directory.'}
+      </div>
+
+      {/* 代码库索引 */}
+      <div className="pt-4 border-t border-border-subtle">
+        <h3 className="text-sm font-medium mb-3">{language === 'zh' ? '代码库索引 (Codebase Index)' : 'Codebase Index'}</h3>
+        <p className="text-xs text-text-muted mb-4">
+          {language === 'zh' 
+            ? '索引你的代码库以启用 @codebase 语义搜索功能。' 
+            : 'Index your codebase to enable @codebase semantic search.'}
         </p>
+
+        {/* Embedding 提供商选择 */}
+        <div className="mb-4">
+          <label className="text-sm font-medium mb-2 block">{language === 'zh' ? 'Embedding 提供商' : 'Embedding Provider'}</label>
+          <div className="grid grid-cols-3 gap-2">
+            {embeddingProviders.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setEmbeddingConfig({ ...embeddingConfig, provider: p.id })}
+                className={`px-3 py-2 rounded-lg border text-xs transition-all text-left ${
+                  embeddingConfig.provider === p.id
+                    ? 'border-accent bg-accent/10 text-accent'
+                    : 'border-border-subtle hover:border-text-muted text-text-muted hover:text-text-primary bg-surface'
+                }`}
+              >
+                <div className="font-medium">{p.name}</div>
+                {p.free && <span className="text-green-400 text-[10px]">FREE</span>}
+              </button>
+            ))}
+          </div>
+          {selectedProviderInfo && (
+            <p className="text-xs text-text-muted mt-2">{selectedProviderInfo.description}</p>
+          )}
+        </div>
+
+        {/* API Key */}
+        {embeddingConfig.provider !== 'ollama' && (
+          <div className="mb-4">
+            <label className="text-sm font-medium mb-2 block">API Key</label>
+            <input
+              type="password"
+              value={embeddingConfig.apiKey}
+              onChange={(e) => setEmbeddingConfig({ ...embeddingConfig, apiKey: e.target.value })}
+              placeholder={`Enter ${selectedProviderInfo?.name || ''} API Key`}
+              className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary focus:outline-none focus:border-accent"
+            />
+            <p className="text-xs text-text-muted mt-1">
+              {embeddingConfig.provider === 'jina' && <a href="https://jina.ai/embeddings/" target="_blank" rel="noreferrer" className="text-accent hover:underline">获取免费 Jina API Key</a>}
+              {embeddingConfig.provider === 'voyage' && <a href="https://www.voyageai.com/" target="_blank" rel="noreferrer" className="text-accent hover:underline">获取免费 Voyage API Key</a>}
+              {embeddingConfig.provider === 'cohere' && <a href="https://cohere.com/" target="_blank" rel="noreferrer" className="text-accent hover:underline">获取免费 Cohere API Key</a>}
+            </p>
+          </div>
+        )}
+
+        {/* 自定义端点 (Ollama) */}
+        {embeddingConfig.provider === 'ollama' && (
+          <div className="mb-4">
+            <label className="text-sm font-medium mb-2 block">{language === 'zh' ? 'Ollama 地址' : 'Ollama URL'}</label>
+            <input
+              type="text"
+              value={embeddingConfig.baseUrl}
+              onChange={(e) => setEmbeddingConfig({ ...embeddingConfig, baseUrl: e.target.value })}
+              placeholder="http://localhost:11434"
+              className="w-full bg-surface border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary focus:outline-none focus:border-accent"
+            />
+            <p className="text-xs text-text-muted mt-1">
+              {language === 'zh' ? '确保 Ollama 正在运行并已安装 nomic-embed-text 模型' : 'Make sure Ollama is running with nomic-embed-text model'}
+            </p>
+          </div>
+        )}
+
+        {/* 测试连接 */}
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={handleTestConnection}
+            disabled={testingConnection || !workspacePath}
+            className="px-4 py-2 bg-surface hover:bg-surface-hover border border-border-subtle rounded-lg text-sm transition-colors disabled:opacity-50"
+          >
+            {testingConnection ? (language === 'zh' ? '测试中...' : 'Testing...') : (language === 'zh' ? '测试连接' : 'Test Connection')}
+          </button>
+          {connectionStatus && (
+            <span className={`text-xs ${connectionStatus.success ? 'text-green-400' : 'text-red-400'}`}>
+              {connectionStatus.success 
+                ? `✓ ${language === 'zh' ? '连接成功' : 'Connected'} (${connectionStatus.latency}ms)` 
+                : `✗ ${connectionStatus.error}`}
+            </span>
+          )}
+        </div>
+
+        {/* 索引状态和操作 */}
+        <div className="p-4 bg-surface/50 rounded-lg border border-border-subtle">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium">{language === 'zh' ? '索引状态' : 'Index Status'}</span>
+            {indexStatus?.isIndexing && (
+              <span className="text-xs text-accent animate-pulse">{language === 'zh' ? '索引中...' : 'Indexing...'}</span>
+            )}
+          </div>
+          
+          {indexStatus?.isIndexing ? (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-text-muted">
+                <span>{language === 'zh' ? '进度' : 'Progress'}</span>
+                <span>{indexStatus.indexedFiles} / {indexStatus.totalFiles} {language === 'zh' ? '文件' : 'files'}</span>
+              </div>
+              <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-accent transition-all duration-300"
+                  style={{ width: `${indexStatus.totalFiles > 0 ? (indexStatus.indexedFiles / indexStatus.totalFiles) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-text-muted">
+              {indexStatus?.totalChunks ? (
+                <span>{language === 'zh' ? `已索引 ${indexStatus.totalChunks} 个代码块` : `${indexStatus.totalChunks} chunks indexed`}</span>
+              ) : (
+                <span>{language === 'zh' ? '尚未索引' : 'Not indexed yet'}</span>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={handleStartIndexing}
+              disabled={indexStatus?.isIndexing || !workspacePath}
+              className="flex-1 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {indexStatus?.totalChunks 
+                ? (language === 'zh' ? '重新索引' : 'Re-index') 
+                : (language === 'zh' ? '开始索引' : 'Start Indexing')}
+            </button>
+            {indexStatus?.totalChunks ? (
+              <button
+                onClick={handleClearIndex}
+                disabled={indexStatus?.isIndexing}
+                className="px-4 py-2 bg-surface hover:bg-red-500/10 border border-border-subtle hover:border-red-500/50 text-text-muted hover:text-red-400 rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                {language === 'zh' ? '清空' : 'Clear'}
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   )

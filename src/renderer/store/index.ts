@@ -265,7 +265,7 @@ export const useStore = create<EditorState>((set) => ({
 	setIsStreaming: (streaming) => set({ isStreaming: streaming }),
 	clearMessages: () => set({ messages: [], currentToolCalls: [] }),
 	addToolCall: (toolCall) => set((state) => ({
-		currentToolCalls: [...state.currentToolCalls, { ...toolCall, status: 'pending' }]
+		currentToolCalls: [...state.currentToolCalls, { ...toolCall, status: 'running' }]
 	})),
 	updateToolCall: (id, updates) => set((state) => ({
 		currentToolCalls: state.currentToolCalls.map(tc =>

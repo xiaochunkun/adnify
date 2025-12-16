@@ -6,6 +6,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
+import * as fsPromises from 'fs/promises'
 import { spawn } from 'child_process'
 import Store from 'electron-store'
 import { LLMService } from './llm/llmService'
@@ -14,8 +15,16 @@ import { LLMService } from './llm/llmService'
 // Native Modules - 原生高性能模块
 // ==========================================
 
-// 终端 - node-pty (原生 PTY)
-import * as pty from 'node-pty'
+// 终端 - node-pty (原生 PTY) - 延迟加载避免 Electron 启动问题
+// import * as pty from 'node-pty'
+let pty: typeof import('node-pty') | null = null
+
+function getPty() {
+    if (!pty) {
+        pty = require('node-pty')
+    }
+    return pty
+}
 
 // 文件搜索 - ripgrep (原生搜索，比 JS 快 10x+)
 import { rgPath } from '@vscode/ripgrep'
@@ -26,6 +35,9 @@ import * as watcher from '@parcel/watcher'
 // 文件编码检测
 import * as jschardet from 'jschardet'
 import * as iconv from 'iconv-lite'
+
+// 代码库索引服务
+import { getIndexService, destroyIndexService, EmbeddingConfig, IndexConfig } from './indexing'
 
 // ==========================================
 // Store 初始化
@@ -54,7 +66,7 @@ let mainWindow: BrowserWindow | null = null
 let llmService: LLMService | null = null
 
 // 终端会话管理
-const terminals = new Map<string, pty.IPty>()
+const terminals = new Map<string, import('node-pty').IPty>()
 
 // 文件监听订阅
 let watcherSubscription: watcher.AsyncSubscription | null = null
@@ -132,13 +144,13 @@ ipcMain.on('window:close', () => mainWindow?.close())
 // Shell Execution (非交互式命令)
 // ==========================================
 
-ipcMain.handle('shell:execute', async (_, command: string, cwd?: string) => {
+ipcMain.handle('shell:execute', async (_, command: string, cwd?: string, timeout: number = 60000) => {
     const { exec } = require('child_process')
     return new Promise((resolve) => {
         exec(command, { 
             cwd: cwd || process.cwd(),
             maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-            timeout: 60000 // 60s timeout
+            timeout: timeout
         }, (error: any, stdout: string, stderr: string) => {
             resolve({
                 output: stdout,
@@ -234,13 +246,18 @@ async function startFileWatcher(folderPath: string) {
     }
 }
 
-ipcMain.handle('workspace:restore', () => {
-    return mainStore.get('lastWorkspacePath')
+ipcMain.handle('workspace:restore', async () => {
+    const lastPath = mainStore.get('lastWorkspacePath') as string | undefined
+    if (lastPath && fs.existsSync(lastPath)) {
+        // 恢复工作区时也启动文件监听
+        await startFileWatcher(lastPath)
+    }
+    return lastPath
 })
 
 ipcMain.handle('file:readDir', async (_, dirPath: string) => {
     try {
-        const items = fs.readdirSync(dirPath, { withFileTypes: true })
+        const items = await fsPromises.readdir(dirPath, { withFileTypes: true })
         return items.map(item => ({
             name: item.name,
             path: path.join(dirPath, item.name),
@@ -253,20 +270,26 @@ ipcMain.handle('file:readDir', async (_, dirPath: string) => {
 
 // 目录树生成
 ipcMain.handle('file:getTree', async (_, dirPath: string, maxDepth: number = 2) => {
-    if (!dirPath || !fs.existsSync(dirPath)) return ''
+    if (!dirPath) return ''
+    try {
+        await fsPromises.access(dirPath)
+    } catch {
+        return ''
+    }
     
     const IGNORED_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.vscode', '.idea', 'coverage', 'tmp', '.adnify'])
     const IGNORED_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.woff', '.woff2', '.exe', '.dll', '.bin', '.lock'])
 
-    function buildTree(currentPath: string, depth: number, prefix: string = ''): string {
+    async function buildTree(currentPath: string, depth: number, prefix: string = ''): Promise<string> {
         if (depth > maxDepth) return ''
         try {
-            const items = fs.readdirSync(currentPath, { withFileTypes: true })
+            const items = (await fsPromises.readdir(currentPath, { withFileTypes: true }))
                 .sort((a, b) => {
                     if (a.isDirectory() && !b.isDirectory()) return -1
                     if (!a.isDirectory() && b.isDirectory()) return 1
                     return a.name.localeCompare(b.name)
                 })
+            
             let result = ''
             const filteredItems = items.filter(item => {
                 if (item.isDirectory() && IGNORED_DIRS.has(item.name)) return false
@@ -277,15 +300,17 @@ ipcMain.handle('file:getTree', async (_, dirPath: string, maxDepth: number = 2) 
                 return true
             })
             
-            filteredItems.forEach((item, index) => {
-                const isLast = index === filteredItems.length - 1
+            for (let i = 0; i < filteredItems.length; i++) {
+                const item = filteredItems[i]
+                const isLast = i === filteredItems.length - 1
                 const pointer = isLast ? '└── ' : '├── '
                 result += `${prefix}${pointer}${item.name}${item.isDirectory() ? '/' : ''}\n`
+                
                 if (item.isDirectory()) {
                     const nextPrefix = prefix + (isLast ? '    ' : '│   ')
-                    result += buildTree(path.join(currentPath, item.name), depth + 1, nextPrefix)
+                    result += await buildTree(path.join(currentPath, item.name), depth + 1, nextPrefix)
                 }
-            })
+            }
             return result
         } catch { return '' }
     }
@@ -373,7 +398,7 @@ ipcMain.handle('file:search', async (_, query: string, rootPath: string, options
 // 智能读取文件（自动检测编码）
 async function readFileWithEncoding(filePath: string): Promise<string> {
     try {
-        const buffer = fs.readFileSync(filePath)
+        const buffer = await fsPromises.readFile(filePath)
         
         // 检测编码
         const detected = jschardet.detect(buffer)
@@ -437,7 +462,7 @@ async function readLargeFile(filePath: string, startLine: number = 0, maxLines: 
 
 ipcMain.handle('file:read', async (_, filePath: string) => {
     try {
-        const stats = fs.statSync(filePath)
+        const stats = await fsPromises.stat(filePath)
         
         // 大文件使用流式读取
         if (stats.size > 5 * 1024 * 1024) { // > 5MB
@@ -455,10 +480,12 @@ ipcMain.handle('file:write', async (_, filePath: string, content: string) => {
     try {
         // 确保目录存在
         const dir = path.dirname(filePath)
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true })
+        try {
+            await fsPromises.access(dir)
+        } catch {
+            await fsPromises.mkdir(dir, { recursive: true })
         }
-        fs.writeFileSync(filePath, content, 'utf-8')
+        await fsPromises.writeFile(filePath, content, 'utf-8')
         return true
     } catch {
         return false
@@ -467,24 +494,31 @@ ipcMain.handle('file:write', async (_, filePath: string, content: string) => {
 
 ipcMain.handle('file:save', async (_, content: string, currentPath?: string) => {
     if (currentPath) {
-        fs.writeFileSync(currentPath, content, 'utf-8')
+        await fsPromises.writeFile(currentPath, content, 'utf-8')
         return currentPath
     }
     const result = await dialog.showSaveDialog(mainWindow!, {
         filters: [{ name: 'All Files', extensions: ['*'] }]
     })
     if (!result.canceled && result.filePath) {
-        fs.writeFileSync(result.filePath, content, 'utf-8')
+        await fsPromises.writeFile(result.filePath, content, 'utf-8')
         return result.filePath
     }
     return null
 })
 
-ipcMain.handle('file:exists', async (_, filePath: string) => fs.existsSync(filePath))
+ipcMain.handle('file:exists', async (_, filePath: string) => {
+    try {
+        await fsPromises.access(filePath)
+        return true
+    } catch {
+        return false
+    }
+})
 
 ipcMain.handle('file:mkdir', async (_, dirPath: string) => {
     try {
-        fs.mkdirSync(dirPath, { recursive: true })
+        await fsPromises.mkdir(dirPath, { recursive: true })
         return true
     } catch {
         return false
@@ -493,11 +527,11 @@ ipcMain.handle('file:mkdir', async (_, dirPath: string) => {
 
 ipcMain.handle('file:delete', async (_, filePath: string) => {
     try {
-        const stat = fs.statSync(filePath)
+        const stat = await fsPromises.stat(filePath)
         if (stat.isDirectory()) {
-            fs.rmSync(filePath, { recursive: true })
+            await fsPromises.rm(filePath, { recursive: true, force: true })
         } else {
-            fs.unlinkSync(filePath)
+            await fsPromises.unlink(filePath)
         }
         return true
     } catch {
@@ -507,7 +541,7 @@ ipcMain.handle('file:delete', async (_, filePath: string) => {
 
 ipcMain.handle('file:rename', async (_, oldPath: string, newPath: string) => {
     try {
-        fs.renameSync(oldPath, newPath)
+        await fsPromises.rename(oldPath, newPath)
         return true
     } catch {
         return false
@@ -568,7 +602,8 @@ ipcMain.handle('terminal:create', async (_, options: { id: string; cwd?: string;
     const workingDir = cwd || process.cwd()
 
     try {
-        const ptyProcess = pty.spawn(shellToUse, [], {
+        const nodePty = getPty()!
+        const ptyProcess = nodePty.spawn(shellToUse, [], {
             name: 'xterm-256color',
             cols: 80,
             rows: 24,
@@ -661,4 +696,129 @@ ipcMain.handle('git:exec', async (_, args: string[], cwd: string) => {
             })
         })
     }
+})
+
+
+// ==========================================
+// Codebase Indexing (代码库索引)
+// ==========================================
+
+// 初始化索引服务
+ipcMain.handle('index:initialize', async (_, workspacePath: string) => {
+    try {
+        const indexService = getIndexService(workspacePath)
+        indexService.setMainWindow(mainWindow!)
+        await indexService.initialize()
+        return { success: true }
+    } catch (e) {
+        console.error('[Index] Initialize failed:', e)
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+})
+
+// 开始全量索引
+ipcMain.handle('index:start', async (_, workspacePath: string) => {
+    try {
+        const indexService = getIndexService(workspacePath)
+        indexService.setMainWindow(mainWindow!)
+        await indexService.initialize()
+        
+        // 异步执行索引，不阻塞
+        indexService.indexWorkspace().catch(e => {
+            console.error('[Index] Indexing failed:', e)
+        })
+        
+        return { success: true }
+    } catch (e) {
+        console.error('[Index] Start failed:', e)
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+})
+
+// 获取索引状态
+ipcMain.handle('index:status', async (_, workspacePath: string) => {
+    try {
+        const indexService = getIndexService(workspacePath)
+        return indexService.getStatus()
+    } catch (e) {
+        return { isIndexing: false, totalFiles: 0, indexedFiles: 0, totalChunks: 0 }
+    }
+})
+
+// 检查是否有索引
+ipcMain.handle('index:hasIndex', async (_, workspacePath: string) => {
+    try {
+        const indexService = getIndexService(workspacePath)
+        await indexService.initialize()
+        return indexService.hasIndex()
+    } catch {
+        return false
+    }
+})
+
+// 语义搜索
+ipcMain.handle('index:search', async (_, workspacePath: string, query: string, topK?: number) => {
+    try {
+        const indexService = getIndexService(workspacePath)
+        await indexService.initialize()
+        return await indexService.search(query, topK || 10)
+    } catch (e) {
+        console.error('[Index] Search failed:', e)
+        return []
+    }
+})
+
+// 更新单个文件的索引
+ipcMain.handle('index:updateFile', async (_, workspacePath: string, filePath: string) => {
+    try {
+        const indexService = getIndexService(workspacePath)
+        await indexService.updateFile(filePath)
+        return { success: true }
+    } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+})
+
+// 清空索引
+ipcMain.handle('index:clear', async (_, workspacePath: string) => {
+    try {
+        const indexService = getIndexService(workspacePath)
+        await indexService.clearIndex()
+        return { success: true }
+    } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+})
+
+// 更新 Embedding 配置
+ipcMain.handle('index:updateEmbeddingConfig', async (_, workspacePath: string, config: Partial<EmbeddingConfig>) => {
+    try {
+        const indexService = getIndexService(workspacePath)
+        indexService.updateEmbeddingConfig(config)
+        return { success: true }
+    } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+})
+
+// 测试 Embedding 连接
+ipcMain.handle('index:testConnection', async (_, workspacePath: string) => {
+    try {
+        const indexService = getIndexService(workspacePath)
+        return await indexService.testEmbeddingConnection()
+    } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+})
+
+// 获取支持的 Embedding 提供商列表
+ipcMain.handle('index:getProviders', () => {
+    return [
+        { id: 'jina', name: 'Jina AI', description: '免费 100万 tokens/月，专为代码优化', free: true },
+        { id: 'voyage', name: 'Voyage AI', description: '免费 5000万 tokens，代码专用模型', free: true },
+        { id: 'cohere', name: 'Cohere', description: '免费 100次/分钟', free: true },
+        { id: 'huggingface', name: 'HuggingFace', description: '免费，有速率限制', free: true },
+        { id: 'ollama', name: 'Ollama', description: '本地运行，完全免费', free: true },
+        { id: 'openai', name: 'OpenAI', description: '付费，质量最高', free: false },
+    ]
 })

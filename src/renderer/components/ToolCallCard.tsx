@@ -277,16 +277,16 @@ export default memo(function ToolCallCard({
 
   // 计算边框和背景样式
   const cardStyles = isAwaiting 
-    ? 'border-yellow-500/40 bg-yellow-500/5 shadow-[0_0_10px_rgba(234,179,8,0.1)]' 
+    ? 'border-yellow-500/40 bg-yellow-500/5 shadow-[0_0_15px_rgba(234,179,8,0.1)] backdrop-blur-sm' 
     : isRunning
-      ? 'border-accent/40 bg-accent/5 shadow-[0_0_10px_rgba(99,102,241,0.1)]'
+      ? 'border-accent/40 bg-accent/5 shadow-[0_0_15px_rgba(99,102,241,0.1)] backdrop-blur-sm'
       : toolCall.status === 'error' || toolCall.status === 'rejected'
-        ? 'border-red-500/30 bg-red-500/5'
-        : 'border-border-subtle/50 bg-surface/30 hover:bg-surface/50'
+        ? 'border-red-500/30 bg-red-500/5 backdrop-blur-sm'
+        : 'border-border-subtle/50 bg-surface/40 hover:bg-surface/60 backdrop-blur-sm'
 
   return (
     <div className={`
-      group rounded-lg border transition-all duration-300 overflow-hidden
+      group rounded-xl border transition-all duration-300 overflow-hidden
       ${cardStyles}
     `}>
       {/* 主行 - 紧凑显示 */}

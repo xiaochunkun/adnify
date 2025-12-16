@@ -672,9 +672,9 @@ export async function executeToolCall(
 			const timeoutSec = getNumber('timeout', 30)
 			const timeout = timeoutSec * 1000
 			const result = await Promise.race([
-				window.electronAPI.executeCommand(command, cwd),
+				window.electronAPI.executeCommand(command, cwd, timeout),
 				new Promise<never>((_, reject) =>
-					setTimeout(() => reject(new Error(`Command timed out after ${timeoutSec}s`)), timeout)
+					setTimeout(() => reject(new Error(`Command timed out after ${timeoutSec}s`)), timeout + 1000)
 				),
 			])
 

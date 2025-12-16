@@ -13,7 +13,27 @@ export default defineConfig({
 					build: {
 						outDir: 'dist/main',
 						rollupOptions: {
-							external: ['electron', 'electron-store', '@anthropic-ai/sdk', 'openai', '@google/generative-ai']
+							external: [
+								'electron',
+								'electron-store',
+								'@anthropic-ai/sdk',
+								'openai',
+								'@google/generative-ai',
+								'node-pty',
+								'@parcel/watcher',
+								'@parcel/watcher-win32-x64',
+								'@parcel/watcher-win32-arm64',
+								'@parcel/watcher-darwin-x64',
+								'@parcel/watcher-darwin-arm64',
+								'@parcel/watcher-linux-x64-glibc',
+								'@parcel/watcher-linux-x64-musl',
+								'@parcel/watcher-linux-arm64-glibc',
+								'@parcel/watcher-linux-arm64-musl',
+								'dugite',
+								'@vscode/ripgrep',
+								'@lancedb/lancedb',
+								'apache-arrow'
+							]
 						}
 					}
 				}

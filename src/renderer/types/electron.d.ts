@@ -130,8 +130,61 @@ export interface ElectronAPI {
     resizeTerminal: (id: string, cols: number, rows: number) => Promise<void>
 	killTerminal: (id?: string) => void
 	getAvailableShells: () => Promise<{ label: string; path: string }[]>
-    executeCommand: (command: string, cwd?: string) => Promise<{ output: string; errorOutput: string; exitCode: number }>
+    executeCommand: (command: string, cwd?: string, timeout?: number) => Promise<{ output: string; errorOutput: string; exitCode: number }>
 	onTerminalData: (callback: (event: { id: string; data: string }) => void) => () => void
+
+	// File watcher
+	onFileChanged: (callback: (event: { event: 'create' | 'update' | 'delete'; path: string }) => void) => () => void
+
+	// Codebase Indexing
+	indexInitialize: (workspacePath: string) => Promise<{ success: boolean; error?: string }>
+	indexStart: (workspacePath: string) => Promise<{ success: boolean; error?: string }>
+	indexStatus: (workspacePath: string) => Promise<IndexStatus>
+	indexHasIndex: (workspacePath: string) => Promise<boolean>
+	indexSearch: (workspacePath: string, query: string, topK?: number) => Promise<IndexSearchResult[]>
+	indexUpdateFile: (workspacePath: string, filePath: string) => Promise<{ success: boolean; error?: string }>
+	indexClear: (workspacePath: string) => Promise<{ success: boolean; error?: string }>
+	indexUpdateEmbeddingConfig: (workspacePath: string, config: EmbeddingConfigInput) => Promise<{ success: boolean; error?: string }>
+	indexTestConnection: (workspacePath: string) => Promise<{ success: boolean; error?: string; latency?: number }>
+	indexGetProviders: () => Promise<EmbeddingProvider[]>
+	onIndexProgress: (callback: (status: IndexStatus) => void) => () => void
+}
+
+// Indexing types
+export type EmbeddingProviderType = 'jina' | 'voyage' | 'openai' | 'cohere' | 'huggingface' | 'ollama'
+
+export interface EmbeddingConfigInput {
+	provider?: EmbeddingProviderType
+	apiKey?: string
+	model?: string
+	baseUrl?: string
+}
+
+export interface IndexStatus {
+	isIndexing: boolean
+	totalFiles: number
+	indexedFiles: number
+	totalChunks: number
+	lastIndexedAt?: number
+	error?: string
+}
+
+export interface IndexSearchResult {
+	filePath: string
+	relativePath: string
+	content: string
+	startLine: number
+	endLine: number
+	score: number
+	type: string
+	language: string
+}
+
+export interface EmbeddingProvider {
+	id: string
+	name: string
+	description: string
+	free: boolean
 }
 
 declare global {

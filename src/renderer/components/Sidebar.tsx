@@ -245,6 +245,15 @@ function ExplorerView() {
         }
     }, [workspacePath])
 
+    // 刷新文件列表
+    const refreshFiles = useCallback(async () => {
+        if (workspacePath) {
+            const items = await window.electronAPI.readDir(workspacePath)
+            setFiles(items)
+            updateGitStatus()
+        }
+    }, [workspacePath, setFiles, updateGitStatus])
+
     // 工作区变化时更新 Git 状态
     useEffect(() => {
         updateGitStatus()
@@ -252,6 +261,29 @@ function ExplorerView() {
         const interval = setInterval(updateGitStatus, 5000)
         return () => clearInterval(interval)
     }, [updateGitStatus])
+
+    // 监听文件变化事件，自动刷新文件树（带防抖）
+    useEffect(() => {
+        if (!workspacePath) return
+
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+        const unsubscribe = window.electronAPI.onFileChanged((event) => {
+            // 只处理当前工作区内的文件变化
+            if (event.path.startsWith(workspacePath)) {
+                // 防抖：300ms 内的多次变化只触发一次刷新
+                if (debounceTimer) clearTimeout(debounceTimer)
+                debounceTimer = setTimeout(() => {
+                    refreshFiles()
+                }, 300)
+            }
+        })
+
+        return () => {
+            unsubscribe()
+            if (debounceTimer) clearTimeout(debounceTimer)
+        }
+    }, [workspacePath, refreshFiles])
 
     useEffect(() => {
         if (isCreating && newItemInputRef.current) {
@@ -262,17 +294,9 @@ function ExplorerView() {
     const handleOpenFolder = async () => {
         const path = await window.electronAPI.openFolder()
         if (path) {
-        setWorkspacePath(path)
-        const items = await window.electronAPI.readDir(path)
-        setFiles(items)
-        }
-    }
-
-    const refreshFiles = async () => {
-        if (workspacePath) {
-        const items = await window.electronAPI.readDir(workspacePath)
-        setFiles(items)
-        updateGitStatus()
+            setWorkspacePath(path)
+            const items = await window.electronAPI.readDir(path)
+            setFiles(items)
         }
     }
 

@@ -407,7 +407,7 @@ async function processToolCallSilent(
 		id: toolCall.id,
 		name: toolCall.name,
 		arguments: toolCall.arguments,
-		status: 'pending' as ToolStatus,
+		status: 'running' as ToolStatus,
 		approvalType,
 	}
 

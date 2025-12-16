@@ -83,6 +83,41 @@ interface LLMSendMessageParams {
 	systemPrompt?: string
 }
 
+// Indexing types
+interface EmbeddingConfigInput {
+	provider?: 'jina' | 'voyage' | 'openai' | 'cohere' | 'huggingface' | 'ollama'
+	apiKey?: string
+	model?: string
+	baseUrl?: string
+}
+
+interface IndexStatusData {
+	isIndexing: boolean
+	totalFiles: number
+	indexedFiles: number
+	totalChunks: number
+	lastIndexedAt?: number
+	error?: string
+}
+
+interface IndexSearchResult {
+	filePath: string
+	relativePath: string
+	content: string
+	startLine: number
+	endLine: number
+	score: number
+	type: string
+	language: string
+}
+
+interface EmbeddingProvider {
+	id: string
+	name: string
+	description: string
+	free: boolean
+}
+
 // 定义 API 类型
 export interface ElectronAPI {
 	// Window controls
@@ -125,7 +160,24 @@ export interface ElectronAPI {
 	resizeTerminal: (id: string, cols: number, rows: number) => Promise<void>
 	killTerminal: (id?: string) => void
 	getAvailableShells: () => Promise<{ label: string; path: string }[]>
+    executeCommand: (command: string, cwd?: string, timeout?: number) => Promise<{ output: string; errorOutput: string; exitCode: number }>
 	onTerminalData: (callback: (event: { id: string; data: string }) => void) => () => void
+
+	// File watcher
+	onFileChanged: (callback: (event: { event: 'create' | 'update' | 'delete'; path: string }) => void) => () => void
+
+	// Codebase Indexing
+	indexInitialize: (workspacePath: string) => Promise<{ success: boolean; error?: string }>
+	indexStart: (workspacePath: string) => Promise<{ success: boolean; error?: string }>
+	indexStatus: (workspacePath: string) => Promise<IndexStatusData>
+	indexHasIndex: (workspacePath: string) => Promise<boolean>
+	indexSearch: (workspacePath: string, query: string, topK?: number) => Promise<IndexSearchResult[]>
+	indexUpdateFile: (workspacePath: string, filePath: string) => Promise<{ success: boolean; error?: string }>
+	indexClear: (workspacePath: string) => Promise<{ success: boolean; error?: string }>
+	indexUpdateEmbeddingConfig: (workspacePath: string, config: EmbeddingConfigInput) => Promise<{ success: boolean; error?: string }>
+	indexTestConnection: (workspacePath: string) => Promise<{ success: boolean; error?: string; latency?: number }>
+	indexGetProviders: () => Promise<EmbeddingProvider[]>
+	onIndexProgress: (callback: (status: IndexStatusData) => void) => () => void
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -195,10 +247,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	killTerminal: (id?: string) => ipcRenderer.send('terminal:kill', id),
 	getAvailableShells: () => ipcRenderer.invoke('terminal:get-shells'),
     // Background Shell
-    executeCommand: (command: string, cwd?: string) => ipcRenderer.invoke('shell:execute', command, cwd),
+    executeCommand: (command: string, cwd?: string, timeout?: number) => ipcRenderer.invoke('shell:execute', command, cwd, timeout),
 	onTerminalData: (callback: (event: { id: string; data: string }) => void) => {
 		const handler = (_: IpcRendererEvent, event: { id: string; data: string }) => callback(event)
 		ipcRenderer.on('terminal:data', handler)
 		return () => ipcRenderer.removeListener('terminal:data', handler)
+	},
+
+	// File watcher events
+	onFileChanged: (callback: (event: { event: 'create' | 'update' | 'delete'; path: string }) => void) => {
+		const handler = (_: IpcRendererEvent, data: { event: 'create' | 'update' | 'delete'; path: string }) => callback(data)
+		ipcRenderer.on('file:changed', handler)
+		return () => ipcRenderer.removeListener('file:changed', handler)
+	},
+
+	// Codebase Indexing
+	indexInitialize: (workspacePath: string) => ipcRenderer.invoke('index:initialize', workspacePath),
+	indexStart: (workspacePath: string) => ipcRenderer.invoke('index:start', workspacePath),
+	indexStatus: (workspacePath: string) => ipcRenderer.invoke('index:status', workspacePath),
+	indexHasIndex: (workspacePath: string) => ipcRenderer.invoke('index:hasIndex', workspacePath),
+	indexSearch: (workspacePath: string, query: string, topK?: number) => ipcRenderer.invoke('index:search', workspacePath, query, topK),
+	indexUpdateFile: (workspacePath: string, filePath: string) => ipcRenderer.invoke('index:updateFile', workspacePath, filePath),
+	indexClear: (workspacePath: string) => ipcRenderer.invoke('index:clear', workspacePath),
+	indexUpdateEmbeddingConfig: (workspacePath: string, config: EmbeddingConfigInput) => ipcRenderer.invoke('index:updateEmbeddingConfig', workspacePath, config),
+	indexTestConnection: (workspacePath: string) => ipcRenderer.invoke('index:testConnection', workspacePath),
+	indexGetProviders: () => ipcRenderer.invoke('index:getProviders'),
+	onIndexProgress: (callback: (status: IndexStatusData) => void) => {
+		const handler = (_: IpcRendererEvent, status: IndexStatusData) => callback(status)
+		ipcRenderer.on('index:progress', handler)
+		return () => ipcRenderer.removeListener('index:progress', handler)
 	},
 } as ElectronAPI)
