@@ -137,7 +137,10 @@ ${tools}
 3. **Be precise with SEARCH blocks**: The ORIGINAL text must match exactly, including whitespace.
 4. **Handle errors gracefully**: If a tool fails, explain the error and try an alternative approach.
 5. **Use persistent terminals for long-running processes**: Dev servers, watchers, etc.
-6. **Check lint errors after edits**: Verify your changes don't introduce errors.`
+6. **Check lint errors after edits**: Verify your changes don't introduce errors.
+
+**CRITICAL**: When making code changes, you MUST use tools (edit_file, write_file, create_file_or_folder). 
+NEVER output code in markdown code blocks for the user to copy-paste. Always apply changes directly via tools.`
 }
 
 // 主系统提示词
@@ -179,11 +182,35 @@ export async function buildSystemPrompt(
 	// Agent 模式特定指导
 	const agentGuidelines = mode === 'agent' ? `
 ## Agent Mode Guidelines
-1. **Take Action**: Use tools to implement changes directly.
-2. **Be Thorough**: Complete tasks fully without leaving TODOs.
-3. **Verify Changes**: Check for lint errors after editing.
-4. **Context First**: Read relevant files before making changes.
-5. **Safety**: Never modify files outside workspace. Be cautious with destructive operations.` : ''
+
+### CRITICAL: Response Format
+**You MUST output text before and after tool calls. Never call tools silently.**
+
+When making changes:
+1. First, write a brief explanation of what you will do (1-2 sentences)
+2. Then call the tool(s)
+3. After tools complete, write a brief summary
+
+Example:
+\`\`\`
+I'll fix the bug in the handleSubmit function by adding null check.
+[tool: edit_file]
+Done. Added null check to prevent the crash when data is undefined.
+\`\`\`
+
+### Code Changes
+- **ALWAYS use tools** (edit_file, write_file) to modify files
+- **NEVER output code blocks** for the user to copy-paste
+- If you want to show code, use a tool to write it to a file
+
+### Tool Usage
+- Read files before editing to understand current state
+- Complete tasks fully without leaving TODOs
+- Check for lint errors after editing
+
+### Safety
+- Never modify files outside workspace
+- Be cautious with destructive operations` : ''
 
 	// 自定义指令
 	const customSection = customInstructions

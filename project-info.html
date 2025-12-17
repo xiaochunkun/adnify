@@ -1,345 +1,365 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Adnify - AI驱动的智能代码编辑器</title>
+    <title>Adnify - Project Information</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --secondary: #8b5cf6;
-            --dark: #1e293b;
-            --light: #f8fafc;
-            --gray: #64748b;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+        .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: var(--light);
-            line-height: 1.6;
         }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
+        .card-hover:hover {
+            transform: translateY(-4px);
+            transition: all 0.3s ease;
         }
-
-        header {
-            text-align: center;
-            margin-bottom: 3rem;
-        }
-
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .description {
-            font-size: 1.2rem;
-            margin-bottom: 2rem;
-            opacity: 0.9;
-        }
-
-        .tech-stack {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            justify-content: center;
-            margin-bottom: 3rem;
-        }
-
-        .tech-tag {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 0.3rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            backdrop-filter: blur(10px);
-        }
-
-        section {
-            background: rgba(30, 41, 59, 0.8);
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            backdrop-filter: blur(10px);
-        }
-
-        h2 {
-            color: var(--primary);
-            margin-top: 0;
-            font-size: 1.8rem;
-        }
-
         .code-block {
             background: #1e293b;
             border-radius: 8px;
-            padding: 1rem;
-            overflow-x: auto;
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 0.9rem;
-            margin: 1rem 0;
-        }
-
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin: 2rem 0;
-        }
-
-        .feature-card {
-            background: rgba(102, 126, 234, 0.1);
-            border: 1px solid rgba(102, 126, 234, 0.3);
-            border-radius: 8px;
             padding: 1.5rem;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            overflow-x: auto;
         }
-
-        .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.2);
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
         }
-
-        .feature-icon {
-            font-size: 2rem;
-            margin-bottom: 1rem;
-        }
-
-        .btn {
-            display: inline-block;
-            background: white;
-            color: var(--primary);
-            padding: 0.6rem 1.2rem;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            border: none;
-            cursor: pointer;
-            margin: 0.5rem;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        footer {
-            text-align: center;
-            margin-top: 3rem;
-            opacity: 0.7;
-            font-size: 0.9rem;
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 1rem;
-            }
-
-            h1 {
-                font-size: 2rem;
-            }
-
-            .feature-grid {
-                grid-template-columns: 1fr;
-            }
+        .tech-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1>Adnify</h1>
-            <p class="description">基于Electron和TypeScript的AI驱动智能代码编辑器</p>
-
-            <div class="tech-stack">
-                <span class="tech-tag">Electron</span>
-                <span class="tech-tag">TypeScript</span>
-                <span class="tech-tag">React</span>
-                <span class="tech-tag">Monaco Editor</span>
-                <span class="tech-tag">Rust</span>
-                <span class="tech-tag">WebAssembly</span>
-                <span class="tech-tag">AI/ML</span>
+<body class="bg-gray-50 text-gray-900">
+    
+    <!-- Header -->
+    <header class="gradient-bg text-white">
+        <div class="container mx-auto px-6 py-12">
+            <div class="flex flex-col lg:flex-row items-center justify-between">
+                <div class="mb-6 lg:mb-0">
+                    <h1 class="text-4xl lg:text-5xl font-bold mb-2">Adnify</h1>
+                    <p class="text-xl opacity-90">AI-Powered Development Platform</p>
+                </div>
+                <div class="flex space-x-4">
+                    <button class="bg-white text-indigo-600 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition">
+                        Get Started
+                    </button>
+                    <button class="border border-white text-white px-6 py-2 rounded-lg font-semibold hover:bg-white hover:text-indigo-600 transition">
+                        Documentation
+                    </button>
+                </div>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <section id="overview">
-            <h2>📋 项目概述</h2>
-            <p>Adnify是一个下一代代码编辑器，结合了强大的编辑功能和AI驱动的智能助手。项目基于Electron框架构建，使用TypeScript进行类型安全开发，并集成了Monaco Editor（VS Code的核心编辑器）来提供卓越的编辑体验。项目同时利用Rust和WebAssembly进行性能关键部分的优化，确保高效的执行和跨平台兼容性。</p>
-        </section>
-
-        <section id="architecture">
-            <h2>🏗️ 技术架构</h2>
-            <p>Adnify采用模块化架构，分为以下几个核心层次：</p>
-
-            <div class="code-block">
-adnify/
-├── src/
-│   ├── main/          # 主进程代码（Electron主进程）
-│   │   ├── indexing/  # 文本索引和向量存储
-│   │   ├── llm/       # 大语言模型服务
-│   │   └── ...        # 其他主进程服务
-│   ├── renderer/      # 渲染进程代码（UI和业务逻辑）
-│   │   ├── agent/     # AI代理服务
-│   │   ├── components/# React组件
-│   │   ├── services/  # 渲染进程服务
-│   │   └── ...        # 其他渲染进程代码
-│   └── ...            # 其他源代码
-├── .kiro/             # 规格和设计文档
-├── void/              # 依赖的VS Code核心代码（用于Monaco Editor）
-└── ...                # 其他配置和构建文件
-            </div>
-
-            <h3>架构特点：</h3>
-            <ul>
-                <li><strong>双进程架构</strong>：主进程负责系统级操作和AI模型管理，渲染进程负责UI和编辑功能</li>
-                <li><strong>模块化设计</strong>：每个功能模块独立开发和测试，提高代码维护性</li>
-                <li><strong>性能优化</strong>：关键算法使用Rust实现并通过WebAssembly集成</li>
-                <li><strong>扩展系统</strong>：支持插件系统，允许第三方扩展功能</li>
-            </ul>
-        </section>
-
-        <section id="features">
-            <h2>✨ 核心功能</h2>
-            <div class="feature-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">🤖</div>
-                    <h3>AI智能助手</h3>
-                    <p>集成大语言模型，提供智能代码补全、错误检测、代码生成和自然语言交互能力。支持多种AI提供商接入，包括本地和云端模型。</p>
+    <!-- Main Content -->
+    <main class="container mx-auto px-6 py-12">
+        
+        <!-- Project Overview -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold mb-8 text-gray-800">Project Overview</h2>
+            <div class="grid lg:grid-cols-2 gap-8">
+                <div class="space-y-4">
+                    <p class="text-lg text-gray-600">
+                        Adnify is an AI-powered development platform designed to enhance productivity and code quality through intelligent features like context-aware assistance, real-time collaboration, and advanced code analysis.
+                    </p>
+                    <p class="text-lg text-gray-600">
+                        Built with modern web technologies and Electron, Adnify provides a seamless cross-platform experience for developers.
+                    </p>
                 </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">🔍</div>
-                    <h3>高级搜索系统</h3>
-                    <p>基于向量数据库的全文搜索和语义搜索，支持跨文件代码引用分析，快速定位相关代码片段和函数调用关系。</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">👥</div>
-                    <h3>实时协作编辑</h3>
-                    <p>支持多用户实时协作编辑，类似Google Docs的体验，同时提供操作历史回溯和差异比较功能。</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">📊</div>
-                    <h3>代码可视化分析</h3>
-                    <p>生成代码依赖关系图、调用树和架构图，帮助开发者快速理解复杂代码库的结构和关系。</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">🔧</div>
-                    <h3>智能重构工具</h3>
-                    <p>基于AI驱动的代码重构建议，支持安全重命名、接口提取和代码迁移，并提供重构前后的影响分析。</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">📝</div>
-                    <h3>智能文档生成</h3>
-                    <p>自动生成API文档、代码注释和README文件，基于代码分析和上下文理解，大大减少文档维护成本。</p>
+                <div class="space-y-4">
+                    <div class="stat-card rounded-lg p-6">
+                        <div class="text-3xl font-bold">1.2K+</div>
+                        <div class="opacity-90">Lines of Code</div>
+                    </div>
+                    <div class="stat-card rounded-lg p-6">
+                        <div class="text-3xl font-bold">50+</div>
+                        <div class="opacity-90">Components</div>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <section id="highlights">
-            <h2>🎯 项目亮点</h2>
-            <div class="feature-grid">
-                <div class="feature-card">
-                    <h3>多模型支持</h3>
-                    <p>支持多种AI模型提供商（OpenAI、Anthropic、本地模型等），可根据需求切换和组合使用不同模型的优势。</p>
+        <!-- Technology Stack -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold mb-8 text-gray-800">Technology Stack</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                <div class="tech-icon mx-auto">
+                    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg" alt="TypeScript" class="w-8 h-8">
                 </div>
-
-                <div class="feature-card">
-                    <h3>离线能力</h3>
-                    <p>支持离线使用，通过WebAssembly集成本地AI模型，无需持续互联网连接即可使用核心功能。</p>
+                <div class="tech-icon mx-auto">
+                    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg" alt="React" class="w-8 h-8">
                 </div>
-
-                <div class="feature-card">
-                    <h3>性能优化</h3>
-                    <p>关键算法使用Rust实现，通过WebAssembly集成到JavaScript环境，显著提升搜索和分析性能。</p>
+                <div class="tech-icon mx-auto">
+                    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/electron/electron-original.svg" alt="Electron" class="w-8 h-8">
                 </div>
-
-                <div class="feature-card">
-                    <h3>插件生态</h3>
-                    <p>支持VS Code插件生态系统，可以直接使用现有的VS Code扩展，并提供额外的AI增强功能。</p>
+                <div class="tech-icon mx-auto">
+                    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/tailwindcss/tailwindcss-plain.svg" alt="Tailwind CSS" class="w-8 h-8">
                 </div>
-
-                <div class="feature-card">
-                    <h3>安全保障</h3>
-                    <p>采用沙箱执行和权限控制，确保AI模型和插件的安全运行，防止潜在的安全漏洞和攻击。</p>
+                <div class="tech-icon mx-auto">
+                    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/vscode/vscode-original.svg" alt="VS Code" class="w-8 h-8">
                 </div>
-
-                <div class="feature-card">
-                    <h3>跨平台支持</h3>
-                    <p>基于Electron框架，支持Windows、macOS和Linux平台，提供一致的用户体验和功能覆盖率。</p>
+                <div class="tech-icon mx-auto">
+                    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" alt="Node.js" class="w-8 h-8">
                 </div>
             </div>
         </section>
 
-        <section id="quick-start">
-            <h2>🚀 快速开始</h2>
-            <p>以下是从源代码构建和运行Adnify的步骤：</p>
-
-            <div class="code-block">
-# 1. 克隆仓库
-git clone https://github.com/yourusername/adnify.git
-cd adnify
-
-# 2. 安装依赖
-npm install
-
-# 3. 构建项目
-npm run build
-
-# 4. 启动开发服务器
-npm run dev
-
-# 5. 打包应用（生产环境）
-npm run package
-            </div>
-
-            <p>更详细的构建和配置说明请参阅<a href="#" style="color: var(--primary);">文档</a>。</p>
-        </section>
-
-        <section id="contribute">
-            <h2>🤝 贡献指南</h2>
-            <p>我们欢迎社区贡献者参与项目开发！以下是贡献指南：</p>
-            <ul>
-                <li>查看<a href="#" style="color: var(--primary);">贡献指南</a>了解详细流程</li>
-                <li>提交Issue时请提供详细的复现步骤和环境信息</li>
-                <li>提交PR前请确保代码通过所有测试并符合代码规范</li>
-                <li>加入我们的Discord社区讨论项目开发</li>
-            </ul>
-            <div style="text-align: center; margin-top: 1rem;">
-                <button class="btn" onclick="window.open('#', '_blank')">查看贡献指南</button>
-                <button class="btn" onclick="window.open('#', '_blank')">提交Issue</button>
+        <!-- Key Features -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold mb-8 text-gray-800">Key Features</h2>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div class="bg-white rounded-lg shadow-lg p-6 card-hover">
+                    <h3 class="text-xl font-bold mb-3 text-indigo-600">AI-Powered Assistance</h3>
+                    <p class="text-gray-600 mb-4">Context-aware code suggestions and intelligent completions.</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6 card-hover">
+                    <h3 class="text-xl font-bold mb-3 text-indigo-600">Real-time Collaboration</h3>
+                    <p class="text-gray-600 mb-4">Seamless team collaboration with shared workspaces.</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6 card-hover">
+                    <h3 class="text-xl font-bold mb-3 text-indigo-600">Advanced Code Analysis</h3>
+                    <p class="text-gray-600 mb-4">Deep code inspection and quality metrics.</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6 card-hover">
+                    <h3 class="text-xl font-bold mb-3 text-indigo-600">Multi-language Support</h3>
+                    <p class="text-gray-600 mb-4">Support for 50+ programming languages.</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6 card-hover">
+                    <h3 class="text-xl font-bold mb-3 text-indigo-600">Cross-platform</h3>
+                    <p class="text-gray-600 mb-4">Windows, macOS, and Linux support.</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6 card-hover">
+                    <h3 class="text-xl font-bold mb-3 text-indigo-600">Extensible Architecture</h3>
+                    <p class="text-gray-600 mb-4">Plugin system for custom extensions.</p>
+                </div>
             </div>
         </section>
 
-        <section id="status">
-            <h2>📊 项目状态</h2>
-            <p>当前版本：<strong>1.0.0</strong></p>
-            <p>开发状态：<strong>活跃开发阶段</strong></p>
-            <p>近期更新：</p>
-            <ul>
-                <li>2025/12/17 - 发布1.0.0版本，完善AI助手功能</li>
-                <li>2025/12/10 - 添加实时协作编辑功能</li>
-                <li>2025/12/05 - 优化代码搜索性能，集成向量数据库</li>
-            </ul>
+        <!-- Project Structure -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold mb-8 text-gray-800">Project Structure</h2>
+            <div class="code-block text-green-400 font-mono text-sm">
+                <div class="text-white font-bold mb-2">adnify/</div>
+                <div class="ml-4">├── .kiro/</div>
+                <div class="ml-8">├── specs/</div>
+                <div class="ml-12">├── adnify-enhancement/</div>
+                <div class="ml-12">└── ux-improvements/</div>
+                <div class="ml-4">├── public/</div>
+                <div class="ml-4">├── release/</div>
+                <div class="ml-4">├── resources/</div>
+                <div class="ml-4">├── scripts/</div>
+                <div class="ml-4">├── src/</div>
+                <div class="ml-8">├── main/</div>
+                <div class="ml-8">└── renderer/</div>
+                <div class="ml-4">├── tests/</div>
+                <div class="ml-4">├── void/</div>
+                <div class="ml-4">├── .editorconfig</div>
+                <div class="ml-4">├── package.json</div>
+                <div class="ml-4">├── tailwind.config.js</div>
+                <div class="ml-4">├── tsconfig.json</div>
+                <div class="ml-4">└── vite.config.ts</div>
+            </div>
         </section>
 
-        <footer>
-            <p>© 2025 Adnify Team. All rights reserved.</p>
-            <p>Licensed under MIT License</p>
-        </footer>
-    </div>
+        <!-- Core Modules -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold mb-8 text-gray-800">Core Modules</h2>
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-4 text-indigo-600">Agent Services</h3>
+                    <ul class="space-y-2 text-gray-600">
+                        <li>• Chat Thread Management</li>
+                        <li>• Code Application</li>
+                        <li>• Context Management</li>
+                        <li>• Git Integration</li>
+                        <li>• Linting & Quality Checks</li>
+                        <li>• Session Management</li>
+                    </ul>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-4 text-indigo-600">Indexing & Search</h3>
+                    <ul class="space-y-2 text-gray-600">
+                        <li>• Vector Embeddings</li>
+                        <li>• Full-text Search</li>
+                        <li>• Semantic Indexing</li>
+                        <li>• Chunking Algorithm</li>
+                    </ul>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-4 text-indigo-600">LLM Integration</h3>
+                    <ul class="space-y-2 text-gray-600">
+                        <li>• Multi-provider Support</li>
+                        <li>• Prompt Engineering</li>
+                        <li>• Streaming Responses</li>
+                        <li>• Model Configuration</li>
+                    </ul>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-4 text-indigo-600">UI Components</h3>
+                    <ul class="space-y-2 text-gray-600">
+                        <li>• Chat Interface</li>
+                        <li>• Code Editor</li>
+                        <li>• Activity Bar</li>
+                        <li>• Terminal Panel</li>
+                        <li>• Settings Modal</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Development Setup -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold mb-8 text-gray-800">Development Setup</h2>
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-bold mb-4 text-indigo-600">Prerequisites</h3>
+                <div class="code-block text-yellow-400 font-mono text-sm mb-6">
+npm install -g pnpm
+node --version # v20.x or higher
+npm --version # 9.x or higher
+                </div>
+
+                <h3 class="text-xl font-bold mb-4 text-indigo-600">Installation</h3>
+                <div class="code-block text-yellow-400 font-mono text-sm mb-6">
+pnpm install
+pnpm run dev
+                </div>
+
+                <h3 class="text-xl font-bold mb-4 text-indigo-600">Available Scripts</h3>
+                <div class="grid md:grid-cols-2 gap-4 text-sm">
+                    <div class="bg-gray-800 text-green-400 p-3 rounded">pnpm run dev</div>
+                    <div class="bg-gray-800 text-green-400 p-3 rounded">Start development server</div>
+                    <div class="bg-gray-800 text-green-400 p-3 rounded">pnpm run build</div>
+                    <div class="bg-gray-800 text-green-400 p-3 rounded">Build production version</div>
+                    <div class="bg-gray-800 text-green-400 p-3 rounded">pnpm run test</div>
+                    <div class="bg-gray-800 text-green-400 p-3 rounded">Run tests</div>
+                    <div class="bg-gray-800 text-green-400 p-3 rounded">pnpm run lint</div>
+                    <div class="bg-gray-800 text-green-400 p-3 rounded">Run linter</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture Diagram -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold mb-8 text-gray-800">System Architecture</h2>
+            <div class="bg-white rounded-lg shadow-lg p-8">
+                <div class="flex justify-center items-center h-64">
+                    <div class="text-center">
+                        <div class="text-6xl font-bold text-indigo-300 mb-4">🏗️</div>
+                        <p class="text-gray-600 text-lg">Electron-based Architecture</p>
+                        <p class="text-gray-600 mt-2">Main Process ↔ Renderer Process ↔ Native Modules</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contributing -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold mb-8 text-gray-800">Contributing</h2>
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-4 text-indigo-600">Development Guidelines</h3>
+                    <ul class="space-y-2 text-gray-600">
+                        <li>• Follow TypeScript best practices</li>
+                        <li>• Write comprehensive tests</li>
+                        <li>• Maintain clean code structure</li>
+                        <li>• Document public APIs</li>
+                        <li>• Follow SOLID principles</li>
+                    </ul>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-4 text-indigo-600">Contribution Workflow</h3>
+                    <ol class="space-y-2 text-gray-600">
+                        <li>1. Fork the repository</li>
+                        <li>2. Create feature branch</li>
+                        <li>3. Commit changes</li>
+                        <li>4. Push to GitHub</li>
+                        <li>5. Open Pull Request</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <!-- Roadmap -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold mb-8 text-gray-800">Roadmap</h2>
+            <div class="space-y-4">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-xl font-bold text-indigo-600">Q1 2025</h3>
+                        <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">In Progress</span>
+                    </div>
+                    <ul class="text-gray-600 ml-4 space-y-1">
+                        <li>• Enhanced AI Models</li>
+                        <li>• Multi-workspace Support</li>
+                        <li>• Improved Collaboration Features</li>
+                    </ul>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-xl font-bold text-indigo-600">Q2 2025</h3>
+                        <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">Planned</span>
+                    </div>
+                    <ul class="text-gray-600 ml-4 space-y-1">
+                        <li>• Plugin Marketplace</li>
+                        <li>• Advanced Analytics</li>
+                        <li>• Team Management</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-12">
+        <div class="container mx-auto px-6">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-6 md:mb-0">
+                    <h3 class="text-2xl font-bold text-indigo-400">Adnify</h3>
+                    <p class="text-gray-400 mt-2">© 2024 Adnify. All rights reserved.</p>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="#" class="text-gray-400 hover:text-white transition">Documentation</a>
+                    <a href="#" class="text-gray-400 hover:text-white transition">GitHub</a>
+                    <a href="#" class="text-gray-400 hover:text-white transition">Community</a>
+                    <a href="#" class="text-gray-400 hover:text-white transition">Blog</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Add smooth scrolling
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        // Add copy functionality to code blocks
+        document.querySelectorAll('.code-block').forEach(block => {
+            const copyBtn = document.createElement('button');
+            copyBtn.innerHTML = 'Copy';
+            copyBtn.className = 'absolute top-2 right-2 bg-indigo-600 text-white px-3 py-1 rounded text-sm hover:bg-indigo-700 transition';
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(block.textContent);
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+            });
+            block.parentNode.insertBefore(copyBtn, block);
+        });
+    </script>
 </body>
 </html>

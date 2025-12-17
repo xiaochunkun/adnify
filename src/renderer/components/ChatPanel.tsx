@@ -14,6 +14,7 @@ import { toFullPath } from '../utils/pathUtils'
 import { ChatInput, PendingImage } from './chat'
 import FileMentionPopup from './FileMentionPopup'
 import ChatMessageComponent from './chat/ChatMessage'
+import GlobalChangesPanel from './chat/GlobalChangesPanel'
 import {
   ChatMessage,
   isUserMessage,
@@ -594,6 +595,23 @@ export default function ChatPanel() {
       <div className="absolute bottom-0 left-0 right-0 z-20 bg-background">
         {/* Gradient Mask for Scrolling */}
         <div className="h-8 bg-gradient-to-t from-background to-transparent pointer-events-none -mt-8" />
+
+        {/* Global Changes Panel - Cursor 风格的底部状态栏 */}
+        <GlobalChangesPanel
+          messages={messages}
+          isStreaming={isStreaming}
+          isAwaitingApproval={isAwaitingApproval}
+          streamingStatus={
+            streamState?.isRunning === 'LLM' ? 'Thinking...' :
+            streamState?.isRunning === 'tool' ? `Running ${streamState.toolInfo?.toolName || 'tool'}...` :
+            streamState?.isRunning === 'awaiting_user' ? 'Waiting for approval' :
+            undefined
+          }
+          onApprove={approveCurrentTool}
+          onReject={rejectCurrentTool}
+          onAbort={abort}
+          onFileClick={handleFileClick}
+        />
 
         {/* Staging Selections (Context Bar) */}
         <div className="px-6 py-2">

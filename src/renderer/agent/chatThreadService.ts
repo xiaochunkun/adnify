@@ -395,6 +395,33 @@ class ChatThreadService {
     }
   }
 
+  /**
+   * 清理所有待审批的工具调用（中止或错误时调用）
+   * 将 pending, running_now, tool_request 状态的工具调用标记为 rejected
+   */
+  cancelPendingToolCalls(reason: string = 'Operation cancelled'): void {
+    const thread = this.getCurrentThread()
+    let changed = false
+
+    for (const msg of thread.messages) {
+      if (msg.role !== 'assistant') continue
+      const assistantMsg = msg as AssistantMessage
+      if (!assistantMsg.toolCalls) continue
+
+      for (const tc of assistantMsg.toolCalls) {
+        if (tc.status === 'pending' || tc.status === 'running_now' || tc.status === 'tool_request') {
+          tc.status = 'rejected'
+          tc.error = reason
+          changed = true
+        }
+      }
+    }
+
+    if (changed) {
+      this.emitThreadChange()
+    }
+  }
+
   deleteMessagesAfter(messageId: string): void {
     const thread = this.getCurrentThread()
     const index = thread.messages.findIndex((m) => m.id === messageId)

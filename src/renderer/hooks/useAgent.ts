@@ -47,6 +47,7 @@ export function useAgent() {
     addInlineToolCall,
     updateInlineToolCall,
     finalizeLastMessage,
+    cancelPendingToolCalls,
     setStreamRunning,
     setStreamError,
     addCheckpoint,
@@ -542,17 +543,50 @@ export function useAgent() {
               // 工具调用参数增量
               if (chunk.toolCallDelta.args) {
                 currentToolCallSoFar.argsString += chunk.toolCallDelta.args
-                // 尝试解析参数
+                
+                // 尝试解析完整 JSON
                 try {
                   currentToolCallSoFar.rawParams = JSON.parse(currentToolCallSoFar.argsString)
-                  // 更新 UI 中的参数
                   if (currentAssistantMsgIdRef.current && currentToolCallSoFar.id) {
                     updateInlineToolCall(currentAssistantMsgIdRef.current, currentToolCallSoFar.id, {
                       rawParams: currentToolCallSoFar.rawParams,
                     })
                   }
                 } catch {
-                  // 参数还不完整，继续累积
+                  // JSON 不完整，尝试提取部分内容用于流式预览
+                  const partialParams: Record<string, unknown> = { _streaming: true }
+                  
+                  // 提取 path
+                  const pathMatch = currentToolCallSoFar.argsString.match(/"path"\s*:\s*"([^"]*)"?/)
+                  if (pathMatch) partialParams.path = pathMatch[1]
+                  
+                  // 提取 content（用于 write_file）
+                  const contentMatch = currentToolCallSoFar.argsString.match(/"content"\s*:\s*"([\s\S]*?)(?:"|$)/)
+                  if (contentMatch) {
+                    // 解码转义字符
+                    try {
+                      partialParams.content = JSON.parse(`"${contentMatch[1]}"`)
+                    } catch {
+                      partialParams.content = contentMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+                    }
+                  }
+                  
+                  // 提取 new_string（用于 edit_file）
+                  const newStringMatch = currentToolCallSoFar.argsString.match(/"new_string"\s*:\s*"([\s\S]*?)(?:"|$)/)
+                  if (newStringMatch) {
+                    try {
+                      partialParams.new_string = JSON.parse(`"${newStringMatch[1]}"`)
+                    } catch {
+                      partialParams.new_string = newStringMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+                    }
+                  }
+                  
+                  // 更新 UI 显示部分内容
+                  if (currentAssistantMsgIdRef.current && currentToolCallSoFar.id && Object.keys(partialParams).length > 1) {
+                    updateInlineToolCall(currentAssistantMsgIdRef.current, currentToolCallSoFar.id, {
+                      rawParams: partialParams,
+                    })
+                  }
                 }
               }
             }
@@ -578,6 +612,8 @@ export function useAgent() {
 
           appendToLastAssistantMessage(errorMessage)
           setStreamError(result.error.message)
+          // 清理所有待审批的工具调用
+          cancelPendingToolCalls(result.error.message)
           finalizeLastMessage()
           return
         }
@@ -666,10 +702,13 @@ export function useAgent() {
       approvalResolverRef.current = null
     }
 
+    // 清理所有待审批的工具调用
+    cancelPendingToolCalls('Operation cancelled by user')
+
     setStreamRunning(undefined)
     finalizeLastMessage(currentAssistantMsgIdRef.current || undefined)
     currentAssistantMsgIdRef.current = null
-  }, [setStreamRunning, finalizeLastMessage])
+  }, [setStreamRunning, finalizeLastMessage, cancelPendingToolCalls])
 
   // ===== 回滚 =====
 

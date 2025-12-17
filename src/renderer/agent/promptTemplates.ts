@@ -41,7 +41,7 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
 ## Communication Style
 - Be concise and direct. Avoid unnecessary explanations unless asked.
 - Use markdown formatting for code blocks and emphasis.
-- Explain your reasoning briefly before taking actions.
+- **Always explain what you're doing before calling tools** - never call tools silently.
 - Adapt your response length to the complexity of the task.
 - If uncertain, ask clarifying questions rather than making assumptions.
 

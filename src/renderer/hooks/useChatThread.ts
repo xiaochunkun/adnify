@@ -26,7 +26,7 @@ export function useChatThreads() {
 
   useEffect(() => {
     const unsubThread = chatThreadService.onThreadChange(() => {
-      // 深拷贝以确保 React 能检测到所有变化（包括 stagingSelections）
+      // 深拷贝以确保 React 能检测到所有变化（包括 toolCalls 和 stagingSelections）
       const newState = chatThreadService.getState()
       const deepCopiedThreads: Record<string, ChatThread | undefined> = {}
       
@@ -34,7 +34,19 @@ export function useChatThreads() {
         if (thread) {
           deepCopiedThreads[id] = {
             ...thread,
-            messages: [...thread.messages],
+            // 深拷贝 messages，包括每个消息的 toolCalls
+            messages: thread.messages.map(msg => {
+              if (msg.role === 'assistant' && 'toolCalls' in msg && msg.toolCalls) {
+                return {
+                  ...msg,
+                  toolCalls: msg.toolCalls.map(tc => ({
+                    ...tc,
+                    rawParams: { ...tc.rawParams },
+                  })),
+                }
+              }
+              return { ...msg }
+            }),
             state: {
               ...thread.state,
               stagingSelections: [...thread.state.stagingSelections],
@@ -160,6 +172,10 @@ export function useChatThreads() {
 
   const finalizeLastMessage = useCallback((messageId?: string) => {
     chatThreadService.finalizeLastMessage(messageId)
+  }, [])
+
+  const cancelPendingToolCalls = useCallback((reason?: string) => {
+    chatThreadService.cancelPendingToolCalls(reason)
   }, [])
 
   const deleteMessagesAfter = useCallback((messageId: string) => {
@@ -320,6 +336,7 @@ export function useChatThreads() {
     // 内嵌工具调用 (Cursor 风格)
     addInlineToolCall,
     updateInlineToolCall,
+    cancelPendingToolCalls,
 
     // 检查点
     addCheckpoint,

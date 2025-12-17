@@ -12,7 +12,7 @@ import { t } from '../../i18n'
 import { getEditorConfig } from '../../config/editorConfig'
 import aiAvatar from '../../assets/icon/ai-avatar.gif'
 import { ChatMessage as ChatMessageType, isUserMessage, isAssistantMessage, InlineToolCall, getMessageText, MessageContent, ImageContent } from '../../agent/types/chatTypes'
-import ToolCallDisplay from './ToolCallDisplay'
+import { ToolCallList } from './ToolCallDisplay'
 
 // Re-export getMessageText for compatibility
 export { getMessageText } from '../../agent/types/chatTypes'
@@ -281,40 +281,24 @@ export default function ChatMessage({
                 {textContent}
               </ReactMarkdown>
               
-              {/* Tool Calls */}
+              {/* Tool Calls - Cursor 风格的工具调用显示 */}
               {isAssistantMessage(message) && message.toolCalls && message.toolCalls.length > 0 && (
-                <div className="space-y-3 mt-4">
-                  {message.toolCalls.map((tc: InlineToolCall) => {
-                    // 转换状态：保持 tool_request 以显示审批按钮
-                    const displayStatus: 'success' | 'error' | 'running' | 'tool_request' | 'pending' = 
-                      tc.status === 'success' 
-                        ? 'success' 
-                        : tc.status === 'tool_error' 
-                          ? 'error' 
-                          : tc.status === 'running_now' 
-                            ? 'running' 
-                            : tc.status === 'tool_request'
-                              ? 'tool_request'
-                              : 'pending'
-                    
-                    return (
-                      <ToolCallDisplay
-                        key={tc.id}
-                        toolCall={{
-                          id: tc.id,
-                          name: tc.name,
-                          arguments: tc.rawParams,
-                          status: displayStatus,
-                          result: tc.result,
-                          error: tc.error,
-                        }}
-                        onApprove={tc.status === 'tool_request' && isAwaitingApproval ? onApproveTool : undefined}
-                        onReject={tc.status === 'tool_request' && isAwaitingApproval ? onRejectTool : undefined}
-                        onFileClick={onFileClick}
-                      />
-                    )
-                  })}
-                </div>
+                <ToolCallList
+                  toolCalls={message.toolCalls.map((tc: InlineToolCall) => ({
+                    id: tc.id,
+                    name: tc.name,
+                    // 保留 rawParams 用于显示代码预览
+                    rawParams: tc.rawParams || {},
+                    arguments: tc.rawParams || {},
+                    status: tc.status,
+                    result: tc.result,
+                    error: tc.error,
+                  }))}
+                  pendingToolId={isAwaitingApproval ? message.toolCalls.find((tc: InlineToolCall) => tc.status === 'tool_request')?.id : undefined}
+                  onApprove={onApproveTool}
+                  onReject={onRejectTool}
+                  onFileClick={onFileClick}
+                />
               )}
 
               {isAssistantMessage(message) && message.isStreaming && (
