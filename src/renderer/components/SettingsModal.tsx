@@ -19,6 +19,7 @@ import { toast } from './ToastProvider'
 import { getPromptTemplates, getPromptTemplateById, getPromptTemplatePreview, getPromptTemplateSummary } from '../agent/promptTemplates'
 import { completionService } from '../services/completionService'
 import KeybindingPanel from './KeybindingPanel'
+import ProviderAdapterEditor from './ProviderAdapterEditor'
 import { Button, Input, Modal, Select, Switch } from './ui'
 
 type SettingsTab = 'provider' | 'editor' | 'agent' | 'keybindings' | 'indexing' | 'security' | 'system'
@@ -487,6 +488,13 @@ function ProviderSettings({
             </div>
           </details>
         </div>
+
+        {/* Provider Adapter Configuration */}
+        <ProviderAdapterEditor
+          adapterId={localConfig.adapterId}
+          onAdapterChange={(id, config) => setLocalConfig({ ...localConfig, adapterId: id })}
+          language={language}
+        />
       </section>
     </div>
   )

@@ -16,6 +16,8 @@ export interface LLMConfig {
   // Thinking 模式配置
   thinkingEnabled?: boolean
   thinkingBudget?: number
+  // 自定义适配器 ID (用于工具调用格式配置)
+  adapterId?: string
 }
 
 export interface TextContent {
