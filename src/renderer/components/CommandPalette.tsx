@@ -95,6 +95,9 @@ export default function CommandPalette({ onClose, onShowKeyboardShortcuts }: Com
     activeFilePath,
     setInputPrompt,
     language,
+    setShowQuickOpen,
+    setShowComposer,
+    setShowAbout,
   } = useStore()
 
   const { clearMessages } = useAgent()
@@ -237,6 +240,15 @@ export default function CommandPalette({ onClose, onShowKeyboardShortcuts }: Com
 
     // View & Settings
     {
+      id: 'quick-open',
+      label: 'Go to File...',
+      description: 'Search and open files by name',
+      icon: Search,
+      category: 'File',
+      action: () => setShowQuickOpen(true),
+      shortcut: 'Ctrl+P',
+    },
+    {
       id: 'toggle-terminal',
       label: terminalVisible ? 'Hide Terminal' : 'Show Terminal',
       description: 'Toggle the terminal panel',
@@ -244,6 +256,15 @@ export default function CommandPalette({ onClose, onShowKeyboardShortcuts }: Com
       category: 'View',
       action: () => setTerminalVisible(!terminalVisible),
       shortcut: 'Ctrl+`',
+    },
+    {
+      id: 'open-composer',
+      label: 'Open Composer',
+      description: 'AI-powered multi-file editing',
+      icon: Sparkles,
+      category: 'AI Tools',
+      action: () => setShowComposer(true),
+      shortcut: 'Ctrl+Shift+I',
     },
     {
       id: 'settings',
@@ -262,6 +283,14 @@ export default function CommandPalette({ onClose, onShowKeyboardShortcuts }: Com
       category: 'Help',
       action: () => onShowKeyboardShortcuts(),
       shortcut: '?',
+    },
+    {
+      id: 'about',
+      label: 'About Adnify',
+      description: 'View application information',
+      icon: MessageSquare,
+      category: 'Help',
+      action: () => setShowAbout(true),
     },
 
     // AI Tools

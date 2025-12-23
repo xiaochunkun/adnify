@@ -229,7 +229,7 @@ const ChatMessage = React.memo(({
   }
 
   return (
-    <div className={`w-full py-6 group transition-colors duration-200 border-b border-white/5 last:border-0`}>
+    <div className={`w-full py-6 group transition-colors duration-200 border-b border-white/5 last:border-0 animate-fade-in`}>
       <div className="max-w-3xl mx-auto px-4">
         {/* Header Row: Avatar + Name + Time/Actions */}
         <div className="flex items-center gap-3 mb-3 select-none">
@@ -239,7 +239,7 @@ const ChatMessage = React.memo(({
                 <User className="w-3.5 h-3.5 text-text-secondary" />
               </div>
             ) : (
-              <div className="w-6 h-6 rounded-full overflow-hidden border border-accent/20 shadow-sm shadow-accent/10 bg-black">
+              <div className={`w-6 h-6 rounded-full overflow-hidden border border-accent/20 shadow-sm shadow-accent/10 bg-black transition-all duration-500 ${isAssistantMessage(message) && message.isStreaming ? 'ring-2 ring-accent/30 shadow-[0_0_10px_rgba(var(--accent)/0.3)]' : ''}`}>
                 <img src={aiAvatar} alt="AI" className="w-full h-full object-cover opacity-90" />
               </div>
             )}
@@ -461,7 +461,7 @@ const ChatMessage = React.memo(({
 
                 {/* Streaming cursor */}
                 {isAssistantMessage(message) && message.isStreaming && (
-                  <span className="inline-block w-2 h-5 bg-accent ml-1 animate-pulse align-middle rounded-sm shadow-[0_0_10px_rgba(var(--color-accent),0.5)]" />
+                  <span className="inline-block w-2 h-4 bg-accent/80 ml-0.5 animate-pulse align-sub rounded-[1px] shadow-[0_0_5px_rgba(var(--accent)/0.5)]" />
                 )}
               </div>
             )

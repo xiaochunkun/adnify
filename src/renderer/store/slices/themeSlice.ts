@@ -1,6 +1,6 @@
 import { StateCreator } from 'zustand'
 
-export type ThemeName = 'adnify-dark' | 'midnight' | 'dawn';
+export type ThemeName = 'adnify-dark' | 'midnight' | 'dawn' | 'cyberpunk';
 
 export interface ThemeSlice {
     currentTheme: ThemeName;

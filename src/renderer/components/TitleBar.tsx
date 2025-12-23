@@ -7,7 +7,7 @@ import WorkspaceDropdown from './WorkspaceDropdown'
 export default function TitleBar() {
   const { setShowQuickOpen, setShowAbout } = useStore()
   return (
-    <div className="h-9 flex items-center justify-between px-3 drag-region select-none border-b border-border-subtle z-50 bg-background-secondary">
+    <div className="h-10 flex items-center justify-between px-3 drag-region select-none border-b border-border-subtle z-50 bg-background-secondary">
 
       {/* Left - Logo + Workspace Dropdown */}
       <div className="flex items-center gap-2 w-1/3">

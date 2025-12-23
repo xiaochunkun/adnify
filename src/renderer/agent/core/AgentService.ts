@@ -140,6 +140,8 @@ class AgentServiceClass {
   private currentAssistantId: string | null = null
   private isRunning = false
   private unsubscribers: (() => void)[] = []
+  private contentBuffer: string = ''
+  private activeStreamingToolCalls: Set<string> = new Set()
 
   // 会话级文件追踪：记录已读取的文件（用于 read-before-write 验证）
   private readFilesInSession = new Set<string>()
@@ -739,8 +741,10 @@ class AgentServiceClass {
         window.electronAPI.onLLMStream((chunk: LLMStreamChunk) => {
           if (chunk.type === 'text' && chunk.content) {
             content += chunk.content
+            this.contentBuffer += chunk.content
             if (this.currentAssistantId) {
               store.appendToAssistant(this.currentAssistantId, chunk.content)
+              this.detectStreamingXMLToolCalls()
             }
           }
 
@@ -874,15 +878,19 @@ class AgentServiceClass {
               finalContent = finalContent.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim()
 
               for (const tc of xmlToolCalls) {
-                toolCalls.push(tc)
-                // 添加到 UI
-                if (this.currentAssistantId) {
-                  const store = useAgentStore.getState()
-                  store.addToolCallPart(this.currentAssistantId, {
-                    id: tc.id,
-                    name: tc.name,
-                    arguments: tc.arguments,
-                  })
+                // 如果已经在流式中添加过了，就不再重复添加，但要更新最终结果
+                const existing = toolCalls.find(t => t.name === tc.name && JSON.stringify(t.arguments) === JSON.stringify(tc.arguments))
+                if (!existing) {
+                  toolCalls.push(tc)
+                  // 添加到 UI
+                  if (this.currentAssistantId) {
+                    const store = useAgentStore.getState()
+                    store.addToolCallPart(this.currentAssistantId, {
+                      id: tc.id,
+                      name: tc.name,
+                      arguments: tc.arguments,
+                    })
+                  }
                 }
               }
             }
@@ -1372,7 +1380,102 @@ class AgentServiceClass {
       }
     }
 
+    // 同时也支持直接的 <function> 标签（不被 <tool_call> 包裹）
+    const standaloneFuncRegex = /<function[=\s]+["']?([^"'>\s]+)["']?\s*>([\s\S]*?)<\/function>/gi
+    let standaloneMatch
+    while ((standaloneMatch = standaloneFuncRegex.exec(content)) !== null) {
+      // 检查是否已经被包含在 tool_call 中
+      const isInsideToolCall = /<tool_call>[\s\S]*?<function[=\s]+["']?([^"'>\s]+)["']?\s*>[\s\S]*?<\/function>[\s\S]*?<\/tool_call>/gi.test(content)
+      if (isInsideToolCall) continue
+
+      const toolName = standaloneMatch[1]
+      const paramsContent = standaloneMatch[2]
+      const args: Record<string, unknown> = {}
+
+      const paramRegex = /<parameter[=\s]+["']?([^"'>\s]+)["']?\s*>([\s\S]*?)<\/parameter>/gi
+      let paramMatch
+      while ((paramMatch = paramRegex.exec(paramsContent)) !== null) {
+        const paramName = paramMatch[1]
+        let paramValue: unknown = paramMatch[2].trim()
+        try {
+          paramValue = JSON.parse(paramValue as string)
+        } catch { }
+        args[paramName] = paramValue
+      }
+
+      toolCalls.push({
+        id: `xml-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: toolName,
+        arguments: args
+      })
+    }
+
     return toolCalls
+  }
+
+  /**
+   * 流式解析 XML 工具调用
+   */
+  private detectStreamingXMLToolCalls(): void {
+    if (!this.currentAssistantId) return
+    const store = useAgentStore.getState()
+    const content = this.contentBuffer
+
+    // 1. 寻找正在进行的 <tool_call> 或 <function>
+    // 我们寻找最后一个未闭合的标签，或者最近更新的标签
+
+    // 匹配 <function=name> 或 <function name="...">
+    const funcStartRegex = /<function[=\s]+["']?([^"'>\s]+)["']?\s*>/gi
+    let match
+    let lastFunc: { name: string, index: number, fullMatch: string } | null = null
+
+    while ((match = funcStartRegex.exec(content)) !== null) {
+      lastFunc = {
+        name: match[1],
+        index: match.index,
+        fullMatch: match[0]
+      }
+    }
+
+    if (!lastFunc) return
+
+    // 检查这个函数是否已经闭合
+    const remainingContent = content.slice(lastFunc.index + lastFunc.fullMatch.length)
+    const isClosed = remainingContent.includes('</function>')
+
+    // 提取参数
+    const args: Record<string, unknown> = {}
+    const paramRegex = /<parameter[=\s]+["']?([^"'>\s]+)["']?\s*>([\s\S]*?)(?:<\/parameter>|$)/gi
+    let paramMatch
+    while ((paramMatch = paramRegex.exec(remainingContent)) !== null) {
+      const paramName = paramMatch[1]
+      let paramValue = paramMatch[2].trim()
+
+      // 如果参数值看起来像 JSON，尝试解析
+      if (paramValue.startsWith('{') || paramValue.startsWith('[')) {
+        const parsed = parsePartialJson(paramValue)
+        if (parsed) paramValue = parsed as any
+      }
+
+      args[paramName] = paramValue
+    }
+
+    // 生成或获取稳定的流式 ID
+    // 我们使用函数名和它在内容中的位置作为唯一标识
+    const streamingId = `stream-xml-${lastFunc.name}-${lastFunc.index}`
+
+    if (!this.activeStreamingToolCalls.has(streamingId)) {
+      this.activeStreamingToolCalls.add(streamingId)
+      store.addToolCallPart(this.currentAssistantId, {
+        id: streamingId,
+        name: lastFunc.name,
+        arguments: { ...args, _streaming: true }
+      })
+    } else {
+      store.updateToolCall(this.currentAssistantId, streamingId, {
+        arguments: { ...args, _streaming: !isClosed }
+      })
+    }
   }
 
   private parsePartialArgs(argsString: string, _toolName: string): Record<string, unknown> {
@@ -1404,6 +1507,8 @@ class AgentServiceClass {
     this.currentAssistantId = null
     this.abortController = null
     this.isRunning = false
+    this.contentBuffer = ''
+    this.activeStreamingToolCalls.clear()
   }
 
   private async observeChanges(

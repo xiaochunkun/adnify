@@ -53,7 +53,7 @@ export default function StatusBar() {
   const toolCallLogs = useStore(state => state.toolCallLogs)
 
   return (
-    <div className="h-6 bg-background-secondary border-t border-white/5 flex items-center justify-between px-3 text-[10px] select-none text-text-muted z-50 font-medium">
+    <div className="h-7 bg-background-secondary border-t border-border-subtle flex items-center justify-between px-3 text-[10px] select-none text-text-muted z-50 font-medium">
       <div className="flex items-center gap-4">
         {isGitRepo && gitStatus && (
           <button className="flex items-center gap-1.5 hover:text-text-primary transition-colors group">

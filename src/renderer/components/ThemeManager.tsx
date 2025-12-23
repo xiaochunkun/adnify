@@ -5,34 +5,34 @@ import { ThemeName } from '../store/slices/themeSlice';
 // Theme definitions
 export const themes: Record<ThemeName, Record<string, string>> = {
     'adnify-dark': {
-        '--background': '9 9 11',           // #09090b
-        '--background-secondary': '24 24 27', // #18181b
-        '--background-tertiary': '39 39 42',  // #27272a
+        '--background': '10 10 12',         // Soft Deep Dark
+        '--background-secondary': '18 18 21',
+        '--background-tertiary': '24 24 27',
 
-        '--surface': '24 24 27',            // #18181b
-        '--surface-hover': '39 39 42',      // #27272a
-        '--surface-active': '63 63 70',     // #3f3f46
-        '--surface-muted': '82 82 91',      // #52525b
+        '--surface': '18 18 21',
+        '--surface-hover': '24 24 27',
+        '--surface-active': '39 39 42',
+        '--surface-muted': '63 63 70',
 
-        '--border': '63 63 70',             // #3f3f46
-        '--border-subtle': '39 39 42',      // #27272a
-        '--border-active': '113 113 122',   // #71717a
+        '--border': '39 39 42',
+        '--border-subtle': '34 34 38',      // Dark subtle border
+        '--border-active': '82 82 91',
 
-        '--text-primary': '244 244 245',    // #f4f4f5
-        '--text-secondary': '161 161 170',  // #a1a1aa
-        '--text-muted': '113 113 122',      // #71717a
-        '--text-inverted': '9 9 11',        // #09090b
+        '--text-primary': '240 240 242',
+        '--text-secondary': '161 161 170',
+        '--text-muted': '113 113 122',
+        '--text-inverted': '0 0 0',
 
-        '--accent': '139 92 246',           // #8b5cf6
-        '--accent-hover': '124 58 237',     // #7c3aed
-        '--accent-active': '109 40 217',    // #6d28d9
+        '--accent': '124 58 237',           // Violet 600
+        '--accent-hover': '109 40 217',     // Violet 700
+        '--accent-active': '91 33 182',     // Violet 800
         '--accent-foreground': '255 255 255',
-        '--accent-subtle': '139 92 246',
+        '--accent-subtle': '139 92 246',    // Violet 500
 
-        '--status-success': '34 197 94',    // #22c55e
-        '--status-warning': '234 179 8',    // #eab308
-        '--status-error': '239 68 68',      // #ef4444
-        '--status-info': '59 130 246',      // #3b82f6
+        '--status-success': '34 197 94',
+        '--status-warning': '234 179 8',
+        '--status-error': '239 68 68',
+        '--status-info': '59 130 246',
     },
     'midnight': {
         '--background': '2 6 23',           // Slate 950
@@ -63,6 +63,36 @@ export const themes: Record<ThemeName, Record<string, string>> = {
         '--status-warning': '234 179 8',
         '--status-error': '239 68 68',
         '--status-info': '59 130 246',
+    },
+    'cyberpunk': {
+        '--background': '10 10 15',         // Dark Navy
+        '--background-secondary': '20 20 35',
+        '--background-tertiary': '30 30 45',
+
+        '--surface': '20 20 35',
+        '--surface-hover': '40 40 60',
+        '--surface-active': '60 60 80',
+        '--surface-muted': '80 80 100',
+
+        '--border': '60 60 80',
+        '--border-subtle': '255 0 255',     // Neon Pink hint
+        '--border-active': '0 255 255',     // Neon Cyan hint
+
+        '--text-primary': '255 255 255',
+        '--text-secondary': '200 200 255',
+        '--text-muted': '150 150 200',
+        '--text-inverted': '0 0 0',
+
+        '--accent': '255 0 128',            // Neon Pink
+        '--accent-hover': '255 50 150',
+        '--accent-active': '200 0 100',
+        '--accent-foreground': '255 255 255',
+        '--accent-subtle': '255 100 200',
+
+        '--status-success': '0 255 100',    // Neon Green
+        '--status-warning': '255 200 0',    // Neon Yellow
+        '--status-error': '255 50 50',      // Neon Red
+        '--status-info': '0 200 255',       // Neon Blue
     },
     'dawn': {
         '--background': '255 255 255',      // White

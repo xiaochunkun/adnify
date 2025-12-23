@@ -13,6 +13,7 @@ import {
 import { useStore } from '../../store'
 import { t } from '../../i18n'
 import { ToolCall } from '../../agent/core/types'
+import { JsonHighlight } from '../../utils/jsonHighlight'
 
 interface ToolCallCardProps {
   toolCall: ToolCall
@@ -154,11 +155,11 @@ const ToolCallCard = memo(function ToolCallCard({
           </div>
           {toolCall.result && (
             <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
-              {/* 尝试解析结果如果是 JSON 列表 */}
-              <pre className="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-all p-2">
-                {toolCall.result.slice(0, 800)}
-                {toolCall.result.length > 800 && '\n...'}
-              </pre>
+              <JsonHighlight
+                data={toolCall.result}
+                className="p-2"
+                maxHeight="max-h-48"
+              />
             </div>
           )}
         </div>
@@ -171,19 +172,10 @@ const ToolCallCard = memo(function ToolCallCard({
         {/* 参数 */}
         {Object.keys(args).filter(k => !k.startsWith('_')).length > 0 && (
           <div className="bg-black/20 rounded-md border border-white/5 p-2">
-            <div className="space-y-1">
-              {Object.entries(args)
-                .filter(([key]) => !key.startsWith('_'))
-                .map(([key, value]) => (
-                  <div key={key} className="flex gap-2 text-[11px]">
-                    <span className="text-text-muted shrink-0 w-20 text-right opacity-60">{key}:</span>
-                    <span className="text-text-secondary font-mono break-all">
-                      {typeof value === 'string' ? value : JSON.stringify(value)}
-                    </span>
-                  </div>
-                ))
-              }
-            </div>
+            <JsonHighlight
+              data={Object.fromEntries(Object.entries(args).filter(([k]) => !k.startsWith('_')))}
+              maxHeight="max-h-32"
+            />
           </div>
         )}
 
@@ -200,10 +192,10 @@ const ToolCallCard = memo(function ToolCallCard({
               </button>
             </div>
             <div className="max-h-48 overflow-auto custom-scrollbar p-2">
-              <pre className="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-all">
-                {toolCall.result.slice(0, 800)}
-                {toolCall.result.length > 800 && '\n... (truncated)'}
-              </pre>
+              <JsonHighlight
+                data={toolCall.result}
+                maxHeight="max-h-48"
+              />
             </div>
           </div>
         )}

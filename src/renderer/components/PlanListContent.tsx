@@ -99,8 +99,8 @@ export function getPlanCount(): number {
 export function PlanListPopover({ language }: { language: 'en' | 'zh' }) {
     const { currentMode } = useModeStore()
 
-    // 仅在 Plan 模式下显示
-    if (currentMode !== 'plan') return null
+    // 在 Agent 和 Plan 模式下都显示
+    if (currentMode !== 'plan' && currentMode !== 'agent') return null
 
     return (
         <BottomBarPopover

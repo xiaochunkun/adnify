@@ -380,9 +380,9 @@ export default function TerminalPanel() {
     return (
         <>
             <style>{XTERM_STYLE}</style>
-            <div className="bg-transparent flex flex-col transition-none relative z-10" style={{ height: isCollapsed ? 36 : height }}>
+            <div className="bg-transparent flex flex-col transition-none relative z-10" style={{ height: isCollapsed ? 40 : height }}>
                 <div className="absolute top-0 left-0 right-0 h-1 cursor-row-resize z-50 hover:bg-accent/50 transition-colors" onMouseDown={startResizing} />
-                <div className="h-9 min-h-[36px] flex items-center justify-between border-b border-border-subtle bg-background/40 backdrop-blur-md select-none relative z-20">
+                <div className="h-10 min-h-[40px] flex items-center justify-between border-b border-border-subtle bg-background/40 backdrop-blur-md select-none relative z-20">
                     {/* Left Section: Icon & Tabs */}
                     <div className="flex items-center flex-1 min-w-0 overflow-hidden h-full">
                         <div className="flex-shrink-0 flex items-center justify-center px-3 cursor-pointer hover:text-text-primary text-text-muted transition-colors h-full" onClick={() => setIsCollapsed(!isCollapsed)}>
