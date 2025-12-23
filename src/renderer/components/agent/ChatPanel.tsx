@@ -29,7 +29,6 @@ import { MentionParser, MentionCandidate } from '@/renderer/agent/core/MentionPa
 import ChatMessageUI from './ChatMessage'
 import AgentStatusBar from './AgentStatusBar'
 import ContextPanel from './ContextPanel'
-import PlanList from './PlanList'
 import { keybindingService } from '@/renderer/services/keybindingService'
 import SlashCommandPopup from './SlashCommandPopup'
 import { slashCommandService, SlashCommand } from '@/renderer/services/slashCommandService'
@@ -87,14 +86,6 @@ export default function ChatPanel() {
     removeContextItem,
     clearContextItems,
     checkContextLength,
-    // Plan
-    plan,
-    updatePlanStatus,
-    updatePlanItem,
-    addPlanItem,
-    deletePlanItem,
-    setPlanStep,
-
   } = useAgent()
 
   const [input, setInput] = useState('')
@@ -110,7 +101,6 @@ export default function ChatPanel() {
   const [showSlashCommand, setShowSlashCommand] = useState(false)
   const [slashCommandQuery, setSlashCommandQuery] = useState('')
   const [showContextWarning, setShowContextWarning] = useState(false)
-  const [showPlan, setShowPlan] = useState(true)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const inputContainerRef = useRef<HTMLDivElement>(null)
@@ -282,32 +272,6 @@ export default function ChatPanel() {
   }, [workspacePath])
 
   // 上下文选择
-  const handleExecutePlanStep = useCallback((stepId: string | null) => {
-    setPlanStep(stepId)
-    if (stepId && plan) {
-      const step = plan.items.find(i => i.id === stepId)
-      if (step) {
-        // 自动发送消息触发执行
-        sendMessage(`Execute plan step: ${step.title}\n\nDescription: ${step.description || ''}`)
-      }
-    }
-  }, [plan, setPlanStep, sendMessage])
-
-  // 开始执行计划
-  const handleStartPlan = useCallback((status: 'active' | 'completed' | 'failed' | 'draft') => {
-    updatePlanStatus(status)
-    // 如果是开始计划，自动触发第一个待执行的步骤
-    if (status === 'active' && plan) {
-      const firstPendingStep = plan.items.find(i => i.status === 'pending')
-      if (firstPendingStep) {
-        handleExecutePlanStep(firstPendingStep.id)
-      } else {
-        // 没有待执行的步骤，直接发送执行计划的消息
-        sendMessage(`Start executing the plan. The plan has ${plan.items.length} items.`)
-      }
-    }
-  }, [plan, updatePlanStatus, handleExecutePlanStep, sendMessage])
-
   const handleSelectMention = useCallback((candidate: MentionCandidate) => {
     if (!mentionRange) return
 
@@ -646,17 +610,6 @@ export default function ChatPanel() {
           </div>
 
           <div className="flex items-center gap-1">
-            {plan && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowPlan(!showPlan)}
-                className={`h-7 px-2 text-xs font-medium transition-colors ${showPlan ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-text-primary'}`}
-                title={showPlan ? 'Hide Plan' : 'Show Plan'}
-              >
-                Plan
-              </Button>
-            )}
             <Button
               variant="ghost"
               size="icon"
@@ -751,19 +704,6 @@ export default function ChatPanel() {
 
         {/* Messages Area */}
         <div className="flex-1 min-h-0 relative z-0 flex flex-col pt-14">
-          {/* Plan View */}
-          {plan && showPlan && (
-            <div className="h-1/3 min-h-[240px] shrink-0 z-10">
-              <PlanList
-                plan={plan}
-                onUpdateStatus={handleStartPlan}
-                onUpdateItem={updatePlanItem}
-                onAddItem={addPlanItem}
-                onDeleteItem={deletePlanItem}
-                onSetStep={handleExecutePlanStep}
-              />
-            </div>
-          )}
           {/* API Key Warning */}
           {!hasApiKey && (
             <div className="m-4 p-4 border border-warning/20 bg-warning/5 rounded-xl flex gap-3 backdrop-blur-sm relative z-10">

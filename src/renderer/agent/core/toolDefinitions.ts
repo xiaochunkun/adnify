@@ -151,11 +151,12 @@ export const CreatePlanSchema = z.object({
 export const UpdatePlanSchema = z.object({
     status: z.enum(['active', 'completed', 'failed']).optional(),
     items: z.array(z.object({
-        id: z.string(),
+        id: z.string().optional(),
         status: z.enum(['pending', 'in_progress', 'completed', 'failed', 'skipped']).optional(),
         title: z.string().optional(),
     })).optional(),
-    currentStepId: z.string().nullable().optional()
+    currentStepId: z.string().nullable().optional(),
+    title: z.string().optional()
 })
 
 // ===== Schema 映射表 =====
@@ -482,24 +483,25 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
     {
         name: 'update_plan',
-        description: 'Update the current plan status or specific items.',
+        description: 'Update the current plan status or specific items. You can use item ID or 1-based index (e.g., "1", "2") to identify items.',
         parameters: {
             type: 'object',
             properties: {
-                status: { type: 'string', enum: ['active', 'completed', 'failed'] },
+                status: { type: 'string', enum: ['active', 'completed', 'failed'], description: 'Overall plan status' },
                 items: {
                     type: 'array',
                     items: {
                         type: 'object',
                         properties: {
-                            id: { type: 'string' },
+                            id: { type: 'string', description: 'Item UUID or 1-based index (e.g., "1")' },
                             status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'failed', 'skipped'] },
-                            title: { type: 'string' }
+                            title: { type: 'string', description: 'New title for the item' }
                         },
-                        required: ['id']
+                        required: []
                     }
                 },
-                currentStepId: { type: 'string' }
+                currentStepId: { type: 'string', description: 'ID or 1-based index of the current active step' },
+                title: { type: 'string', description: 'Update plan title' }
             },
             required: []
         }

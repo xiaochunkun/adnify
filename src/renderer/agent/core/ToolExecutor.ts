@@ -104,13 +104,13 @@ function generatePlanMarkdown(plan: {
     status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped'
   }>
 }, planTitle?: string): string {
-  const timestamp = new Date().toISOString()
+  const timestamp = new Date().toLocaleString()
 
   let content = `# 📋 ${planTitle || 'Execution Plan'}\n\n`
   content += `> Generated: ${timestamp}\n\n`
-  content += `## Steps\n\n`
+  content += `## Steps\n`
 
-  plan.items.forEach((item, idx) => {
+  plan.items.forEach((item) => {
     const checkbox = item.status === 'completed' ? '[x]' :
       item.status === 'in_progress' ? '[/]' :
         item.status === 'failed' ? '[!]' :
@@ -121,14 +121,13 @@ function generatePlanMarkdown(plan: {
         item.status === 'failed' ? '❌' :
           '⬜'
 
-    content += `${idx + 1}. ${checkbox} ${statusIcon} ${item.title}\n`
+    content += `- ${checkbox} ${statusIcon} [id: ${item.id}] ${item.title}\n`
     if (item.description) {
-      content += `   > ${item.description}\n`
+      content += `  > ${item.description}\n`
     }
-    content += `\n`
   })
 
-  content += `---\n`
+  content += `\n---\n`
   content += `*Plan ID: ${plan.items[0]?.id?.slice(0, 8) || 'N/A'}*\n`
 
   return content
@@ -756,14 +755,18 @@ export async function executeTool(
       }
 
       case 'update_plan': {
-        const { status, items, currentStepId } = validatedArgs
+        const { status, items, currentStepId, title } = validatedArgs as {
+          status?: string
+          items?: Array<{ id: string; status: string; title?: string }>
+          currentStepId?: string | null
+          title?: string
+        }
         const { useAgentStore } = await import('./AgentStore')
         const store = useAgentStore.getState()
         const plan = store.plan
 
         // 调试日志
         console.log('[update_plan] Received args:', JSON.stringify(validatedArgs, null, 2))
-        console.log('[update_plan] Current plan items:', plan?.items.map((p, i) => ({ index: i, id: p.id, title: p.title, status: p.status })))
 
         if (status) {
           store.updatePlanStatus(status as any)
@@ -773,30 +776,60 @@ export async function executeTool(
           for (const item of items) {
             let targetId = item.id
 
-            // 优先检查是否直接匹配某个 item 的 id（UUID）
-            const directMatch = plan.items.find(p => p.id === item.id)
-            if (!directMatch) {
-              // 如果没有直接匹配，尝试作为数字索引解析
-              const maybeIndex = parseInt(item.id, 10)
+            if (!targetId) {
+              // 如果没有 ID，尝试通过标题匹配
+              if (item.title) {
+                const titleMatch = plan.items.find(p => p.title === item.title)
+                if (titleMatch) {
+                  targetId = titleMatch.id
+                  console.log(`[update_plan] Mapped title "${item.title}" -> id ${targetId}`)
+                }
+              }
+
+              if (!targetId) {
+                console.warn('[update_plan] Item missing id and no title match found, skipping:', item)
+                continue
+              }
+            }
+
+            // 1. 优先检查是否直接匹配某个 item 的 id (UUID)
+            let matchedItem = plan.items.find(p => p.id === targetId)
+
+            // 2. 如果没有直接匹配，尝试前缀匹配 (支持 AI 使用短 ID，如 8 位)
+            if (!matchedItem && targetId && targetId.length >= 4) {
+              const prefixMatches = plan.items.filter(p => p.id.startsWith(targetId!))
+              if (prefixMatches.length === 1) {
+                matchedItem = prefixMatches[0]
+                targetId = matchedItem.id
+                console.log(`[update_plan] Mapped prefix "${item.id}" -> id ${targetId}`)
+              }
+            }
+
+            // 3. 如果还是没有匹配，尝试作为数字索引解析
+            if (!matchedItem) {
+              const maybeIndex = parseInt(targetId!, 10)
               if (!isNaN(maybeIndex)) {
                 // 支持 1-based 索引（AI 自然语言习惯）
-                // "1" -> 第1个项目 -> 索引 0
-                // "0" -> 也作为索引 0 处理
                 const adjustedIndex = maybeIndex > 0 && maybeIndex <= plan.items.length
                   ? maybeIndex - 1  // 1-based 转 0-based
                   : maybeIndex      // 已经是 0-based 或超界
 
                 if (adjustedIndex >= 0 && adjustedIndex < plan.items.length) {
-                  targetId = plan.items[adjustedIndex].id
-                  console.log(`[update_plan] Mapped "${item.id}" -> index ${adjustedIndex} -> id ${targetId}`)
+                  matchedItem = plan.items[adjustedIndex]
+                  targetId = matchedItem.id
+                  console.log(`[update_plan] Mapped index "${item.id}" -> index ${adjustedIndex} -> id ${targetId}`)
                 }
               }
             }
 
-            store.updatePlanItem(targetId, {
-              status: item.status as any,
-              title: item.title
-            })
+            if (matchedItem) {
+              store.updatePlanItem(targetId!, {
+                status: item.status as any,
+                title: item.title
+              })
+            } else {
+              console.warn(`[update_plan] Could not find item for identifier: ${item.id}`)
+            }
           }
         }
 
@@ -805,33 +838,54 @@ export async function executeTool(
           let stepId = currentStepId
           if (plan && currentStepId !== null) {
             const maybeIndex = parseInt(currentStepId, 10)
-            if (!isNaN(maybeIndex) && maybeIndex >= 0 && maybeIndex < plan.items.length) {
-              stepId = plan.items[maybeIndex].id
+            if (!isNaN(maybeIndex)) {
+              const adjustedIndex = maybeIndex > 0 && maybeIndex <= plan.items.length
+                ? maybeIndex - 1
+                : maybeIndex
+              if (adjustedIndex >= 0 && adjustedIndex < plan.items.length) {
+                stepId = plan.items[adjustedIndex].id
+              }
             }
           }
           store.setPlanStep(stepId)
         }
 
         // 同步更新活动计划文件
-        const updatedPlan = store.plan
+        const updatedPlan = useAgentStore.getState().plan
         if (updatedPlan && workspacePath) {
           // 读取活动计划路径
           let planFilePath = await window.electronAPI.readFile(`${workspacePath}/.adnify/active_plan.txt`)
           if (!planFilePath) {
-            // 兼容旧格式
             planFilePath = `${workspacePath}/.adnify/plan.md`
           }
           planFilePath = planFilePath.trim()
 
-          const planContent = generatePlanMarkdown(updatedPlan)
-          await window.electronAPI.writeFile(planFilePath, planContent)
+          // 提取现有标题（如果 update_plan 没传 title）
+          let finalTitle = title
+          if (!finalTitle) {
+            const oldContent = await window.electronAPI.readFile(planFilePath)
+            if (oldContent) {
+              const titleMatch = oldContent.match(/^# 📋 (.*)$/m)
+              if (titleMatch) finalTitle = titleMatch[1]
+            }
+          }
 
-          // 更新编辑器中的文件内容
-          const { useStore } = await import('@/renderer/store')
-          const storeState = useStore.getState()
-          const openFile = storeState.openFiles.find(f => f.path === planFilePath)
-          if (openFile) {
-            storeState.updateFileContent(planFilePath, planContent)
+          const planContent = generatePlanMarkdown(updatedPlan, finalTitle)
+          const writeSuccess = await window.electronAPI.writeFile(planFilePath, planContent)
+
+          if (writeSuccess) {
+            // 更新编辑器中的文件内容（使用 reloadFileFromDisk 确保同步且清除 dirty 状态）
+            // 注意：避免在 IPC 回调中直接使用复杂的动态导入，可能会触发 require is not defined
+            try {
+              const { useStore } = await import('@/renderer/store')
+              const storeState = useStore.getState()
+              const openFile = storeState.openFiles.find(f => f.path === planFilePath)
+              if (openFile) {
+                storeState.reloadFileFromDisk(planFilePath, planContent)
+              }
+            } catch (err) {
+              console.error('[update_plan] Failed to sync editor state:', err)
+            }
           }
         }
 

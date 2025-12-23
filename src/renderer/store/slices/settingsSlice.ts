@@ -2,7 +2,11 @@
  * 设置相关状态切片
  */
 import { StateCreator } from 'zustand'
-import { SECURITY_DEFAULTS, AGENT_DEFAULTS } from '../../../shared/constants'
+import {
+  SECURITY_DEFAULTS,
+  AGENT_DEFAULTS,
+} from '@/shared/constants'
+import { saveEditorConfig, getEditorConfig } from '../../config/editorConfig'
 import { defaultEditorConfig } from '../../config/editorConfig'
 
 export type ProviderType = 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'groq' | 'mistral' | 'ollama' | 'custom'
@@ -219,7 +223,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice, [], [], SettingsSl
   setEditorConfig: (config) =>
     set((state) => {
       const newConfig = { ...state.editorConfig, ...config }
-      require('../../config/editorConfig').saveEditorConfig(newConfig)
+      saveEditorConfig(newConfig)
       return { editorConfig: newConfig }
     }),
 
@@ -239,7 +243,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice, [], [], SettingsSl
           agentConfig: settings.agentConfig ? { ...defaultAgentConfig, ...settings.agentConfig } : defaultAgentConfig,
           onboardingCompleted: settings.onboardingCompleted ?? !!settings.llmConfig?.apiKey,
           hasExistingConfig: !!settings.llmConfig?.apiKey,
-          editorConfig: require('../../config/editorConfig').getEditorConfig(),
+          editorConfig: getEditorConfig(),
         })
       } else {
         set({ onboardingCompleted: false, hasExistingConfig: false })

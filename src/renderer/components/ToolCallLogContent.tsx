@@ -3,71 +3,21 @@
  * 用于在 BottomBarPopover 中显示
  */
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Trash2, Download, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { Button } from './ui'
 import { JsonHighlight } from '@/renderer/utils/jsonHighlight'
-
-interface ToolCallLogEntry {
-    id: string
-    timestamp: Date
-    type: 'request' | 'response'
-    toolName: string
-    data: unknown
-    duration?: number
-}
-
-// 全局日志存储
-let logEntries: ToolCallLogEntry[] = []
-const MAX_LOGS = 100
-
-// 添加日志的公共函数
-export function addToolCallLog(entry: Omit<ToolCallLogEntry, 'id' | 'timestamp'>) {
-    const newEntry: ToolCallLogEntry = {
-        ...entry,
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        timestamp: new Date()
-    }
-    logEntries.unshift(newEntry)
-    if (logEntries.length > MAX_LOGS) {
-        logEntries = logEntries.slice(0, MAX_LOGS)
-    }
-    logSubscribers.forEach(fn => fn([...logEntries]))
-}
-
-// 订阅日志更新
-const logSubscribers: ((logs: ToolCallLogEntry[]) => void)[] = []
-function subscribeToLogs(callback: (logs: ToolCallLogEntry[]) => void) {
-    logSubscribers.push(callback)
-    return () => {
-        const idx = logSubscribers.indexOf(callback)
-        if (idx >= 0) logSubscribers.splice(idx, 1)
-    }
-}
-
-export function clearToolCallLogs() {
-    logEntries = []
-    logSubscribers.forEach(fn => fn([]))
-}
-
-export function getToolCallLogCount(): number {
-    return logEntries.length
-}
+import { useStore } from '@/renderer/store'
 
 interface ToolCallLogContentProps {
     language?: 'en' | 'zh'
 }
 
 export default function ToolCallLogContent({ language = 'zh' }: ToolCallLogContentProps) {
-    const [logs, setLogs] = useState<ToolCallLogEntry[]>(logEntries)
+    const { toolCallLogs: logs, clearToolCallLogs } = useStore()
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
     const [filter, setFilter] = useState<'all' | 'request' | 'response'>('all')
     const [copiedId, setCopiedId] = useState<string | null>(null)
-
-    useEffect(() => {
-        const unsubscribe = subscribeToLogs(setLogs)
-        return unsubscribe
-    }, [])
 
     const toggleExpand = (id: string) => {
         const newExpanded = new Set(expandedIds)
@@ -100,22 +50,36 @@ export default function ToolCallLogContent({ language = 'zh' }: ToolCallLogConte
     return (
         <div className="h-full flex flex-col">
             {/* 工具栏 */}
-            <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border-subtle">
+            <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border-subtle bg-surface/30">
                 <select
                     value={filter}
                     onChange={e => setFilter(e.target.value as 'all' | 'request' | 'response')}
-                    className="px-1.5 py-0.5 text-[10px] bg-surface border border-border-subtle rounded text-text-secondary"
+                    className="px-1.5 py-0.5 text-[10px] bg-surface border border-border-subtle rounded text-text-secondary outline-none focus:border-accent/50"
                 >
                     <option value="all">{language === 'zh' ? '全部' : 'All'}</option>
                     <option value="request">{language === 'zh' ? '请求' : 'Req'}</option>
                     <option value="response">{language === 'zh' ? '响应' : 'Res'}</option>
                 </select>
                 <div className="flex-1" />
-                <Button variant="ghost" size="sm" onClick={handleExport} className="h-5 w-5 p-0">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleExport}
+                    className="h-6 px-1.5 text-[10px] gap-1 text-text-muted hover:text-text-primary"
+                    title={language === 'zh' ? '导出日志' : 'Export Logs'}
+                >
                     <Download className="w-3 h-3" />
+                    <span className="hidden sm:inline">{language === 'zh' ? '导出' : 'Export'}</span>
                 </Button>
-                <Button variant="ghost" size="sm" onClick={clearToolCallLogs} className="h-5 w-5 p-0">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearToolCallLogs}
+                    className="h-6 px-1.5 text-[10px] gap-1 text-text-muted hover:text-red-400 hover:bg-red-500/10"
+                    title={language === 'zh' ? '清除日志' : 'Clear Logs'}
+                >
                     <Trash2 className="w-3 h-3" />
+                    <span className="hidden sm:inline">{language === 'zh' ? '清除' : 'Clear'}</span>
                 </Button>
             </div>
 

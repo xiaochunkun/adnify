@@ -11,13 +11,23 @@
  */
 
 import { useAgentStore } from './AgentStore'
-import { useStore } from '../../store'  // 用于读取 autoApprove 配置
+import { useModeStore } from '@/renderer/modes'
+import { useStore } from '../../store'  // 用于读取 autoApprove 配置和记录日志
 import { executeTool, getToolDefinitions, getToolApprovalType } from './ToolExecutor'
 import { buildOpenAIMessages, validateOpenAIMessages, OpenAIMessage } from './MessageConverter'
-import { MessageContent, ToolStatus, ContextItem, TextContent, UserMessage, AssistantMessage, ToolResultMessage, ToolDefinition, ToolExecutionResult } from './types'
+import {
+  UserMessage,
+  AssistantMessage,
+  ToolResultMessage,
+  ContextItem,
+  MessageContent,
+  ToolDefinition,
+  ToolExecutionResult,
+  TextContent,
+  ToolStatus,
+} from './types'
 import { LLMStreamChunk, LLMToolCall } from '@/renderer/types/electron'
 import { parsePartialJson, truncateToolResult } from '@/renderer/utils/partialJson'
-import { addToolCallLog } from '@/renderer/components/ToolCallLogContent'
 import { AGENT_DEFAULTS, READ_ONLY_TOOLS, isFileModifyingTool } from '@/shared/constants'
 
 // 读取类工具（可以并行执行）- 使用 constants.ts 的统一定义
@@ -480,6 +490,20 @@ class AgentServiceClass {
 
       // 如果没有工具调用，LLM 认为任务完成，结束循环
       if (!result.toolCalls || result.toolCalls.length === 0) {
+        // [Plan Mode Reminder] 如果在计划模式下，且本轮执行了写操作但未更新计划，则注入提醒
+        const hasWriteOps = llmMessages.some(m => m.role === 'assistant' && m.tool_calls?.some((tc: any) => !READ_ONLY_TOOLS.includes(tc.function.name)))
+        const hasUpdatePlan = llmMessages.some(m => m.role === 'assistant' && m.tool_calls?.some((tc: any) => tc.function.name === 'update_plan'))
+
+        if (store.plan && hasWriteOps && !hasUpdatePlan && loopCount < CONFIG.maxToolLoops) {
+          console.log('[Agent] Plan mode detected: Reminding AI to update plan status')
+          llmMessages.push({
+            role: 'user' as const,
+            content: 'Reminder: You have performed some actions. Please use `update_plan` to update the plan status (e.g., mark the current step as completed) before finishing your response.',
+          })
+          shouldContinue = true
+          continue
+        }
+
         console.log('[Agent] No tool calls, task complete')
         break
       }
@@ -705,7 +729,6 @@ class AgentServiceClass {
       const isValidToolName = (name: string) => {
         if (!/^[a-zA-Z0-9_-]+$/.test(name)) return false
         // 获取 Plan 模式状态，动态过滤工具
-        const { useModeStore } = require('@/renderer/modes')
         const isPlanMode = useModeStore.getState().currentMode === 'plan'
         // 确保工具在定义中存在
         return getToolDefinitions(isPlanMode).some((t: ToolDefinition) => t.name === name)
@@ -950,7 +973,7 @@ class AgentServiceClass {
 
     // 记录工具调用请求日志
     const startTime = Date.now()
-    addToolCallLog({ type: 'request', toolName: name, data: { name, arguments: args } })
+    useStore.getState().addToolCallLog({ type: 'request', toolName: name, data: { name, arguments: args } })
 
     let originalContent: string | null = null
     let fullPath: string | null = null
@@ -1011,7 +1034,7 @@ class AgentServiceClass {
     }
 
     // 记录工具调用响应日志
-    addToolCallLog({
+    useStore.getState().addToolCallLog({
       type: 'response',
       toolName: name,
       data: { success: result.success, result: result.result?.slice?.(0, 500), error: result.error },

@@ -125,6 +125,7 @@ type AgentStore = AgentState & AgentActions
 // ===== 辅助函数 =====
 
 const generateId = () => crypto.randomUUID()
+const generateShortId = () => crypto.randomUUID().slice(0, 8)
 
 const createEmptyThread = (): ChatThread => ({
   id: generateId(),
@@ -1015,7 +1016,7 @@ export const useAgentStore = create<AgentStore>()(
           plan: {
             id: crypto.randomUUID(),
             items: items.map(item => ({
-              id: crypto.randomUUID(),
+              id: generateShortId(),
               title: item.title,
               description: item.description,
               status: 'pending'
@@ -1060,7 +1061,7 @@ export const useAgentStore = create<AgentStore>()(
         set((state) => {
           if (!state.plan) return {}
           const newItem: PlanItem = {
-            id: generateId(),
+            id: generateShortId(),
             title: item.title,
             description: item.description,
             status: 'pending',

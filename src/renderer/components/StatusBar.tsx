@@ -5,7 +5,7 @@ import { t } from '../i18n'
 import { IndexStatus } from '../types/electron'
 import { indexWorkerService, IndexProgress } from '../services/indexWorkerService'
 import BottomBarPopover from './ui/BottomBarPopover'
-import ToolCallLogContent, { getToolCallLogCount } from './ToolCallLogContent'
+import ToolCallLogContent from './ToolCallLogContent'
 import { PlanListPopover } from './PlanListContent'
 
 export default function StatusBar() {
@@ -49,6 +49,8 @@ export default function StatusBar() {
   const handleIndexClick = () => {
     setShowSettings(true)
   }
+
+  const toolCallLogs = useStore(state => state.toolCallLogs)
 
   return (
     <div className="h-6 bg-background-secondary border-t border-white/5 flex items-center justify-between px-3 text-[10px] select-none text-text-muted z-50 font-medium">
@@ -127,7 +129,7 @@ export default function StatusBar() {
             title={language === 'zh' ? '工具调用日志' : 'Tool Call Logs'}
             width={380}
             height={280}
-            badge={getToolCallLogCount() || undefined}
+            badge={toolCallLogs.length || undefined}
             language={language as 'en' | 'zh'}
           >
             <ToolCallLogContent language={language as 'en' | 'zh'} />

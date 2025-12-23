@@ -14,7 +14,8 @@ import { lintService } from '../agent/lintService'
 import { streamingEditService } from '../agent/streamingEditService'
 import { LintError, StreamingEditState } from '@/renderer/agent/toolTypes'
 import { completionService } from '../services/completionService'
-import { getFileType, MarkdownPreview, ImagePreview, UnsupportedFile } from './FilePreview'
+import { getFileType, MarkdownPreview, ImagePreview, UnsupportedFile, isPlanFile } from './FilePreview'
+import { PlanPreview } from './agent/PlanPreview'
 
 import { initMonacoTypeService } from '../services/monacoTypeService'
 import {
@@ -1173,24 +1174,29 @@ export default function Editor() {
             {/* Markdown 工具栏 */}
             {activeFileType === 'markdown' && (
               <div className="absolute top-0 right-0 z-10 flex items-center gap-1 px-2 py-1 bg-surface/80 backdrop-blur-sm rounded-bl-lg border-l border-b border-white/10">
-                <button
-                  onClick={() => setMarkdownMode('edit')}
-                  className={`p-1.5 rounded-md text-xs transition-colors ${markdownMode === 'edit' ? 'bg-accent/20 text-accent' : 'text-text-muted hover:text-text-primary hover:bg-white/10'}`}
-                  title="编辑模式"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setMarkdownMode('split')}
-                  className={`p-1.5 rounded-md text-xs transition-colors ${markdownMode === 'split' ? 'bg-accent/20 text-accent' : 'text-text-muted hover:text-text-primary hover:bg-white/10'}`}
-                  title="分屏模式"
-                >
-                  <Columns className="w-3.5 h-3.5" />
-                </button>
+                {!isPlanFile(activeFile.path) && (
+                  <>
+                    <button
+                      onClick={() => setMarkdownMode('edit')}
+                      className={`p-1.5 rounded-md text-xs transition-colors ${markdownMode === 'edit' ? 'bg-accent/20 text-accent' : 'text-text-muted hover:text-text-primary hover:bg-white/10'}`}
+                      title="编辑模式"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setMarkdownMode('split')}
+                      className={`p-1.5 rounded-md text-xs transition-colors ${markdownMode === 'split' ? 'bg-accent/20 text-accent' : 'text-text-muted hover:text-text-primary hover:bg-white/10'}`}
+                      title="分屏模式"
+                    >
+                      <Columns className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => setMarkdownMode('preview')}
-                  className={`p-1.5 rounded-md text-xs transition-colors ${markdownMode === 'preview' ? 'bg-accent/20 text-accent' : 'text-text-muted hover:text-text-primary hover:bg-white/10'}`}
+                  className={`p-1.5 rounded-md text-xs transition-colors ${markdownMode === 'preview' || isPlanFile(activeFile.path) ? 'bg-accent/20 text-accent' : 'text-text-muted hover:text-text-primary hover:bg-white/10'}`}
                   title="预览模式"
+                  disabled={isPlanFile(activeFile.path)}
                 >
                   <Eye className="w-3.5 h-3.5" />
                 </button>
@@ -1203,9 +1209,13 @@ export default function Editor() {
             ) : activeFileType === 'binary' ? (
               /* 二进制文件提示 */
               <UnsupportedFile path={activeFile.path} fileType="binary" />
-            ) : activeFileType === 'markdown' && markdownMode === 'preview' ? (
-              /* Markdown 纯预览模式 */
-              <MarkdownPreview content={activeFile.content} fontSize={getEditorConfig().fontSize} />
+            ) : activeFileType === 'markdown' && (markdownMode === 'preview' || isPlanFile(activeFile.path)) ? (
+              /* Markdown 纯预览模式 或 Plan 文件强制预览 */
+              isPlanFile(activeFile.path) ? (
+                <PlanPreview content={activeFile.content} fontSize={getEditorConfig().fontSize} filePath={activeFile.path} />
+              ) : (
+                <MarkdownPreview content={activeFile.content} fontSize={getEditorConfig().fontSize} />
+              )
             ) : activeFileType === 'markdown' && markdownMode === 'split' ? (
               /* Markdown 分屏模式 */
               <div className="flex h-full">
