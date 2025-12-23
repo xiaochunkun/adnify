@@ -91,6 +91,49 @@ function formatDirTree(nodes: DirTreeNode[], prefix = ''): string {
   return result
 }
 
+// ===== Plan Markdown 生成 =====
+
+/**
+ * 生成 Plan 的 Markdown 内容（使用清单格式）
+ */
+function generatePlanMarkdown(plan: {
+  items: Array<{
+    id: string
+    title: string
+    description?: string
+    status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped'
+  }>
+}, planTitle?: string): string {
+  const timestamp = new Date().toISOString()
+
+  let content = `# 📋 ${planTitle || 'Execution Plan'}\n\n`
+  content += `> Generated: ${timestamp}\n\n`
+  content += `## Steps\n\n`
+
+  plan.items.forEach((item, idx) => {
+    const checkbox = item.status === 'completed' ? '[x]' :
+      item.status === 'in_progress' ? '[/]' :
+        item.status === 'failed' ? '[!]' :
+          '[ ]'
+
+    const statusIcon = item.status === 'completed' ? '✅' :
+      item.status === 'in_progress' ? '🔄' :
+        item.status === 'failed' ? '❌' :
+          '⬜'
+
+    content += `${idx + 1}. ${checkbox} ${statusIcon} ${item.title}\n`
+    if (item.description) {
+      content += `   > ${item.description}\n`
+    }
+    content += `\n`
+  })
+
+  content += `---\n`
+  content += `*Plan ID: ${plan.items[0]?.id?.slice(0, 8) || 'N/A'}*\n`
+
+  return content
+}
+
 // ===== 工具执行结果 =====
 
 
@@ -662,19 +705,51 @@ export async function executeTool(
       }
 
       case 'create_plan': {
-        const { items } = validatedArgs
+        const { items, title } = validatedArgs as {
+          items: Array<{ title: string; description?: string }>
+          title?: string
+        }
         const { useAgentStore } = await import('./AgentStore')
         useAgentStore.getState().createPlan(items)
 
-        // 返回创建的计划详情（包含生成的 ID）
+        // 生成 plan.md 内容（使用清单格式）
         const plan = useAgentStore.getState().plan
         if (plan) {
+          const planContent = generatePlanMarkdown(plan, title)
+
+          // 获取工作区路径并保存到 plans/ 目录
+          if (workspacePath) {
+            // 生成唯一的计划文件名
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+            const planName = title
+              ? title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_').slice(0, 30)
+              : `plan_${timestamp}`
+            const planFilePath = `${workspacePath}/.adnify/plans/${planName}.md`
+
+            // 确保目录存在
+            await window.electronAPI.ensureDir(`${workspacePath}/.adnify/plans`)
+
+            // 写入计划文件
+            await window.electronAPI.writeFile(planFilePath, planContent)
+
+            // 在编辑器中打开
+            const { useStore } = await import('@/renderer/store')
+            useStore.getState().openFile(planFilePath, planContent)
+            useStore.getState().setActiveFile(planFilePath)
+
+            // 保存当前活动计划路径
+            await window.electronAPI.writeFile(
+              `${workspacePath}/.adnify/active_plan.txt`,
+              planFilePath
+            )
+          }
+
           const itemsSummary = plan.items.map((item, idx) =>
             `[${idx}] ${item.id.slice(0, 8)}... - ${item.title}`
           ).join('\n')
           return {
             success: true,
-            result: `Plan created successfully with ${plan.items.length} items:\n${itemsSummary}\n\nUse index (0-based) or item ID to update items.`
+            result: `Plan created and opened in editor with ${plan.items.length} items:\n${itemsSummary}\n\nPlan file: .adnify/plans/${title || 'plan'}.md`
           }
         }
         return { success: true, result: 'Plan created successfully' }
@@ -735,6 +810,29 @@ export async function executeTool(
             }
           }
           store.setPlanStep(stepId)
+        }
+
+        // 同步更新活动计划文件
+        const updatedPlan = store.plan
+        if (updatedPlan && workspacePath) {
+          // 读取活动计划路径
+          let planFilePath = await window.electronAPI.readFile(`${workspacePath}/.adnify/active_plan.txt`)
+          if (!planFilePath) {
+            // 兼容旧格式
+            planFilePath = `${workspacePath}/.adnify/plan.md`
+          }
+          planFilePath = planFilePath.trim()
+
+          const planContent = generatePlanMarkdown(updatedPlan)
+          await window.electronAPI.writeFile(planFilePath, planContent)
+
+          // 更新编辑器中的文件内容
+          const { useStore } = await import('@/renderer/store')
+          const storeState = useStore.getState()
+          const openFile = storeState.openFiles.find(f => f.path === planFilePath)
+          if (openFile) {
+            storeState.updateFileContent(planFilePath, planContent)
+          }
         }
 
         return { success: true, result: 'Plan updated successfully' }

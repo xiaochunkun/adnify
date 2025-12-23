@@ -704,8 +704,11 @@ class AgentServiceClass {
       // 验证工具名称是否合法
       const isValidToolName = (name: string) => {
         if (!/^[a-zA-Z0-9_-]+$/.test(name)) return false
+        // 获取 Plan 模式状态，动态过滤工具
+        const { useModeStore } = require('@/renderer/modes')
+        const isPlanMode = useModeStore.getState().currentMode === 'plan'
         // 确保工具在定义中存在
-        return getToolDefinitions().some((t: ToolDefinition) => t.name === name)
+        return getToolDefinitions(isPlanMode).some((t: ToolDefinition) => t.name === name)
       }
 
       // 监听流式文本

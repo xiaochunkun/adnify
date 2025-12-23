@@ -197,7 +197,8 @@ export const createFileSlice: StateCreator<FileSlice, [], [], FileSlice> = (set)
   reloadFileFromDisk: (path, content) =>
     set((state) => ({
       openFiles: state.openFiles.map((f) =>
-        f.path === path ? { ...f, content, originalContent: content, isDirty: false } : f
+        // 重新加载时清除 originalContent，避免 DiffEditor 显示两边相同的内容
+        f.path === path ? { ...f, content, originalContent: undefined, isDirty: false } : f
       ),
     })),
 })

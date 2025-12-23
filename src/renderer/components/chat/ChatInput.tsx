@@ -11,11 +11,13 @@ import {
   Terminal,
   Database,
   Paperclip,
-  ArrowUp
+  ArrowUp,
+  ClipboardList
 } from 'lucide-react'
 import { useStore, ChatMode } from '../../store'
 import { t } from '../../i18n'
 import { Button } from '../ui'
+import { useModeStore } from '@/renderer/modes'
 
 export interface PendingImage {
   id: string
@@ -246,32 +248,89 @@ export default function ChatInput({
 
       <div className="mt-1.5 flex items-center justify-between px-2">
         <div className="flex items-center gap-1 bg-white/5 rounded-lg p-0.5 border border-white/5">
-          <button
+          <ModeButton
+            active={chatMode === 'chat'}
             onClick={() => setChatMode('chat')}
-            className={`h-6 px-2.5 gap-1.5 text-[10px] font-bold transition-all duration-200 rounded-md flex items-center
-              ${chatMode === 'chat'
-                ? 'bg-surface text-text-primary shadow-sm'
-                : 'text-text-muted hover:text-text-secondary hover:bg-white/5'
-              }`}
           >
             CHAT
-          </button>
-          <button
+          </ModeButton>
+          <ModeButton
+            active={chatMode === 'agent'}
             onClick={() => setChatMode('agent')}
-            className={`h-6 px-2.5 gap-1.5 text-[10px] font-bold transition-all duration-200 rounded-md flex items-center
-              ${chatMode === 'agent'
-                ? 'bg-accent/10 text-accent shadow-sm shadow-accent/5'
-                : 'text-text-muted hover:text-text-secondary hover:bg-white/5'
-              }`}
+            accent
           >
             <Sparkles className="w-2.5 h-2.5" />
             AGENT
-          </button>
+          </ModeButton>
+          <PlanModeButton chatMode={chatMode} />
         </div>
         <span className="text-[10px] text-text-muted opacity-40 font-mono">
           {t('returnToSend', language)}
         </span>
       </div>
     </div>
+  )
+}
+
+// 模式按钮组件
+function ModeButton({
+  active,
+  onClick,
+  accent,
+  children
+}: {
+  active: boolean
+  onClick: () => void
+  accent?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`h-6 px-2.5 gap-1.5 text-[10px] font-bold transition-all duration-200 rounded-md flex items-center
+        ${active
+          ? accent
+            ? 'bg-accent/10 text-accent shadow-sm shadow-accent/5'
+            : 'bg-surface text-text-primary shadow-sm'
+          : 'text-text-muted hover:text-text-secondary hover:bg-white/5'
+        }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+// Plan Mode 按钮 (Agent 模式的子开关)
+function PlanModeButton({ chatMode }: { chatMode: 'chat' | 'agent' }) {
+  const { currentMode, setMode } = useModeStore()
+  const isPlan = currentMode === 'plan'
+  const isAgentMode = chatMode === 'agent'
+
+  // Chat 模式下禁用 Plan
+  if (!isAgentMode) {
+    return (
+      <button
+        disabled
+        className="h-6 px-2.5 gap-1.5 text-[10px] font-bold rounded-md flex items-center text-text-muted/30 cursor-not-allowed"
+        title="切换到 Agent 模式后可开启"
+      >
+        <ClipboardList className="w-2.5 h-2.5" />
+        PLAN
+      </button>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setMode(isPlan ? 'agent' : 'plan')}
+      className={`h-6 px-2.5 gap-1.5 text-[10px] font-bold transition-all duration-200 rounded-md flex items-center
+        ${isPlan
+          ? 'bg-purple-500/10 text-purple-400 shadow-sm shadow-purple-500/5'
+          : 'text-text-muted hover:text-text-secondary hover:bg-white/5'
+        }`}
+    >
+      <ClipboardList className="w-2.5 h-2.5" />
+      PLAN
+    </button>
   )
 }

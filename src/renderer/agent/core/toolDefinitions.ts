@@ -519,8 +519,15 @@ export function getToolApprovalType(toolName: string): ToolApprovalType | undefi
     return APPROVAL_TYPE_MAP[toolName]
 }
 
-export function getToolDefinitions(): ToolDefinition[] {
-    return TOOL_DEFINITIONS
+// Plan 工具名称列表
+const PLAN_TOOLS = ['create_plan', 'update_plan']
+
+export function getToolDefinitions(isPlanMode: boolean = false): ToolDefinition[] {
+    // Plan 工具只在 Plan 模式下可用
+    if (isPlanMode) {
+        return TOOL_DEFINITIONS
+    }
+    return TOOL_DEFINITIONS.filter(tool => !PLAN_TOOLS.includes(tool.name))
 }
 
 export function getToolSchema(toolName: string): z.ZodSchema | undefined {

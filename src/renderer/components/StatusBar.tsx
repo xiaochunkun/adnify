@@ -6,6 +6,7 @@ import { IndexStatus } from '../types/electron'
 import { indexWorkerService, IndexProgress } from '../services/indexWorkerService'
 import BottomBarPopover from './ui/BottomBarPopover'
 import ToolCallLogContent, { getToolCallLogCount } from './ToolCallLogContent'
+import { PlanListPopover } from './PlanListContent'
 
 export default function StatusBar() {
   const {
@@ -120,7 +121,6 @@ export default function StatusBar() {
             <Terminal className={`w-3 h-3 ${terminalVisible ? 'text-accent drop-shadow-[0_0_5px_rgba(var(--accent)/0.5)]' : ''}`} />
           </button>
 
-          {/* 工具调用日志 */}
           <BottomBarPopover
             icon={<ScrollText className="w-3 h-3" />}
             tooltip={language === 'zh' ? '工具调用日志' : 'Tool Call Logs'}
@@ -132,6 +132,9 @@ export default function StatusBar() {
           >
             <ToolCallLogContent language={language as 'en' | 'zh'} />
           </BottomBarPopover>
+
+          {/* 计划列表 - 仅在 Plan 模式下显示 */}
+          <PlanListPopover language={language as 'en' | 'zh'} />
 
           {activeFilePath && (
             <span className="font-medium text-accent/80">{activeFilePath.split('.').pop()?.toUpperCase() || 'TXT'}</span>
