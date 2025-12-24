@@ -67,6 +67,34 @@ export interface MessageFormatConfig {
     toolResultWrapper?: string
 }
 
+// ===== 请求配置 =====
+
+export interface RequestConfig {
+    /** 额外的请求参数 (如 reasoning_effort, top_p 等) */
+    extraParams?: Record<string, unknown>
+    /** 额外的请求头 */
+    extraHeaders?: Record<string, string>
+    /** max_tokens 参数名 (默认 'max_tokens') */
+    maxTokensParam?: string
+    /** stream 参数名 (默认 'stream') */
+    streamParam?: string
+    /** 是否在 Thinking 模式下启用特殊参数 */
+    thinkingParams?: Record<string, unknown>
+}
+
+// ===== 流式响应配置 =====
+
+export interface StreamConfig {
+    /** 增量内容字段路径 (默认 'choices[0].delta.content') */
+    deltaContentPath?: string
+    /** 增量工具调用字段路径 (默认 'choices[0].delta.tool_calls') */
+    deltaToolCallsPath?: string
+    /** 推理/思考字段名 (如 'reasoning', 'thinking') */
+    reasoningField?: string
+    /** 字段映射 (用于不同厂商的字段名差异) */
+    fieldMappings?: Record<string, string>
+}
+
 // ===== 完整的 Provider 适配器配置 =====
 
 export interface ProviderAdapterConfig {
@@ -87,10 +115,14 @@ export interface ProviderAdapterConfig {
     responseParse: ResponseParseConfig
     /** 消息格式配置 */
     messageFormat: MessageFormatConfig
+    /** 请求配置 (可选) */
+    requestConfig?: RequestConfig
+    /** 流式响应配置 (可选) */
+    streamConfig?: StreamConfig
 
-    /** 可选：额外的请求头 */
+    /** @deprecated 使用 requestConfig.extraHeaders */
     extraHeaders?: Record<string, string>
-    /** 可选：额外的请求参数 */
+    /** @deprecated 使用 requestConfig.extraParams */
     extraParams?: Record<string, unknown>
 }
 

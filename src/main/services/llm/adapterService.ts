@@ -134,7 +134,7 @@ const BUILTIN_ADAPTERS: Record<BuiltinAdapterId, ProviderAdapterConfig> = {
     deepseek: {
         id: 'deepseek',
         name: 'DeepSeek',
-        description: 'DeepSeek models (OpenAI compatible)',
+        description: 'DeepSeek models (OpenAI compatible, supports reasoning)',
         extendsFrom: 'openai',
         isBuiltin: true,
         toolFormat: {
@@ -156,6 +156,17 @@ const BUILTIN_ADAPTERS: Record<BuiltinAdapterId, ProviderAdapterConfig> = {
             toolResultRole: 'tool',
             toolCallIdField: 'tool_call_id',
             wrapToolResult: false
+        },
+        // DeepSeek 特定配置
+        requestConfig: {
+            // Thinking 模式参数 (DeepSeek R1 支持)
+            thinkingParams: {
+                reasoning_effort: 'medium'  // low/medium/high
+            }
+        },
+        streamConfig: {
+            // DeepSeek 使用 reasoning 字段返回思考过程
+            reasoningField: 'reasoning'
         }
     },
 
@@ -383,7 +394,7 @@ class ProviderAdapterServiceClass {
 
     formatToolResultMessage(
         toolCallId: string,
-        _toolName: string,
+        _toolName: string, // 保留以支持未来扩展（如日志记录）
         result: string,
         adapterId: string
     ): LLMMessage {

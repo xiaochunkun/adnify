@@ -22,7 +22,8 @@ export class LLMService {
    * 获取或创建 Provider 实例
    */
   private getProvider(config: LLMConfig): LLMProvider {
-    const key = `${config.provider}-${config.apiKey}-${config.baseUrl || 'default'}-${config.timeout || 'default'}`
+    const adapterKey = config.adapterConfig?.id || config.adapterId || 'default'
+    const key = `${config.provider}-${config.apiKey}-${config.baseUrl || 'default'}-${config.timeout || 'default'}-${adapterKey}`
 
     if (!this.providers.has(key)) {
       console.log('[LLMService] Creating new provider:', config.provider, 'timeout:', config.timeout)
@@ -108,11 +109,8 @@ export class LLMService {
         systemPrompt,
         maxTokens: config.maxTokens,
         signal: this.currentAbortController.signal,
-        // Thinking 模式配置
-        thinkingEnabled: config.thinkingEnabled,
-        thinkingBudget: config.thinkingBudget,
-        // 适配器配置
-        adapterId: config.adapterId,
+        // 完整适配器配置
+        adapterConfig: config.adapterConfig,
 
         onStream: (chunk) => {
           if (!this.window.isDestroyed()) {

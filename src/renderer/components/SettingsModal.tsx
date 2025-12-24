@@ -19,7 +19,8 @@ import { toast } from './ToastProvider'
 import { getPromptTemplates, getPromptTemplateById, getPromptTemplatePreview, getPromptTemplateSummary } from '../agent/promptTemplates'
 import { completionService } from '../services/completionService'
 import KeybindingPanel from './KeybindingPanel'
-import ProviderAdapterEditor from './ProviderAdapterEditor'
+import LLMAdapterConfigEditor from './LLMAdapterConfigEditor'
+import { BUILTIN_ADAPTERS } from '@/shared/types/llmAdapter'
 import { Button, Input, Modal, Select, Switch } from './ui'
 
 type SettingsTab = 'provider' | 'editor' | 'agent' | 'keybindings' | 'indexing' | 'security' | 'system'
@@ -33,7 +34,8 @@ export default function SettingsModal() {
   const {
     llmConfig, setLLMConfig, setShowSettings, language, setLanguage,
     autoApprove, setAutoApprove, providerConfigs, setProviderConfig,
-    promptTemplateId, setPromptTemplateId, agentConfig, setAgentConfig
+    promptTemplateId, setPromptTemplateId, agentConfig, setAgentConfig,
+    aiInstructions, setAiInstructions
   } = useStore()
   const [activeTab, setActiveTab] = useState<SettingsTab>('provider')
   const [showApiKey, setShowApiKey] = useState(false)
@@ -42,6 +44,8 @@ export default function SettingsModal() {
   const [localAutoApprove, setLocalAutoApprove] = useState(autoApprove)
   const [localPromptTemplateId, setLocalPromptTemplateId] = useState(promptTemplateId)
   const [localAgentConfig, setLocalAgentConfig] = useState(agentConfig)
+  const [localProviderConfigs, setLocalProviderConfigs] = useState(providerConfigs)
+  const [localAiInstructions, setLocalAiInstructions] = useState(aiInstructions)
   const [saved, setSaved] = useState(false)
 
 
@@ -65,46 +69,50 @@ export default function SettingsModal() {
     completionMaxTokens: editorConfig.ai.completionMaxTokens,
   })
 
-  // AI 指令
-  const [aiInstructions, setAiInstructions] = useState('')
+  // AI 指令已移至 Store
 
-  useEffect(() => {
-    setLocalConfig(llmConfig)
-    setLocalLanguage(language)
-    setLocalAutoApprove(autoApprove)
-    setLocalPromptTemplateId(promptTemplateId)
-    // 加载设置
-    // 从统一的 app-settings 加载 aiInstructions 和 providerConfigs
-    window.electronAPI.getSetting('app-settings').then((settings: any) => {
-      if (settings?.aiInstructions) {
-        setAiInstructions(settings.aiInstructions)
-      }
-      if (settings?.providerConfigs) {
-        Object.entries(settings.providerConfigs as Record<string, ProviderModelConfig>).forEach(([id, config]) => {
-          setProviderConfig(id, config)
-        })
-      }
-    })
-  }, [llmConfig, language, autoApprove, promptTemplateId]) // 注意：这里不依赖 setProviderConfig 以避免循环，虽然它通常是稳定的
+  // 移除导致循环重置的 useEffect，状态由 Store 统一管理并在 handleSave 时持久化
+
 
   const handleSave = async () => {
-    // 更新 Store 状态
+    // 1. 先将当前的 localConfig 同步到 localProviderConfigs，确保当前活动 Provider 的修改也被捕获
+    const finalProviderConfigs = {
+      ...localProviderConfigs,
+      [localConfig.provider]: {
+        ...localProviderConfigs[localConfig.provider],
+        apiKey: localConfig.apiKey,
+        baseUrl: localConfig.baseUrl,
+        timeout: localConfig.timeout,
+        adapterId: localConfig.adapterId,
+        adapterConfig: localConfig.adapterConfig,
+        model: localConfig.model,
+      }
+    }
+    setLocalProviderConfigs(finalProviderConfigs)
+
+    // 2. 更新 Store 状态
     setLLMConfig(localConfig)
     setLanguage(localLanguage)
     setAutoApprove(localAutoApprove)
     setPromptTemplateId(localPromptTemplateId)
     setAgentConfig(localAgentConfig)
+    setAiInstructions(localAiInstructions)
 
-    // 统一保存所有设置到 app-settings
+    // 更新所有 Provider 配置
+    Object.entries(finalProviderConfigs).forEach(([id, config]) => {
+      setProviderConfig(id, config)
+    })
+
+    // 3. 统一保存所有设置到 app-settings (即 config.json)
     await window.electronAPI.setSetting('app-settings', {
       llmConfig: localConfig,
       language: localLanguage,
       autoApprove: localAutoApprove,
       promptTemplateId: localPromptTemplateId,
       agentConfig: localAgentConfig,
-      providerConfigs: providerConfigs,
+      providerConfigs: finalProviderConfigs,
       editorSettings: editorSettings,
-      aiInstructions: aiInstructions,
+      aiInstructions: localAiInstructions,
       onboardingCompleted: true,
     })
 
@@ -240,6 +248,8 @@ export default function SettingsModal() {
                 <ProviderSettings
                   localConfig={localConfig}
                   setLocalConfig={setLocalConfig}
+                  localProviderConfigs={localProviderConfigs}
+                  setLocalProviderConfigs={setLocalProviderConfigs}
                   showApiKey={showApiKey}
                   setShowApiKey={setShowApiKey}
                   selectedProvider={selectedProvider}
@@ -260,12 +270,10 @@ export default function SettingsModal() {
                 <AgentSettings
                   autoApprove={localAutoApprove}
                   setAutoApprove={setLocalAutoApprove}
-                  aiInstructions={aiInstructions}
-                  setAiInstructions={setAiInstructions}
+                  aiInstructions={localAiInstructions}
+                  setAiInstructions={setLocalAiInstructions}
                   promptTemplateId={localPromptTemplateId}
                   setPromptTemplateId={setLocalPromptTemplateId}
-                  llmConfig={localConfig}
-                  setLLMConfig={setLocalConfig}
                   agentConfig={localAgentConfig}
                   setAgentConfig={setLocalAgentConfig}
                   language={localLanguage}
@@ -398,8 +406,20 @@ interface ProviderSettingsProps {
   language: Language
 }
 
+interface ProviderSettingsProps {
+  localConfig: LLMConfig
+  setLocalConfig: React.Dispatch<React.SetStateAction<LLMConfig>>
+  localProviderConfigs: Record<string, ProviderModelConfig>
+  setLocalProviderConfigs: React.Dispatch<React.SetStateAction<Record<string, ProviderModelConfig>>>
+  showApiKey: boolean
+  setShowApiKey: (show: boolean) => void
+  selectedProvider: { id: string; name: string; models: string[] } | undefined
+  providers: { id: string; name: string; models: string[] }[]
+  language: Language
+}
+
 function ProviderSettings({
-  localConfig, setLocalConfig, showApiKey, setShowApiKey, selectedProvider, providers, language
+  localConfig, setLocalConfig, localProviderConfigs, setLocalProviderConfigs, showApiKey, setShowApiKey, selectedProvider, providers, language
 }: ProviderSettingsProps) {
   const { addCustomModel, removeCustomModel, providerConfigs } = useStore()
   const [newModelName, setNewModelName] = useState('')
@@ -422,7 +442,35 @@ function ProviderSettings({
           {providers.map(p => (
             <button
               key={p.id}
-              onClick={() => setLocalConfig({ ...localConfig, provider: p.id as any, model: p.models[0] || '' })}
+              onClick={() => {
+                // 1. 保存当前配置到本地 providerConfigs
+                const updatedConfigs = {
+                  ...localProviderConfigs,
+                  [localConfig.provider]: {
+                    ...localProviderConfigs[localConfig.provider],
+                    apiKey: localConfig.apiKey,
+                    baseUrl: localConfig.baseUrl,
+                    timeout: localConfig.timeout,
+                    adapterId: localConfig.adapterId,
+                    adapterConfig: localConfig.adapterConfig,
+                    model: localConfig.model,
+                  }
+                }
+                setLocalProviderConfigs(updatedConfigs)
+
+                // 2. 加载新 Provider 的配置
+                const nextConfig = updatedConfigs[p.id] || {}
+                setLocalConfig({
+                  ...localConfig,
+                  provider: p.id as any,
+                  apiKey: nextConfig.apiKey || '',
+                  baseUrl: nextConfig.baseUrl || '',
+                  timeout: nextConfig.timeout || 120000,
+                  adapterId: nextConfig.adapterId || p.id,
+                  adapterConfig: nextConfig.adapterConfig || (BUILTIN_ADAPTERS as any)[p.id] || BUILTIN_ADAPTERS.openai,
+                  model: nextConfig.model || p.models[0] || '',
+                })
+              }}
               className={`
                 relative flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200
                 ${localConfig.provider === p.id
@@ -567,18 +615,23 @@ function ProviderSettings({
             </div>
           </details>
         </div>
+      </section>
 
-        {/* Provider Adapter Configuration */}
-        <ProviderAdapterEditor
-          adapterId={localConfig.adapterId}
-          adapterConfig={localConfig.adapterConfig}
-          providerId={localConfig.provider}
-          onAdapterChange={(id, config) => setLocalConfig({
+      {/* LLM 适配器配置（统一配置） */}
+      <section className="space-y-4 p-6 bg-surface/30 rounded-xl border border-border-subtle">
+        <h4 className="text-sm font-medium text-text-secondary uppercase tracking-wider text-xs mb-2">
+          {language === 'zh' ? '🔌 适配器配置' : '🔌 Adapter Configuration'}
+        </h4>
+        <LLMAdapterConfigEditor
+          adapterId={localConfig.adapterId || 'openai'}
+          config={localConfig.adapterConfig}
+          onChange={(id, config) => setLocalConfig({
             ...localConfig,
             adapterId: id,
             adapterConfig: config
           })}
           language={language}
+          hasConfiguredAI={!!localConfig.apiKey}
         />
       </section>
     </div>
@@ -851,15 +904,13 @@ interface AgentSettingsProps {
   setAiInstructions: (value: string) => void
   promptTemplateId: string
   setPromptTemplateId: (value: string) => void
-  llmConfig: LLMConfig
-  setLLMConfig: React.Dispatch<React.SetStateAction<LLMConfig>>
   agentConfig: import('../store/slices/settingsSlice').AgentConfig
   setAgentConfig: React.Dispatch<React.SetStateAction<import('../store/slices/settingsSlice').AgentConfig>>
   language: Language
 }
 
 function AgentSettings({
-  autoApprove, setAutoApprove, aiInstructions, setAiInstructions, promptTemplateId, setPromptTemplateId, llmConfig, setLLMConfig, agentConfig, setAgentConfig, language
+  autoApprove, setAutoApprove, aiInstructions, setAiInstructions, promptTemplateId, setPromptTemplateId, agentConfig, setAgentConfig, language
 }: AgentSettingsProps) {
   const templates = getPromptTemplates()
   const [showPreview, setShowPreview] = useState(false)
@@ -900,43 +951,7 @@ function AgentSettings({
         </div>
       </section>
 
-      {/* Thinking Mode */}
-      <section className="space-y-4 p-5 bg-gradient-to-br from-purple-500/5 to-transparent rounded-xl border border-purple-500/10">
-        <div className="flex items-center justify-between">
-          <h4 className="flex items-center gap-2 text-sm font-medium text-purple-400 uppercase tracking-wider text-xs">
-            <Sparkles className="w-4 h-4" />
-            {language === 'zh' ? 'Thinking 模式' : 'Thinking Mode'}
-          </h4>
-          <Switch
-            checked={llmConfig.thinkingEnabled || false}
-            onChange={(e) => setLLMConfig({ ...llmConfig, thinkingEnabled: e.target.checked })}
-          />
-        </div>
-        <p className="text-xs text-text-muted">
-          {language === 'zh'
-            ? '启用后，AI 将在回答前进行深度思考。适用于复杂问题和代码审查。支持 Claude、DeepSeek R1、Gemini 2.0。'
-            : 'When enabled, AI will think deeply before responding. Best for complex problems and code review. Supports Claude, DeepSeek R1, Gemini 2.0.'}
-        </p>
-        {llmConfig.thinkingEnabled && (
-          <div className="pt-2 animate-fade-in">
-            <label className="text-sm font-medium text-text-primary block mb-2">
-              {language === 'zh' ? 'Thinking Token 预算' : 'Thinking Token Budget'}
-            </label>
-            <Input
-              type="number"
-              value={llmConfig.thinkingBudget || 16000}
-              onChange={(e) => setLLMConfig({ ...llmConfig, thinkingBudget: parseInt(e.target.value) || 16000 })}
-              min={4000}
-              max={64000}
-              step={4000}
-              className="w-40"
-            />
-            <p className="text-xs text-text-muted mt-1">
-              {language === 'zh' ? '建议 8000-32000' : 'Recommended 8000-32000'}
-            </p>
-          </div>
-        )}
-      </section>
+      {/* 注意：Thinking 模式配置现在通过 Provider 设置中的适配器编辑器进行 */}
 
       <section className="space-y-4">
         <h4 className="text-sm font-medium text-text-secondary uppercase tracking-wider text-xs mb-2">
@@ -1033,7 +1048,7 @@ function AgentSettings({
           placeholder={language === 'zh'
             ? '在此输入全局系统指令，例如："总是使用中文回答"、"代码风格偏好..."'
             : 'Enter global system instructions here, e.g., "Always answer in English", "Code style preferences..."'}
-          className="w-full h-40 bg-surface/50 border border-border-subtle rounded-xl px-4 py-3 text-sm text-text-primary focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/50 resize-none transition-all placeholder:text-text-muted/50"
+          className="w-full h-40 p-4 bg-surface/50 rounded-xl border border-border-subtle focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all resize-none text-sm font-mono custom-scrollbar"
         />
         <p className="text-xs text-text-muted">
           {language === 'zh'

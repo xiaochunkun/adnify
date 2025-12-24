@@ -158,3 +158,56 @@ body {
 .tooltip-arrow {
   @apply absolute w-2 h-2 bg-surface border border-border-subtle transform rotate-45;
 }
+
+/* Tool Call Card Animations */
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(var(--accent) / 0);
+    border-color: rgb(var(--accent) / 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 12px 2px rgb(var(--accent) / 0.15);
+    border-color: rgb(var(--accent) / 0.4);
+  }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Slide down animation for expanded content */
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.2s ease-out;
+}
+
+/* Card slide in animation */
+@keyframes slide-in {
+  from {
+    opacity: 0.5;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.15s ease-out;
+}

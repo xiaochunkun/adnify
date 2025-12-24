@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useCallback } from 'react'
-import { User, Copy, Check, RefreshCw, Edit2, RotateCcw, FileText, Sparkles } from 'lucide-react'
+import { User, Copy, Check, RefreshCw, Edit2, RotateCcw, Sparkles, ChevronDown } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -93,47 +93,166 @@ const cleanStreamingContent = (text: string): string => {
   return cleaned.trim()
 }
 
-// Markdown 渲染组件 - 优化排版
-const MarkdownContent = React.memo(({ content, fontSize, isStreaming }: { content: string; fontSize: number; isStreaming?: boolean }) => {
-  const displayContent = isStreaming ? cleanStreamingContent(content) : content;
+// 提取 thinking 内容
+const extractThinkingBlocks = (text: string): { thinkingBlocks: { content: string, startTime?: number, isClosed: boolean }[], mainContent: string } => {
+  if (!text) return { thinkingBlocks: [], mainContent: '' }
+
+  const thinkingBlocks: { content: string, startTime?: number, isClosed: boolean }[] = []
+
+  // 1. 匹配已闭合的块
+  let currentText = text
+  const closedRegex = /<thinking(?: startTime="(\d+)")?>([\s\S]*?)<\/thinking>/gi
+  currentText = currentText.replace(closedRegex, (_, startTime, content) => {
+    thinkingBlocks.push({
+      content: content.trim(),
+      startTime: startTime ? parseInt(startTime) : undefined,
+      isClosed: true
+    })
+    return ''
+  })
+
+  // 2. 匹配未闭合的块（在末尾）
+  const openRegex = /<thinking(?: startTime="(\d+)")?>([\s\S]*)$/gi
+  const openMatch = openRegex.exec(currentText)
+  if (openMatch) {
+    const startTime = openMatch[1] ? parseInt(openMatch[1]) : undefined
+    const content = openMatch[2].trim()
+    thinkingBlocks.push({
+      content,
+      startTime,
+      isClosed: false
+    })
+    currentText = currentText.replace(openRegex, '')
+  }
+
+  return { thinkingBlocks, mainContent: currentText.trim() }
+}
+
+// ThinkingBlock 组件 - 高级折叠样式
+const ThinkingBlock = React.memo(({ content, startTime, isClosed, fontSize }: { content: string; startTime?: number; isClosed: boolean; fontSize: number }) => {
+  const [isExpanded, setIsExpanded] = useState(!isClosed) // 初始状态
+  const [elapsed, setElapsed] = useState<number>(0)
+  const lastElapsed = React.useRef<number>(0)
+
+  // 当 isClosed 状态改变时（例如流结束），自动同步折叠状态
+  React.useEffect(() => {
+    setIsExpanded(!isClosed)
+  }, [isClosed])
+
+  // 计时器逻辑
+  React.useEffect(() => {
+    if (!startTime || isClosed) {
+      return
+    }
+
+    const timer = setInterval(() => {
+      const current = Math.floor((Date.now() - startTime) / 1000)
+      setElapsed(current)
+      lastElapsed.current = current
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [startTime, isClosed])
+
+  // 格式化时长
+  const durationText = isClosed
+    ? (lastElapsed.current > 0 ? `Thought for ${lastElapsed.current}s` : 'Thought')
+    : `Thinking for ${elapsed}s...`
 
   return (
-    <div style={{ fontSize: `${fontSize}px` }} className="text-text-primary/90 leading-8 tracking-wide">
-      <ReactMarkdown
-        className="prose prose-invert max-w-none"
-        components={{
-          code({ className, children, node, ...props }) {
-            const match = /language-(\w+)/.exec(className || '')
-            const codeContent = String(children)
-            const isCodeBlock = match || node?.position?.start?.line !== node?.position?.end?.line
-            const isInline = !isCodeBlock && !codeContent.includes('\n')
-
-            return isInline ? (
-              <code className="bg-white/10 px-1.5 py-0.5 rounded text-accent-light font-mono text-[0.9em]" {...props}>
-                {children}
-              </code>
-            ) : (
-              <CodeBlock language={match?.[1]} fontSize={fontSize}>{children}</CodeBlock>
-            )
-          },
-          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-          ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
-          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
-          li: ({ children }) => <li className="">{children}</li>,
-          a: ({ href, children }) => (
-            <a href={href} target="_blank" className="text-accent hover:underline decoration-accent/50 underline-offset-2">{children}</a>
-          ),
-          blockquote: ({ children }) => (
-            <blockquote className="border-l-2 border-accent/40 pl-4 my-2 text-text-muted italic bg-white/5 py-1 rounded-r">{children}</blockquote>
-          ),
-          h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0 text-text-primary">{children}</h1>,
-          h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0 text-text-primary">{children}</h2>,
-          h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0 text-text-primary">{children}</h3>,
-        }}
+    <div className="my-4 group/think">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-2 text-text-muted/80 hover:text-text-secondary transition-colors select-none"
       >
-        {displayContent}
-      </ReactMarkdown>
+        <div className={`transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}>
+          <ChevronDown className="w-3.5 h-3.5" />
+        </div>
+        <span className="text-sm font-medium tracking-tight">
+          {durationText}
+        </span>
+      </button>
+
+      {isExpanded && (
+        <div className="mt-2 pl-5 border-l border-white/5 space-y-2">
+          {content ? (
+            <div
+              style={{ fontSize: `${fontSize - 1}px` }}
+              className="text-text-muted/70 leading-relaxed whitespace-pre-wrap font-sans italic"
+            >
+              {content}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-text-muted/30 italic text-xs py-1">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              <span>Analyzing...</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
+  )
+})
+ThinkingBlock.displayName = 'ThinkingBlock'
+
+// Markdown 渲染组件 - 优化排版
+const MarkdownContent = React.memo(({ content, fontSize, isStreaming }: { content: string; fontSize: number; isStreaming?: boolean }) => {
+  const cleanedContent = isStreaming ? cleanStreamingContent(content) : content
+  const { thinkingBlocks, mainContent } = extractThinkingBlocks(cleanedContent)
+
+  return (
+    <>
+      {/* 显示思考过程（如果有） */}
+      {thinkingBlocks.map((thinking, idx) => (
+        <ThinkingBlock
+          key={idx}
+          content={thinking.content}
+          startTime={thinking.startTime}
+          isClosed={thinking.isClosed}
+          fontSize={fontSize}
+        />
+      ))}
+
+      {/* 显示主要内容 */}
+      {mainContent && (
+        <div style={{ fontSize: `${fontSize}px` }} className="text-text-primary/90 leading-8 tracking-wide">
+          <ReactMarkdown
+            className="prose prose-invert max-w-none"
+            components={{
+              code({ className, children, node, ...props }) {
+                const match = /language-(\w+)/.exec(className || '')
+                const codeContent = String(children)
+                const isCodeBlock = match || node?.position?.start?.line !== node?.position?.end?.line
+                const isInline = !isCodeBlock && !codeContent.includes('\n')
+
+                return isInline ? (
+                  <code className="bg-white/10 px-1.5 py-0.5 rounded text-accent-light font-mono text-[0.9em]" {...props}>
+                    {children}
+                  </code>
+                ) : (
+                  <CodeBlock language={match?.[1]} fontSize={fontSize}>{children}</CodeBlock>
+                )
+              },
+              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+              ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
+              ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
+              li: ({ children }) => <li className="">{children}</li>,
+              a: ({ href, children }) => (
+                <a href={href} target="_blank" className="text-accent hover:underline decoration-accent/50 underline-offset-2">{children}</a>
+              ),
+              blockquote: ({ children }) => (
+                <blockquote className="border-l-2 border-accent/40 pl-4 my-2 text-text-muted italic bg-white/5 py-1 rounded-r">{children}</blockquote>
+              ),
+              h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0 text-text-primary">{children}</h1>,
+              h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0 text-text-primary">{children}</h2>,
+              h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0 text-text-primary">{children}</h3>,
+            }}
+          >
+            {mainContent}
+          </ReactMarkdown>
+        </div>
+      )}
+    </>
   )
 })
 MarkdownContent.displayName = 'MarkdownContent'

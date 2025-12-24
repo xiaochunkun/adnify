@@ -55,9 +55,7 @@ export class OpenAIProvider extends BaseProvider {
       systemPrompt,
       maxTokens,
       signal,
-      thinkingEnabled,
-      thinkingBudget,
-      adapterId,
+      adapterConfig,
       onStream,
       onToolCall,
       onComplete,
@@ -118,9 +116,9 @@ export class OpenAIProvider extends BaseProvider {
         }
       }
 
-      const convertedTools = this.convertTools(tools, adapterId)
+      const convertedTools = this.convertTools(tools, adapterConfig?.id)
 
-      // 构建请求体，使用 any 以支持扩展参数（如 reasoning_effort）
+      // 构建请求体 - 使用适配器配置
       const requestBody: Record<string, unknown> = {
         model,
         messages: openaiMessages,
@@ -132,13 +130,16 @@ export class OpenAIProvider extends BaseProvider {
         requestBody.tools = convertedTools
       }
 
-      // Thinking/Reasoning 模式支持
-      // DeepSeek: reasoning_effort 参数
-      // 其他兼容 API 可能使用不同字段
-      if (thinkingEnabled) {
-        // DeepSeek R1 使用 reasoning_effort
-        requestBody.reasoning_effort = 'medium'  // low/medium/high
-        this.log('info', 'Thinking mode enabled', { budget: thinkingBudget })
+      // 应用适配器的请求体模板参数
+      if (adapterConfig?.request?.bodyTemplate) {
+        const template = adapterConfig.request.bodyTemplate
+        for (const [key, value] of Object.entries(template)) {
+          // 跳过占位符
+          if (typeof value === 'string' && value.startsWith('{{')) continue
+          // 不覆盖已设置的核心字段
+          if (['model', 'messages', 'stream', 'tools'].includes(key)) continue
+          requestBody[key] = value
+        }
       }
 
       const stream = await this.client.chat.completions.create(
@@ -148,13 +149,16 @@ export class OpenAIProvider extends BaseProvider {
 
       let fullContent = ''
       let fullReasoning = ''
+
+      // 从适配器配置获取 reasoning 字段名
       const toolCalls: ToolCall[] = []
       let currentToolCall: { id?: string; name?: string; argsString: string } | null = null
 
       for await (const chunk of stream) {
+        // 动态 delta 类型，支持不同厂商的字段名
         interface ExtendedDelta {
           content?: string
-          reasoning?: string
+          [key: string]: unknown  // 支持动态字段如 reasoning, thinking 等
           tool_calls?: Array<{
             index?: number
             id?: string
@@ -168,9 +172,18 @@ export class OpenAIProvider extends BaseProvider {
           onStream({ type: 'text', content: delta.content })
         }
 
-        if (delta?.reasoning) {
-          fullReasoning += delta.reasoning
-          onStream({ type: 'reasoning', content: delta.reasoning })
+        // 使用适配器配置的 reasoning 字段名，支持嵌套路径
+        const reasoningField = adapterConfig?.response?.reasoningField || 'reasoning'
+
+        // 简单的嵌套路径解析函数
+        const getNestedValue = (obj: any, path: string): any => {
+          return path.split('.').reduce((acc, part) => acc && acc[part], obj)
+        }
+
+        const reasoningContent = getNestedValue(delta, reasoningField) as string | undefined
+        if (reasoningContent) {
+          fullReasoning += reasoningContent
+          onStream({ type: 'reasoning', content: reasoningContent })
         }
 
         if (delta?.tool_calls) {

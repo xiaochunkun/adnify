@@ -8,21 +8,11 @@ import {
 } from '@/shared/constants'
 import { saveEditorConfig, getEditorConfig } from '../../config/editorConfig'
 import { defaultEditorConfig } from '../../config/editorConfig'
+import { ProviderModelConfig } from '../../types/provider'
 
 export type ProviderType = 'openai' | 'anthropic' | 'gemini' | 'deepseek' | 'groq' | 'mistral' | 'ollama' | 'custom'
 
-// 适配器配置
-export interface AdapterConfig {
-  responseFormat: 'json' | 'xml' | 'mixed'
-  toolCallPath: string
-  toolNamePath: string
-  toolArgsPath: string
-  argsIsObject: boolean
-  autoGenerateId: boolean
-  xmlToolCallTag?: string
-  xmlNameSource?: string
-  xmlArgsTag?: string
-}
+// 适配器配置已统一使用 @/shared/types/llmAdapter 中的 LLMAdapterConfig
 
 export interface LLMConfig {
   provider: ProviderType
@@ -31,12 +21,9 @@ export interface LLMConfig {
   baseUrl?: string
   timeout?: number
   maxTokens?: number
-  // Thinking 模式配置
-  thinkingEnabled?: boolean
-  thinkingBudget?: number  // thinking token 预算 (默认 16000)
-  // 适配器配置
+  // 完整适配器配置（包含请求体和响应解析）
   adapterId?: string
-  adapterConfig?: AdapterConfig
+  adapterConfig?: import('@/shared/types/llmAdapter').LLMAdapterConfig
 }
 
 export interface AutoApproveSettings {
@@ -44,9 +31,7 @@ export interface AutoApproveSettings {
   dangerous: boolean   // 危险操作（delete_file_or_folder）
 }
 
-export interface ProviderModelConfig {
-  customModels: string[]
-}
+// ProviderModelConfig 已移至 ../types/provider.ts
 
 export interface SecuritySettings {
   enablePermissionConfirm: boolean
@@ -82,6 +67,7 @@ export interface SettingsSlice {
   editorConfig: import('../../config/editorConfig').EditorConfig
   onboardingCompleted: boolean
   hasExistingConfig: boolean
+  aiInstructions: string
 
   setLLMConfig: (config: Partial<LLMConfig>) => void
   setLanguage: (lang: 'en' | 'zh') => void
@@ -95,16 +81,19 @@ export interface SettingsSlice {
   setEditorConfig: (config: Partial<import('../../config/editorConfig').EditorConfig>) => void
   setOnboardingCompleted: (completed: boolean) => void
   setHasExistingConfig: (hasConfig: boolean) => void
+  setAiInstructions: (instructions: string) => void
   loadSettings: (isEmptyWindow?: boolean) => Promise<void>
 }
+
+import { BUILTIN_ADAPTERS } from '@/shared/types/llmAdapter'
 
 const defaultLLMConfig: LLMConfig = {
   provider: 'openai',
   model: 'gpt-4o',
   apiKey: '',
   baseUrl: '',
-  thinkingEnabled: false,
-  thinkingBudget: 16000,
+  adapterId: 'openai',
+  adapterConfig: BUILTIN_ADAPTERS.openai,
 }
 
 const defaultAutoApprove: AutoApproveSettings = {
@@ -113,14 +102,14 @@ const defaultAutoApprove: AutoApproveSettings = {
 }
 
 const defaultProviderConfigs: Record<string, ProviderModelConfig> = {
-  openai: { customModels: [] },
-  anthropic: { customModels: [] },
-  gemini: { customModels: [] },
-  deepseek: { customModels: [] },
-  groq: { customModels: [] },
-  mistral: { customModels: [] },
-  ollama: { customModels: [] },
-  custom: { customModels: [] },
+  openai: { customModels: [], adapterId: 'openai', adapterConfig: BUILTIN_ADAPTERS.openai, model: 'gpt-4o' },
+  anthropic: { customModels: [], adapterId: 'anthropic', adapterConfig: BUILTIN_ADAPTERS.anthropic, model: 'claude-3-5-sonnet-20241022' },
+  gemini: { customModels: [], adapterId: 'gemini', adapterConfig: BUILTIN_ADAPTERS.gemini, model: 'gemini-1.5-pro' },
+  deepseek: { customModels: [], adapterId: 'openai', adapterConfig: BUILTIN_ADAPTERS.openai, model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com' },
+  groq: { customModels: [], adapterId: 'openai', adapterConfig: BUILTIN_ADAPTERS.openai, model: 'llama-3.3-70b-versatile', baseUrl: 'https://api.groq.com/openai/v1' },
+  mistral: { customModels: [], adapterId: 'openai', adapterConfig: BUILTIN_ADAPTERS.openai, model: 'mistral-large-latest', baseUrl: 'https://api.mistral.ai/v1' },
+  ollama: { customModels: [], adapterId: 'ollama', adapterConfig: BUILTIN_ADAPTERS.ollama, model: 'llama3.2', baseUrl: 'http://localhost:11434' },
+  custom: { customModels: [], adapterId: 'openai', adapterConfig: BUILTIN_ADAPTERS.openai, model: '' },
 }
 
 // 使用共享常量作为默认安全设置
@@ -158,6 +147,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice, [], [], SettingsSl
   editorConfig: defaultEditorConfig,
   onboardingCompleted: true, // 默认 true，加载后更新
   hasExistingConfig: true,
+  aiInstructions: '',
 
   setLLMConfig: (config) =>
     set((state) => ({
@@ -229,6 +219,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice, [], [], SettingsSl
 
   setOnboardingCompleted: (completed) => set({ onboardingCompleted: completed }),
   setHasExistingConfig: (hasConfig) => set({ hasExistingConfig: hasConfig }),
+  setAiInstructions: (instructions) => set({ aiInstructions: instructions }),
 
   loadSettings: async (isEmptyWindow = false) => {
     try {
@@ -236,13 +227,44 @@ export const createSettingsSlice: StateCreator<SettingsSlice, [], [], SettingsSl
       const settings = await window.electronAPI.getSetting('app-settings') as any
 
       if (settings) {
+        // 确保 llmConfig 与默认值合并，adapterConfig 有默认值
+        const loadedLLMConfig = settings.llmConfig
+          ? { ...defaultLLMConfig, ...settings.llmConfig }
+          : defaultLLMConfig
+
+        // 如果没有 adapterConfig 但有 adapterId，使用对应的内置预设
+        if (!loadedLLMConfig.adapterConfig && loadedLLMConfig.adapterId) {
+          const preset = BUILTIN_ADAPTERS[loadedLLMConfig.adapterId as keyof typeof BUILTIN_ADAPTERS]
+          if (preset) {
+            loadedLLMConfig.adapterConfig = preset
+          }
+        }
+
+        console.log('[SettingsSlice] loadSettings - llmConfig loaded:', {
+          hasAdapterConfig: !!loadedLLMConfig.adapterConfig,
+          adapterId: loadedLLMConfig.adapterId,
+          provider: loadedLLMConfig.provider,
+        })
+
+        const mergedProviderConfigs = { ...defaultProviderConfigs }
+        if (settings.providerConfigs) {
+          for (const [id, config] of Object.entries(settings.providerConfigs)) {
+            mergedProviderConfigs[id] = {
+              ...defaultProviderConfigs[id],
+              ...(config as any)
+            }
+          }
+        }
+
         set({
-          llmConfig: settings.llmConfig || defaultLLMConfig,
+          llmConfig: loadedLLMConfig,
           language: settings.language || 'en',
           autoApprove: settings.autoApprove || defaultAutoApprove,
+          providerConfigs: mergedProviderConfigs,
           agentConfig: settings.agentConfig ? { ...defaultAgentConfig, ...settings.agentConfig } : defaultAgentConfig,
           onboardingCompleted: settings.onboardingCompleted ?? !!settings.llmConfig?.apiKey,
           hasExistingConfig: !!settings.llmConfig?.apiKey,
+          aiInstructions: settings.aiInstructions || '',
           editorConfig: getEditorConfig(),
         })
       } else {

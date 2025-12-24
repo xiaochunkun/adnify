@@ -30,6 +30,17 @@ import { LLMStreamChunk, LLMToolCall } from '@/renderer/types/electron'
 import { parsePartialJson, truncateToolResult } from '@/renderer/utils/partialJson'
 import { AGENT_DEFAULTS, READ_ONLY_TOOLS, isFileModifyingTool } from '@/shared/constants'
 
+export interface LLMCallConfig {
+  provider: string
+  model: string
+  apiKey: string
+  baseUrl?: string
+  timeout?: number
+  maxTokens?: number
+  adapterId?: string
+  adapterConfig?: import('@/shared/types/llmAdapter').LLMAdapterConfig
+}
+
 // 读取类工具（可以并行执行）- 使用 constants.ts 的统一定义
 const READ_TOOLS = READ_ONLY_TOOLS as readonly string[]
 
@@ -57,8 +68,7 @@ const getConfig = () => {
   }
 }
 
-// 保留旧的 CONFIG 引用以兼容现有代码
-const CONFIG = getConfig()
+// CONFIG 已弃用，请使用 getConfig() 函数动态获取配置
 
 /**
  * 智能消息压缩函数
@@ -214,7 +224,7 @@ class AgentServiceClass {
             // 注意：这里频繁读取文件可能有性能影响，后续可考虑缓存
             const content = await window.electronAPI.readFile(filePath)
             if (content) {
-              totalChars += Math.min(content.length, CONFIG.maxFileContentChars)
+              totalChars += Math.min(content.length, getConfig().maxFileContentChars)
             }
           } catch (e) { }
         }
@@ -251,14 +261,7 @@ class AgentServiceClass {
    */
   async sendMessage(
     userMessage: MessageContent,
-    config: {
-      provider: string
-      model: string
-      apiKey: string
-      baseUrl?: string
-      thinkingEnabled?: boolean
-      thinkingBudget?: number
-    },
+    config: LLMCallConfig,
     workspacePath: string | null,
     systemPrompt: string,
     chatMode: ChatMode = 'agent'
@@ -456,7 +459,7 @@ class AgentServiceClass {
    * Agent 主循环
    */
   private async runAgentLoop(
-    config: { provider: string; model: string; apiKey: string; baseUrl?: string },
+    config: LLMCallConfig,
     llmMessages: OpenAIMessage[],
     workspacePath: string | null,
     chatMode: ChatMode
@@ -471,7 +474,9 @@ class AgentServiceClass {
     let consecutiveRepeats = 0
     const MAX_CONSECUTIVE_REPEATS = 2
 
-    while (shouldContinue && loopCount < CONFIG.maxToolLoops && !this.abortController?.signal.aborted) {
+    const agentLoopConfig = getConfig()
+
+    while (shouldContinue && loopCount < agentLoopConfig.maxToolLoops && !this.abortController?.signal.aborted) {
       loopCount++
       shouldContinue = false
 
@@ -495,11 +500,11 @@ class AgentServiceClass {
         const currentMsg = store.getMessages().find(m => m.id === this.currentAssistantId)
         if (currentMsg && currentMsg.role === 'assistant' && currentMsg.content !== result.content) {
           // Update parts to reflect cleaned content
-          const newParts = currentMsg.parts.map(p => 
+          const newParts = currentMsg.parts.map(p =>
             p.type === 'text' ? { ...p, content: result.content! } : p
           )
-          
-          store.updateMessage(this.currentAssistantId, { 
+
+          store.updateMessage(this.currentAssistantId, {
             content: result.content,
             parts: newParts
           })
@@ -512,7 +517,7 @@ class AgentServiceClass {
         const hasWriteOps = llmMessages.some(m => m.role === 'assistant' && m.tool_calls?.some((tc: any) => !READ_ONLY_TOOLS.includes(tc.function.name)))
         const hasUpdatePlan = llmMessages.some(m => m.role === 'assistant' && m.tool_calls?.some((tc: any) => tc.function.name === 'update_plan'))
 
-        if (store.plan && hasWriteOps && !hasUpdatePlan && loopCount < CONFIG.maxToolLoops) {
+        if (store.plan && hasWriteOps && !hasUpdatePlan && loopCount < agentLoopConfig.maxToolLoops) {
           console.log('[Agent] Plan mode detected: Reminding AI to update plan status')
           llmMessages.push({
             role: 'user' as const,
@@ -682,7 +687,7 @@ class AgentServiceClass {
       store.setStreamPhase('streaming')
     }
 
-    if (loopCount >= CONFIG.maxToolLoops) {
+    if (loopCount >= agentLoopConfig.maxToolLoops) {
       store.appendToAssistant(this.currentAssistantId!, '\n\n⚠️ Reached maximum tool call limit.')
     }
   }
@@ -691,19 +696,20 @@ class AgentServiceClass {
    * 调用 LLM API（带自动重试）
    */
   private async callLLMWithRetry(
-    config: { provider: string; model: string; apiKey: string; baseUrl?: string },
+    config: LLMCallConfig,
     messages: OpenAIMessage[],
     chatMode: ChatMode
   ): Promise<{ content?: string; toolCalls?: LLMToolCall[]; error?: string }> {
     let lastError: string | undefined
-    let delay = CONFIG.retryDelayMs
+    const retryConfig = getConfig()
+    let delay = retryConfig.retryDelayMs
 
-    for (let attempt = 0; attempt <= CONFIG.maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
       if (this.abortController?.signal.aborted) return { error: 'Aborted' }
 
       if (attempt > 0) {
         await new Promise(resolve => setTimeout(resolve, delay))
-        delay *= CONFIG.retryBackoffMultiplier
+        delay *= retryConfig.retryBackoffMultiplier
       }
 
       const result = await this.callLLM(config, messages, chatMode)
@@ -714,7 +720,7 @@ class AgentServiceClass {
         result.error.includes('rate limit') ||
         result.error.includes('network')
 
-      if (!isRetryable || attempt === CONFIG.maxRetries) return result
+      if (!isRetryable || attempt === retryConfig.maxRetries) return result
       lastError = result.error
     }
 
@@ -725,7 +731,7 @@ class AgentServiceClass {
    * 调用 LLM API
    */
   private async callLLM(
-    config: { provider: string; model: string; apiKey: string; baseUrl?: string },
+    config: LLMCallConfig,
     messages: OpenAIMessage[],
     chatMode: ChatMode
   ): Promise<{ content?: string; toolCalls?: LLMToolCall[]; error?: string }> {
@@ -753,8 +759,43 @@ class AgentServiceClass {
       }
 
       // 监听流式文本
+      // 🔍 调试：记录流式事件时间线
+      const streamStartTime = Date.now()
+      let lastChunkTime = streamStartTime
+      let chunkCount = 0
+
+      let isReasoning = false
+
       this.unsubscribers.push(
         window.electronAPI.onLLMStream((chunk: LLMStreamChunk) => {
+          chunkCount++
+          const now = Date.now()
+          const elapsed = now - streamStartTime
+          const delta = now - lastChunkTime
+          lastChunkTime = now
+
+          // 🔍 详细日志：观察流式工具调用行为
+          if (chunk.type !== 'text') {
+            console.log(`%c[Stream #${chunkCount}] ${chunk.type} @ ${elapsed}ms (+${delta}ms)`,
+              'color: #00ff00; font-weight: bold',
+              {
+                toolName: chunk.toolCallDelta?.name || chunk.toolCall?.name,
+                hasArgs: !!(chunk.toolCallDelta?.args || chunk.toolCall?.arguments),
+                argsPreview: (chunk.toolCallDelta?.args || '').slice(0, 50) || undefined
+              }
+            )
+          }
+
+          // 如果当前正在思考，但收到了非思考内容，则关闭思考标签
+          if (isReasoning && chunk.type !== 'reasoning') {
+            isReasoning = false
+            const closeTag = '\n</thinking>\n'
+            content += closeTag // 同步到本地变量
+            if (this.currentAssistantId) {
+              store.appendToAssistant(this.currentAssistantId, closeTag)
+            }
+          }
+
           if (chunk.type === 'text' && chunk.content) {
             content += chunk.content
             this.contentBuffer += chunk.content
@@ -764,13 +805,32 @@ class AgentServiceClass {
             }
           }
 
+          // 处理 reasoning/thinking 内容
+          if (chunk.type === 'reasoning' && chunk.content) {
+            console.log(`%c[Agent] 🧠 Reasoning: +${chunk.content.length} chars`, 'color: #ff00ff')
+
+            if (this.currentAssistantId) {
+              // 如果是第一次进入思考模式，添加开始标签
+              if (!isReasoning) {
+                isReasoning = true
+                const startTime = Date.now()
+                const openTag = `\n<thinking startTime="${startTime}">\n`
+                content += openTag // 同步到本地变量
+                store.appendToAssistant(this.currentAssistantId, openTag)
+              }
+              // 追加思考内容
+              content += chunk.content // 同步到本地变量
+              store.appendToAssistant(this.currentAssistantId, chunk.content)
+            }
+          }
+
           // 流式工具调用开始
           if (chunk.type === 'tool_call_start' && chunk.toolCallDelta) {
             const toolId = chunk.toolCallDelta.id || `tool_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
             const toolName = chunk.toolCallDelta.name || 'unknown'
 
             // 记录调试日志
-            console.log(`[Agent] Tool call start: ${toolName} (${toolId})`)
+            console.log(`%c[Agent] ✅ Tool call START: ${toolName} (${toolId})`, 'color: #00ff00; font-weight: bold')
 
             if (toolName !== 'unknown' && !isValidToolName(toolName)) {
               console.warn(`[Agent] Invalid tool name detected: ${toolName}`)
@@ -790,6 +850,8 @@ class AgentServiceClass {
 
           // 流式工具调用参数
           if (chunk.type === 'tool_call_delta' && chunk.toolCallDelta && currentToolCall) {
+            console.log(`%c[Agent] 📝 Tool call DELTA: +${chunk.toolCallDelta.args?.length || 0} chars`, 'color: #ffff00')
+
             if (chunk.toolCallDelta.name) {
               const newName = chunk.toolCallDelta.name
               if (isValidToolName(newName)) {
@@ -824,7 +886,7 @@ class AgentServiceClass {
 
           // 流式工具调用结束
           if (chunk.type === 'tool_call_end' && currentToolCall) {
-            console.log(`[Agent] Tool call end: ${currentToolCall.name} (${currentToolCall.id})`)
+            console.log(`%c[Agent] 🏁 Tool call END: ${currentToolCall.name} (total args: ${currentToolCall.argsString.length} chars)`, 'color: #ff6600; font-weight: bold')
             try {
               const args = JSON.parse(currentToolCall.argsString || '{}')
               toolCalls.push({ id: currentToolCall.id, name: currentToolCall.name, arguments: args })
@@ -841,8 +903,9 @@ class AgentServiceClass {
             currentToolCall = null
           }
 
-          // 完整工具调用
+          // 完整工具调用（非流式，一次性到达）
           if (chunk.type === 'tool_call' && chunk.toolCall) {
+            console.log(`%c[Agent] ⚡ FULL tool call (non-streaming): ${chunk.toolCall.name}`, 'color: #ff0000; font-weight: bold')
             if (!isValidToolName(chunk.toolCall.name)) return
             if (!toolCalls.find(tc => tc.id === chunk.toolCall!.id)) {
               toolCalls.push(chunk.toolCall)
@@ -878,6 +941,12 @@ class AgentServiceClass {
       // 监听完成
       this.unsubscribers.push(
         window.electronAPI.onLLMDone((result) => {
+          if (isReasoning) {
+            isReasoning = false
+            if (this.currentAssistantId) {
+              store.appendToAssistant(this.currentAssistantId, '\n</thinking>\n')
+            }
+          }
           cleanupListeners()
           if (result.toolCalls) {
             for (const tc of result.toolCalls) {
@@ -919,6 +988,12 @@ class AgentServiceClass {
       // 监听错误
       this.unsubscribers.push(
         window.electronAPI.onLLMError((error) => {
+          if (isReasoning) {
+            isReasoning = false
+            if (this.currentAssistantId) {
+              store.appendToAssistant(this.currentAssistantId, '\n</thinking>\n')
+            }
+          }
           cleanupListeners()
           resolve({ error: error.message })
         })
@@ -1024,7 +1099,7 @@ class AgentServiceClass {
       )
     ])
 
-    let result: ToolExecutionResult
+    let result: ToolExecutionResult | undefined
     let lastError: string = ''
 
     // 重试机制
@@ -1053,8 +1128,9 @@ class AgentServiceClass {
       }
     }
 
-    if (!result!) {
-      result = { success: false, result: '', error: lastError }
+    // 确保 result 有值（移除危险的非空断言）
+    if (!result) {
+      result = { success: false, result: '', error: lastError || 'Tool execution failed' }
     }
 
     // 记录工具调用响应日志
@@ -1105,8 +1181,9 @@ class AgentServiceClass {
       }
     }
 
+    const resultConfig = getConfig()
     const resultContent = result.success ? (result.result || '') : `Error: ${result.error || 'Unknown error'}`
-    const truncatedContent = truncateToolResult(resultContent, name, CONFIG.maxToolResultChars)
+    const truncatedContent = truncateToolResult(resultContent, name, resultConfig.maxToolResultChars)
     const resultType = result.success ? 'success' : 'tool_error'
     store.addToolResult(id, name, truncatedContent, resultType, args as Record<string, unknown>)
 
@@ -1134,6 +1211,8 @@ class AgentServiceClass {
     )
     let compactedSummary: string | null = null
 
+    const llmConfig = getConfig()
+
     if (shouldCompactContext(filteredMessages)) {
       console.log('[Agent] Context exceeds threshold, compacting...')
 
@@ -1147,10 +1226,10 @@ class AgentServiceClass {
       } else {
         // 这里只做准备，实际压缩需要在会话开始时或定期执行
         // 为了不阻塞当前请求，先截断消息
-        filteredMessages = filteredMessages.slice(-CONFIG.maxHistoryMessages)
+        filteredMessages = filteredMessages.slice(-llmConfig.maxHistoryMessages)
       }
     } else {
-      filteredMessages = filteredMessages.slice(-CONFIG.maxHistoryMessages)
+      filteredMessages = filteredMessages.slice(-llmConfig.maxHistoryMessages)
     }
 
     // 构建系统提示词（可能包含压缩摘要）
@@ -1164,8 +1243,8 @@ class AgentServiceClass {
 
     for (const msg of openaiMessages) {
       if (msg.role === 'tool' && typeof msg.content === 'string') {
-        if (msg.content.length > CONFIG.maxToolResultChars) {
-          msg.content = truncateToolResult(msg.content, 'default', CONFIG.maxToolResultChars)
+        if (msg.content.length > llmConfig.maxToolResultChars) {
+          msg.content = truncateToolResult(msg.content, 'default', llmConfig.maxToolResultChars)
         }
       }
     }
@@ -1183,12 +1262,13 @@ class AgentServiceClass {
     if (!contextItems || contextItems.length === 0) return ''
     const parts: string[] = []
     let totalChars = 0
+    const contextConfig = getConfig()
 
     // Get workspace path from store
     const workspacePath = useStore.getState().workspacePath
 
     for (const item of contextItems) {
-      if (totalChars >= CONFIG.maxTotalContextChars) {
+      if (totalChars >= contextConfig.maxTotalContextChars) {
         parts.push('\n[Additional context truncated]')
         break
       }
@@ -1198,8 +1278,8 @@ class AgentServiceClass {
         try {
           const content = await window.electronAPI.readFile(filePath)
           if (content) {
-            const truncated = content.length > CONFIG.maxFileContentChars
-              ? content.slice(0, CONFIG.maxFileContentChars) + '\n...(file truncated)'
+            const truncated = content.length > contextConfig.maxFileContentChars
+              ? content.slice(0, contextConfig.maxFileContentChars) + '\n...(file truncated)'
               : content
             const fileBlock = `\n### File: ${filePath}\n\`\`\`\n${truncated}\n\`\`\`\n`
             parts.push(fileBlock)
@@ -1311,18 +1391,18 @@ class AgentServiceClass {
       }
     }
 
-    // 更新上下文统计信息
-    const messages = useStore.getState().messages
+    // 更新上下文统计信息（使用 AgentStore 的消息计数）
+    const agentMessages = useAgentStore.getState().getMessages()
     const fileCount = contextItems.filter(item => item.type === 'File').length
     const semanticResultCount = contextItems.filter(item => item.type === 'Codebase').length
 
     useStore.getState().setContextStats({
       totalChars,
-      maxChars: CONFIG.maxTotalContextChars,
+      maxChars: contextConfig.maxTotalContextChars,
       fileCount,
       maxFiles: 10, // 假设最多支持 10 个文件
-      messageCount: messages.length,
-      maxMessages: CONFIG.maxHistoryMessages,
+      messageCount: agentMessages.length,
+      maxMessages: contextConfig.maxHistoryMessages,
       semanticResultCount,
       terminalChars: 0
     })
@@ -1397,11 +1477,20 @@ class AgentServiceClass {
     }
 
     // 同时也支持直接的 <function> 标签（不被 <tool_call> 包裹）
+    // 首先收集所有 tool_call 块的位置范围
+    const toolCallRanges: Array<{ start: number; end: number }> = []
+    const toolCallBlockRegex = /<tool_call>[\s\S]*?<\/tool_call>/gi
+    let blockMatch
+    while ((blockMatch = toolCallBlockRegex.exec(content)) !== null) {
+      toolCallRanges.push({ start: blockMatch.index, end: blockMatch.index + blockMatch[0].length })
+    }
+
     const standaloneFuncRegex = /<function[=\s]+["']?([^"'>\s]+)["']?\s*>([\s\S]*?)<\/function>/gi
     let standaloneMatch
     while ((standaloneMatch = standaloneFuncRegex.exec(content)) !== null) {
-      // 检查是否已经被包含在 tool_call 中
-      const isInsideToolCall = /<tool_call>[\s\S]*?<function[=\s]+["']?([^"'>\s]+)["']?\s*>[\s\S]*?<\/function>[\s\S]*?<\/tool_call>/gi.test(content)
+      // 检查当前匹配位置是否在任何 tool_call 块内
+      const matchPos = standaloneMatch.index
+      const isInsideToolCall = toolCallRanges.some(range => matchPos >= range.start && matchPos < range.end)
       if (isInsideToolCall) continue
 
       const toolName = standaloneMatch[1]

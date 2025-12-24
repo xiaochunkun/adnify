@@ -3,12 +3,10 @@
  * 支持流式参数预览、状态指示、结果展示、代码高亮
  */
 
-import React, { useState, useMemo, useEffect, memo } from 'react'
+import { useState, useMemo, useEffect, memo } from 'react'
 import {
   Check, X, ChevronDown, ChevronRight, Loader2,
-  Terminal, Search, FolderOpen, FileText, Edit3,
-  Trash2, Copy, AlertTriangle,
-  Globe, Link2, MessageCircle
+  Terminal, Search, Copy, AlertTriangle
 } from 'lucide-react'
 import { useStore } from '../../store'
 import { t } from '../../i18n'
@@ -204,15 +202,18 @@ const ToolCallCard = memo(function ToolCallCard({
   }
 
   return (
-    <div className={`
-      group my-1.5 rounded-lg border transition-all duration-200
-      ${isAwaitingApproval
-        ? 'border-yellow-500/30 bg-yellow-500/5'
-        : isError
-          ? 'border-red-500/20 bg-red-500/5'
-          : 'border-white/5 bg-transparent hover:border-white/10'
-      }
-    `}>
+    <div
+      className={`
+        group my-1.5 rounded-lg border transition-all duration-300 ease-out animate-slide-in
+        ${isStreaming ? 'animate-pulse-subtle border-accent/30 bg-accent/5' : ''}
+        ${isAwaitingApproval
+          ? 'border-yellow-500/30 bg-yellow-500/5'
+          : isError
+            ? 'border-red-500/20 bg-red-500/5'
+            : 'border-white/5 bg-transparent hover:border-white/10'
+        }
+      `}
+    >
       {/* Header */}
       <div
         className="flex items-center gap-3 px-3 py-2 cursor-pointer select-none"

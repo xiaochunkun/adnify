@@ -120,15 +120,19 @@ export interface CustomProviderConfig {
 
 // 完整的 Provider 设置
 export interface ProviderModelConfig {
-    enabledModels: string[] // 启用的内置模型
-    customModels: string[]  // 用户添加的模型
-    baseUrl?: string
-    apiKey?: string
+	enabledModels?: string[] // 启用的内置模型
+	customModels: string[]  // 用户添加的模型
+	baseUrl?: string
+	apiKey?: string
+	timeout?: number
+	adapterId?: string
+	adapterConfig?: import('@/shared/types/llmAdapter').LLMAdapterConfig
+	model?: string
 }
 
 export interface ProviderSettings {
 	// 映射 Provider ID 到配置
-    configs: Record<string, ProviderModelConfig>
+	configs: Record<string, ProviderModelConfig>
 }
 
 // 模型选择

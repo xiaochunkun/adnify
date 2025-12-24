@@ -5,7 +5,7 @@
 
 import { GoogleGenerativeAI, SchemaType, Content } from '@google/generative-ai'
 import { BaseProvider } from './base'
-import { ChatParams, ToolDefinition, ToolCall } from '../types'
+import { ChatParams, ToolDefinition, ToolCall, LLMError, LLMErrorCode } from '../types'
 import { adapterService } from '../adapterService'
 
 export class GeminiProvider extends BaseProvider {
@@ -59,9 +59,8 @@ export class GeminiProvider extends BaseProvider {
       messages,
       tools,
       systemPrompt,
-      thinkingEnabled,
-      thinkingBudget,
-      adapterId,
+      signal,
+      adapterConfig,
       onStream,
       onToolCall,
       onComplete,
@@ -71,24 +70,31 @@ export class GeminiProvider extends BaseProvider {
     try {
       this.log('info', 'Starting chat', { model, messageCount: messages.length })
 
+      // 检查是否已经被中止
+      if (signal?.aborted) {
+        onError(new LLMError('Request aborted', LLMErrorCode.ABORTED, undefined, false))
+        return
+      }
+
       const requestOptions = this.baseUrl ? { baseUrl: this.baseUrl } : undefined
 
-      // Gemini 2.0 支持 thinking 模式
-      // https://ai.google.dev/gemini-api/docs/thinking
+      // 构建模型配置
       const modelConfig: Record<string, unknown> = {
         model,
         systemInstruction: systemPrompt,
-        tools: this.convertTools(tools, adapterId) as Parameters<
+        tools: this.convertTools(tools, adapterConfig?.id) as Parameters<
           typeof this.client.getGenerativeModel
         >[0]['tools'],
       }
 
-      // 添加 thinking 配置 (Gemini 2.0+)
-      if (thinkingEnabled) {
-        modelConfig.thinkingConfig = {
-          thinkingBudget: thinkingBudget || 8192,  // Gemini 默认 8k thinking
+      // 应用适配器的请求体模板参数 (如 thinkingConfig)
+      if (adapterConfig?.request?.bodyTemplate) {
+        const template = adapterConfig.request.bodyTemplate
+        for (const [key, value] of Object.entries(template)) {
+          if (typeof value === 'string' && value.startsWith('{{')) continue
+          if (['model', 'systemInstruction', 'tools'].includes(key)) continue
+          modelConfig[key] = value
         }
-        this.log('info', 'Thinking mode enabled', { budget: thinkingBudget })
       }
 
       const genModel = this.client.getGenerativeModel(
@@ -176,10 +182,32 @@ export class GeminiProvider extends BaseProvider {
       const toolCalls: ToolCall[] = []
 
       for await (const chunk of result.stream) {
+        // 检查中止信号
+        if (signal?.aborted) {
+          this.log('info', 'Stream aborted by user')
+          onError(new LLMError('Request aborted', LLMErrorCode.ABORTED, undefined, false))
+          return
+        }
+
         const text = chunk.text()
         if (text) {
           fullContent += text
           onStream({ type: 'text', content: text })
+        }
+
+        // 支持 Gemini 的思考内容（如果适配器配置了）
+        const reasoningField = adapterConfig?.response?.reasoningField
+        if (reasoningField) {
+          const candidate = chunk.candidates?.[0]
+          const parts = candidate?.content?.parts
+          if (parts) {
+            for (const part of parts) {
+              if ((part as any)[reasoningField]) {
+                const reasoning = (part as any)[reasoningField]
+                onStream({ type: 'reasoning', content: reasoning })
+              }
+            }
+          }
         }
 
         const candidate = chunk.candidates?.[0]

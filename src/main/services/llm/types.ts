@@ -26,12 +26,9 @@ export interface LLMConfig {
   maxTokens?: number
   temperature?: number
   timeout?: number
-  // Thinking 模式配置
-  thinkingEnabled?: boolean
-  thinkingBudget?: number
-  // 适配器配置
+  // 完整适配器配置
   adapterId?: string
-  adapterConfig?: AdapterConfig
+  adapterConfig?: import('@/shared/types/llmAdapter').LLMAdapterConfig
 }
 
 export interface TextContent {
@@ -106,11 +103,8 @@ export interface ChatParams {
   systemPrompt?: string
   maxTokens?: number
   signal?: AbortSignal
-  // Thinking 模式配置
-  thinkingEnabled?: boolean
-  thinkingBudget?: number
-  // 适配器配置
-  adapterId?: string
+  // 完整适配器配置（包含请求体和响应解析）
+  adapterConfig?: import('../../../shared/types/llmAdapter').LLMAdapterConfig
   onStream: (chunk: StreamChunk) => void
   onToolCall: (toolCall: ToolCall) => void
   onComplete: (result: ChatResult) => void

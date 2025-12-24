@@ -74,9 +74,7 @@ export class AnthropicProvider extends BaseProvider {
       tools,
       systemPrompt,
       signal,
-      thinkingEnabled,
-      thinkingBudget,
-      adapterId,
+      adapterConfig,
       onStream,
       onToolCall,
       onComplete,
@@ -129,19 +127,17 @@ export class AnthropicProvider extends BaseProvider {
         max_tokens: 8192,
         system: systemPrompt,
         messages: anthropicMessages,
-        tools: this.convertTools(tools, adapterId),
+        tools: this.convertTools(tools, adapterConfig?.id),
       }
 
-      // Extended Thinking 支持 (Claude 3.5 Sonnet, Claude 4 等)
-      // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
-      if (thinkingEnabled) {
-        requestParams.thinking = {
-          type: 'enabled',
-          budget_tokens: thinkingBudget || 16000,  // 默认 16k thinking tokens
+      // 应用适配器的请求体模板参数
+      if (adapterConfig?.request?.bodyTemplate) {
+        const template = adapterConfig.request.bodyTemplate
+        for (const [key, value] of Object.entries(template)) {
+          if (typeof value === 'string' && value.startsWith('{{')) continue
+          if (['model', 'messages', 'system', 'tools'].includes(key)) continue
+          requestParams[key] = value
         }
-        // thinking 模式需要更大的 max_tokens
-        requestParams.max_tokens = Math.max(8192, (thinkingBudget || 16000) + 4096)
-        this.log('info', 'Extended thinking enabled', { budget: thinkingBudget })
       }
 
       const stream = this.client.messages.stream(
@@ -155,6 +151,15 @@ export class AnthropicProvider extends BaseProvider {
       stream.on('text', (text) => {
         fullContent += text
         onStream({ type: 'text', content: text })
+      })
+
+      // 支持 Anthropic 的思考块（Claude 3.7+）
+      // 使用 streamEvent 绕过 MessageStreamEvents 的类型限制
+      stream.on('streamEvent', (event) => {
+        if (event.type === 'content_block_delta' && event.delta.type === 'thinking_delta') {
+          const thinking = (event.delta as any).thinking
+          onStream({ type: 'reasoning', content: thinking })
+        }
       })
 
       const finalMessage = await stream.finalMessage()
