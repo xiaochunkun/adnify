@@ -315,13 +315,27 @@ Sidebar.tsx 拆分完成：
 - ✅ 更新 `index.ts` 导出
 - ✅ 更新 `App.tsx` 导入路径
 - ✅ 删除旧的 `Sidebar.tsx` (1938 行)
+
+SettingsModal.tsx 拆分完成：
+- ✅ 创建目录结构 `components/settings/`
+- ✅ 创建 `types.ts` 共享类型定义
+- ✅ 创建 `tabs/ProviderSettings.tsx`
+- ✅ 创建 `tabs/EditorSettings.tsx`
+- ✅ 创建 `tabs/AgentSettings.tsx`
+- ✅ 创建 `tabs/PromptPreviewModal.tsx`
+- ✅ 创建 `tabs/SecuritySettings.tsx`
+- ✅ 创建 `tabs/IndexSettings.tsx`
+- ✅ 创建 `tabs/SystemSettings.tsx`
+- ✅ 创建 `tabs/index.ts` 导出
+- ✅ 创建新的 `SettingsModal.tsx` 主组件 (~180 行)
+- ✅ 更新 `App.tsx` 导入路径
+- ✅ 删除旧的 `SettingsModal.tsx` (1936 行)
 - ✅ 构建通过
 - ✅ 测试通过
 
 ### Phase 5: 目录重组 (待进行)
-1. 拆分 SettingsModal.tsx (~1935 行)
-2. 拆分 AgentService.ts (~1656 行)
-3. 更新相关导入
+1. 拆分 AgentService.ts (~1656 行)
+2. 更新相关导入
 
 ### Phase 4: 目录重组 (2-3 天)
 1. 创建新目录结构
@@ -352,6 +366,8 @@ Sidebar.tsx 拆分完成：
 | 新增 logger 导入 | 63 |
 | Sidebar 拆分组件 | 10 |
 | 原 Sidebar.tsx 行数 | 1938 → 30 |
+| SettingsModal 拆分组件 | 9 |
+| 原 SettingsModal.tsx 行数 | 1936 → 180 |
 
 ## 五、路径别名配置
 
