@@ -158,7 +158,7 @@ export default function ChatInput({
         )}
 
         {/* Context Chips */}
-        {(contextItems.length > 0 || fileRefs.length > 0 || hasCodebaseRef || hasSymbolsRef || hasGitRef || hasTerminalRef || (activeFilePath && onAddFile)) && (
+        {(contextItems.length > 0 || fileRefs.length > 0 || hasCodebaseRef || hasSymbolsRef || hasGitRef || hasTerminalRef || hasWebRef || (activeFilePath && onAddFile)) && (
           <div className="flex flex-wrap gap-1.5 px-4 pt-3 pb-0.5">
             {/* Active File Suggestion */}
             {activeFilePath && onAddFile && !contextItems.some(item => item.type === 'File' && (item as FileContext).uri === activeFilePath) && (
@@ -170,7 +170,7 @@ export default function ChatInput({
                 <span>{activeFilePath.split(/[\\/]/).pop()}</span>
               </button>
             )}
-            {/* Context Items - 只显示文件/文件夹/代码选择（拖放添加的） */}
+            {/* Context Items - 拖放添加的 */}
             {contextItems.filter(item => ['File', 'Folder', 'CodeSelection'].includes(item.type)).map((item, i) => {
               const getContextStyle = (type: string) => {
                 switch (type) {
@@ -220,7 +220,19 @@ export default function ChatInput({
               )
             })}
 
-            {/* @xxx 引用 - 跟随输入文本，删除文本则消失 */}
+            {/* 文件引用 - 从输入文本中解析的 @file:xxx */}
+            {fileRefs.map((ref, i) => (
+              <span
+                key={`file-${i}`}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-white/5 text-text-secondary text-[10px] font-medium rounded-full border border-white/10 animate-fade-in select-none"
+                title={ref}
+              >
+                <FileText className="w-2.5 h-2.5 opacity-70" />
+                <span className="max-w-[100px] truncate">{ref}</span>
+              </span>
+            ))}
+
+            {/* @xxx 引用 - 跟随输入文本 */}
             {hasCodebaseRef && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[10px] font-medium rounded-full border border-green-500/20 animate-fade-in select-none">
                 <Database className="w-2.5 h-2.5" />

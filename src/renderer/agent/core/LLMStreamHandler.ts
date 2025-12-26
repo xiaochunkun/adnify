@@ -21,6 +21,8 @@ export interface StreamHandlerState {
   isReasoning: boolean
   contentBuffer: string
   activeStreamingToolCalls: Set<string>
+  // 已完成的 XML 工具调用（避免重复处理）
+  completedXMLToolCalls: Set<string>
   // 当前 reasoning part 的 id（用于追加内容）
   currentReasoningPartId: string | null
   reasoningStartTime: number | null
@@ -47,6 +49,7 @@ export function createStreamHandlerState(): StreamHandlerState {
     isReasoning: false,
     contentBuffer: '',
     activeStreamingToolCalls: new Set(),
+    completedXMLToolCalls: new Set(),
     currentReasoningPartId: null,
     reasoningStartTime: null,
   }
@@ -92,7 +95,6 @@ export function handleReasoningChunk(
   if (chunk.type !== 'reasoning' || !chunk.content) return
 
   const store = useAgentStore.getState()
-  logger.agent.info(`%c[Agent] 🧠 Reasoning: +${chunk.content.length} chars`, 'color: #ff00ff')
 
   if (currentAssistantId) {
     if (!state.isReasoning) {
@@ -117,12 +119,12 @@ export function closeReasoningIfNeeded(
   currentAssistantId: string | null
 ): void {
   if (!state.isReasoning) return
-  
+
   const store = useAgentStore.getState()
   if (currentAssistantId && state.currentReasoningPartId) {
     store.finalizeReasoningPart(currentAssistantId, state.currentReasoningPartId)
   }
-  
+
   state.isReasoning = false
   state.currentReasoningPartId = null
 }
@@ -407,5 +409,29 @@ export function detectStreamingXMLToolCalls(
     store.updateToolCall(currentAssistantId, streamingId, {
       arguments: { ...args, _streaming: !isClosed },
     })
+  }
+
+  // 当工具调用完成时，立即加入 toolCalls 数组（避免等到 LLM done）
+  if (isClosed && !state.completedXMLToolCalls.has(streamingId)) {
+    state.completedXMLToolCalls.add(streamingId)
+
+    // 移除 _streaming 标记
+    const finalArgs = { ...args }
+    delete (finalArgs as any)._streaming
+
+    // 加入 toolCalls 数组
+    state.toolCalls.push({
+      id: streamingId,
+      name: lastFunc.name,
+      arguments: finalArgs,
+    })
+
+    // 更新 UI 状态为 pending
+    store.updateToolCall(currentAssistantId, streamingId, {
+      arguments: finalArgs,
+      status: 'pending',
+    })
+
+    logger.agent.info(`[XMLStreamParser] Tool call completed early: ${lastFunc.name} (${streamingId})`)
   }
 }

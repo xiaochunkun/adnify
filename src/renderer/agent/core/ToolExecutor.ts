@@ -402,9 +402,31 @@ export async function executeTool(
         }
 
         const lines = originalContent.split('\n')
+        const fileLineCount = originalContent === '' ? 0 : lines.length
+
+        // 空文件特殊处理：允许 start_line=1, end_line=0 或 1
+        if (fileLineCount === 0) {
+          // 空文件：直接写入内容
+          const success = await window.electronAPI.writeFile(path, content)
+          if (!success) {
+            return { success: false, result: '', error: 'Failed to write file' }
+          }
+          return {
+            success: true,
+            result: 'File written successfully (was empty)',
+            meta: {
+              filePath: path,
+              oldContent: '',
+              newContent: content,
+              linesAdded: content.split('\n').length,
+              linesRemoved: 0
+            }
+          }
+        }
+
         // 验证行号范围
-        if (start_line < 1 || end_line > lines.length || start_line > end_line) {
-          return { success: false, result: '', error: `Invalid line range: ${start_line}-${end_line}. File has ${lines.length} lines.` }
+        if (start_line < 1 || end_line > fileLineCount || start_line > end_line) {
+          return { success: false, result: '', error: `Invalid line range: ${start_line}-${end_line}. File has ${fileLineCount} lines.` }
         }
 
         // 替换行

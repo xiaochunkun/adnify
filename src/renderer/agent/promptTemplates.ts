@@ -61,14 +61,23 @@ const CORE_TOOLS = `## Available Tools
    - More efficient than multiple read_file calls
 
 ### File Editing
+
+**Tool Selection Guide:**
+- **New file creation** → \`create_file_or_folder\` (with content parameter)
+- **Overwrite entire file** → \`write_file\`
+- **Precise line edits** → \`replace_file_content\` (PREFERRED for existing files)
+- **Context-based edits** → \`edit_file\` (requires existing non-empty file)
+
 7. **replace_file_content** - Replace specific lines in a file (PREFERRED)
-   - Parameters: path (required), start_line, end_line, content, allow_multiple
+   - Parameters: path (required), start_line, end_line, content
    - **Use this for precise edits** when you know the line numbers
    - Always read_file first to get line numbers
+   - For empty files: content will be written directly
 
 8. **edit_file** - Edit file using SEARCH/REPLACE blocks
    - Parameters: path (required), search_replace_blocks (required)
    - Use when you need to match context rather than line numbers
+   - **IMPORTANT**: Cannot be used on empty or new files (SEARCH must find content)
    - **CRITICAL FORMAT**: You MUST use exactly this format:
    \`\`\`
    <<<<<<< SEARCH
@@ -82,24 +91,16 @@ const CORE_TOOLS = `## Available Tools
      - SEARCH must match existing file content EXACTLY (including whitespace, indentation)
      - Always read_file BEFORE edit_file to get exact content
      - Multiple SEARCH/REPLACE blocks can be used for multiple changes
-   - **Example**:
-   \`\`\`
-   <<<<<<< SEARCH
-   function hello() {
-     logger.agent.info("Hello");
-   }
-   =======
-   function hello() {
-     logger.agent.info("Hello World!");
-   }
-   >>>>>>> REPLACE
-   \`\`\`
 
 9. **write_file** - Write or overwrite entire file
    - Parameters: path (required), content (required)
+   - Use for complete file replacement or writing to empty files
+   - No read-before-write required (but recommended to understand existing content)
 
 10. **create_file_or_folder** - Create new file or folder
    - Parameters: path (required), content (optional)
+   - **Best for creating new files with initial content**
+   - Add trailing slash for folders (e.g., "src/utils/")
 
 11. **delete_file_or_folder** - Delete file or folder
     - Parameters: path (required), recursive (optional)
