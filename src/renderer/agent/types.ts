@@ -1,8 +1,29 @@
 /**
  * Agent 模块统一类型定义
  * 
- * 所有 Agent 相关类型的单一来源
+ * Agent 专用类型定义，通用 LLM 类型从 @/shared/types 重新导出
  */
+
+// ============================================
+// 从 shared/types 重新导出通用类型
+// ============================================
+
+export type {
+    // 消息内容类型
+    TextContent,
+    ImageContent,
+    MessageContent,
+    // 工具相关类型
+    ToolStatus,
+    ToolResultType,
+    ToolCall,
+    ToolDefinition,
+    ToolExecutionResult,
+    ToolExecutionContext,
+    ToolExecutor,
+    ValidationResult,
+    ToolApprovalType,
+} from '@/shared/types'
 
 // ============================================
 // 从配置中心导入基础类型
@@ -10,108 +31,15 @@
 
 export type {
     ToolCategory,
-    ToolApprovalType,
     ToolMetadata,
     AgentRuntimeConfig,
 } from '@/shared/config/agentConfig'
 
 // ============================================
-// 工具相关类型
+// Agent 专用消息类型
 // ============================================
 
-/** 工具状态 */
-export type ToolStatus =
-    | 'pending'     // 等待执行/流式接收中
-    | 'running'     // 正在执行
-    | 'success'     // 执行成功
-    | 'error'       // 执行失败
-    | 'rejected'    // 用户拒绝
-    | 'awaiting'    // 等待用户审批
-
-/** 工具结果类型 */
-export type ToolResultType =
-    | 'tool_request'  // 等待用户审批
-    | 'running_now'   // 正在执行
-    | 'success'       // 执行成功
-    | 'tool_error'    // 执行出错
-    | 'rejected'      // 用户拒绝
-
-/** 工具调用记录 */
-export interface ToolCall {
-    id: string
-    name: string
-    arguments: Record<string, unknown>
-    status: ToolStatus
-    result?: string
-    error?: string
-    rawParams?: Record<string, unknown>
-}
-
-/** 工具定义（发送给 LLM） */
-export interface ToolDefinition {
-    name: string
-    description: string
-    parameters: {
-        type: 'object'
-        properties: Record<string, {
-            type: string
-            description?: string
-            enum?: string[]
-            items?: any
-        }>
-        required?: string[]
-    }
-}
-
-/** 工具执行结果 */
-export interface ToolExecutionResult {
-    success: boolean
-    result: string
-    error?: string
-    meta?: Record<string, unknown>
-}
-
-/** 工具执行上下文 */
-export interface ToolExecutionContext {
-    workspacePath: string | null
-    currentAssistantId?: string | null
-}
-
-/** 工具执行器函数类型 */
-export type ToolExecutor = (
-    args: Record<string, unknown>,
-    context: ToolExecutionContext
-) => Promise<ToolExecutionResult>
-
-/** 工具验证结果 */
-export interface ValidationResult<T = unknown> {
-    success: boolean
-    data?: T
-    error?: string
-}
-
-// ============================================
-// 消息相关类型
-// ============================================
-
-/** 文本内容 */
-export interface TextContent {
-    type: 'text'
-    text: string
-}
-
-/** 图片内容 */
-export interface ImageContent {
-    type: 'image'
-    source: {
-        type: 'base64' | 'url'
-        media_type: string
-        data: string
-    }
-}
-
-/** 消息内容 */
-export type MessageContent = string | Array<TextContent | ImageContent>
+import type { TextContent, ImageContent, MessageContent, ToolCall, ToolResultType } from '@/shared/types'
 
 /** 文本部分 */
 export interface TextPart {
@@ -429,7 +357,7 @@ export function isToolCallPart(part: AssistantPart): part is ToolCallPart {
 
 export function getMessageText(content: MessageContent): string {
     if (typeof content === 'string') return content
-    return content
+    return (content as Array<TextContent | ImageContent>)
         .filter((c): c is TextContent => c.type === 'text')
         .map(c => c.text)
         .join('')
@@ -437,7 +365,7 @@ export function getMessageText(content: MessageContent): string {
 
 export function getMessageImages(content: MessageContent): ImageContent[] {
     if (typeof content === 'string') return []
-    return content.filter((c): c is ImageContent => c.type === 'image')
+    return (content as Array<TextContent | ImageContent>).filter((c): c is ImageContent => c.type === 'image')
 }
 
 export function getModifiedFilesFromMessages(messages: ChatMessage[]): string[] {

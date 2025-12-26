@@ -8,20 +8,16 @@
 
 ## 🔴 严重问题
 
-### 1. 类型定义重复（5+ 处）
+### 1. 类型定义重复（5+ 处） ✅ 已修复
 
 **问题**: 同一个类型在多个文件中重复定义，导致维护困难和潜在的类型不一致。
 
-| 类型 | 重复位置 |
-|------|----------|
-| `ToolCall` | `shared/types/index.ts`, `renderer/agent/types.ts`, `renderer/agent/tools/types.ts`, `renderer/store/slices/chatSlice.ts`, `main/services/llm/types.ts` |
-| `LLMConfig` | `shared/types/index.ts`, `renderer/types/electron.d.ts`, `renderer/services/settingsService.ts`, `main/services/llm/types.ts`, `main/preload.ts` |
-| `ToolDefinition` | `shared/types/index.ts`, `renderer/types/electron.d.ts`, `renderer/agent/types.ts`, `renderer/agent/tools/types.ts`, `main/services/llm/types.ts`, `main/preload.ts` |
-
-**建议**:
-- 在 `src/shared/types/` 中定义所有共享类型
-- 其他文件通过 `import type` 引用
-- 删除所有重复定义
+**解决方案**:
+- 创建 `src/shared/types/llm.ts` 作为 LLM 相关类型的单一来源
+- 区分 `LLMToolCall` (LLM 返回的原始工具调用) 和 `ToolCall` (UI 层带状态的工具调用)
+- 区分 `LLMError` (接口) 和 `LLMErrorClass` (可实例化的错误类)
+- `src/main/services/llm/types.ts` 只定义主进程专用类型，其他从 shared 重新导出
+- 删除 `src/renderer/agent/tools/types.ts`，所有工具类型直接从 `@/shared/types` 导入
 
 ### 2. Provider 配置架构混乱
 
@@ -97,7 +93,26 @@ src/renderer/agent/store/AgentStore.ts - Agent Store (useAgentStore)
 
 ## 🟢 轻微问题
 
-### 7. 未使用的导出
+### 7. 未使用的代码和文件
+
+**已删除:**
+- ✅ `src/renderer/agent/core/` - 兼容层目录，已无引用
+- ✅ `src/renderer/types/provider.ts` 中的 `CustomProviderConfig` - 与 `shared/types/customProvider.ts` 重复
+
+**未使用但保留（可能为未来功能准备）:**
+
+1. **`src/shared/config/promptConfig.ts`** - 整个文件未被使用
+   - `PromptConfig`, `PromptTemplate`, `PromptComponent` 类型
+   - `CORE_TOOLS_COMPONENT`, `WORKFLOW_COMPONENT`, `ENVIRONMENT_COMPONENT`, `PLANNING_TOOLS_COMPONENT` 组件
+   - `DEFAULT_PROMPT_CONFIG` 默认配置
+   - `replaceTemplatePlaceholders`, `mergePromptComponents`, `createCustomTemplate`, `validateTemplate` 函数
+   - 实际使用的是 `src/renderer/agent/prompts/promptTemplates.ts`
+
+2. **`src/renderer/agent/services/contextService.ts`** - 导出但未调用
+   - `parseFileReferences`, `cleanFileReferences`, `expandFileReference`, `expandFolderReference` 等方法
+   - 可能是为 @file, @folder 等上下文引用功能准备的
+
+### 8. 未使用的导出
 
 **文件**: `src/renderer/agent/prompts/promptTemplates.ts`
 
@@ -146,9 +161,16 @@ src/main/utils/Logger.ts
 
 ## 🔧 建议的重构优先级
 
-### P0 - 立即修复
-1. 统一 `ToolCall`, `LLMConfig`, `ToolDefinition` 类型定义
-2. 清理 Provider 配置架构
+### P0 - 立即修复 ✅ 已完成
+1. ✅ 统一 `ToolCall`, `LLMConfig`, `ToolDefinition` 类型定义
+   - 创建 `src/shared/types/llm.ts` 作为单一来源
+   - `LLMToolCall` (无状态) vs `ToolCall` (有 UI 状态) 明确区分
+   - `LLMErrorClass` (可实例化) vs `LLMError` (接口) 明确区分
+   - 删除 `src/renderer/agent/tools/types.ts`，直接从 shared 导入
+   - 更新所有 provider 使用新类型
+
+2. ✅ 清理 Provider 配置架构
+   - 已在之前的任务中完成
 
 ### P1 - 短期优化
 3. 删除 `agent/core/` 兼容层

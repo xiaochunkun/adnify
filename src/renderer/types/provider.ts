@@ -41,25 +41,3 @@ export type FeatureName = 'chat' | 'agent' | 'autocomplete' | 'apply'
 
 /** 各功能的模型选择 */
 export type ModelSelectionOfFeature = Record<FeatureName, ModelSelection | null>
-
-// ============ 自定义 Provider 类型 ============
-
-/** 自定义 Provider 配置（用于完全自定义的 API 端点） */
-export interface CustomProviderConfig {
-	id: string
-	name: string
-	displayName: string
-	endpoint: string
-	apiKey?: string
-	models: string[]
-	requestTemplate: {
-		method: 'POST'
-		headers: Record<string, string>
-		bodyTemplate: string
-	}
-	responseParser: {
-		contentPath: string
-		streamFormat: 'sse' | 'ndjson' | 'none'
-		streamContentPath?: string
-	}
-}

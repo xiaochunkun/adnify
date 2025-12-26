@@ -9,6 +9,3 @@ export * from './providers'
 
 // Agent 配置
 export * from './agentConfig'
-
-// 提示词配置
-export * from './promptConfig'
