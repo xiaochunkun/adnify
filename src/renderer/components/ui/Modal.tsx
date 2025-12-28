@@ -9,9 +9,10 @@ interface ModalProps {
     children: React.ReactNode
     size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full'
     noPadding?: boolean
+    className?: string
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md', noPadding = false }) => {
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md', noPadding = false, className = '' }) => {
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose()
@@ -43,7 +44,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className={`relative w-full ${sizes[size]} bg-surface border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-scale-in`}>
+            <div className={`relative w-full ${sizes[size]} bg-surface border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-scale-in ${className}`}>
                 {title && (
                     <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
                         <h3 className="text-lg font-semibold text-text-primary">{title}</h3>

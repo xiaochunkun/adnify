@@ -192,8 +192,54 @@ class TerminalManagerClass {
       webglAddon.onContextLoss(() => webglAddon.dispose())
     } catch {}
 
+    // 处理终端输入
     terminal.onData(data => {
       window.electronAPI.writeTerminal(id, data)
+    })
+
+    // 处理复制粘贴快捷键
+    terminal.attachCustomKeyEventHandler((event) => {
+      // Ctrl+C 复制（有选中内容时）
+      if (event.ctrlKey && event.key === 'c' && event.type === 'keydown') {
+        const selection = terminal.getSelection()
+        if (selection) {
+          navigator.clipboard.writeText(selection)
+          return false // 阻止默认行为
+        }
+        // 没有选中内容时，让 Ctrl+C 发送到终端（中断信号）
+        return true
+      }
+      
+      // Ctrl+V 粘贴
+      if (event.ctrlKey && event.key === 'v' && event.type === 'keydown') {
+        navigator.clipboard.readText().then(text => {
+          if (text) {
+            window.electronAPI.writeTerminal(id, text)
+          }
+        }).catch(() => {})
+        return false // 阻止默认行为
+      }
+      
+      // Ctrl+Shift+C 复制（备用）
+      if (event.ctrlKey && event.shiftKey && event.key === 'C' && event.type === 'keydown') {
+        const selection = terminal.getSelection()
+        if (selection) {
+          navigator.clipboard.writeText(selection)
+        }
+        return false
+      }
+      
+      // Ctrl+Shift+V 粘贴（备用）
+      if (event.ctrlKey && event.shiftKey && event.key === 'V' && event.type === 'keydown') {
+        navigator.clipboard.readText().then(text => {
+          if (text) {
+            window.electronAPI.writeTerminal(id, text)
+          }
+        }).catch(() => {})
+        return false
+      }
+      
+      return true // 其他按键正常处理
     })
 
     this.xtermInstances.set(id, { terminal, fitAddon, container })

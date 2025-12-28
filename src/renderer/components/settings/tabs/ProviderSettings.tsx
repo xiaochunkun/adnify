@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react'
-import { Plus, Trash, Eye, EyeOff, Check, AlertTriangle, X } from 'lucide-react'
+import { Plus, Trash, Eye, EyeOff, Check, AlertTriangle, X, Server, Key, Sliders, Box } from 'lucide-react'
 import { useStore } from '@store'
 import { PROVIDERS, getAdapterConfig, type CustomProviderConfig, type LLMAdapterConfig } from '@/shared/config/providers'
 import { toast } from '@components/common/ToastProvider'
@@ -115,10 +115,10 @@ function TestConnectionButton({ localConfig, language }: { localConfig: any; lan
     }
 
     return (
-        <div className="flex items-center gap-3">
-            <Button variant="secondary" size="sm" onClick={handleTest} disabled={testing} className="h-8 px-3 text-xs">
+        <div className="flex items-center gap-3 mt-2">
+            <Button variant="secondary" size="sm" onClick={handleTest} disabled={testing} className="h-9 px-4 text-xs font-medium">
                 {testing ? (
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-2">
                         <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         {language === 'zh' ? '测试中...' : 'Testing...'}
                     </span>
@@ -127,14 +127,14 @@ function TestConnectionButton({ localConfig, language }: { localConfig: any; lan
                 )}
             </Button>
             {status === 'success' && (
-                <span className="flex items-center gap-1 text-xs text-green-500">
-                    <Check className="w-3.5 h-3.5" />
-                    {language === 'zh' ? '连接正常' : 'Connected'}
+                <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-full border border-emerald-400/20">
+                    <Check className="w-3 h-3" />
+                    {language === 'zh' ? '连接成功' : 'Connected'}
                 </span>
             )}
             {status === 'error' && (
-                <span className="flex items-center gap-1 text-xs text-red-400" title={errorMsg}>
-                    <AlertTriangle className="w-3.5 h-3.5" />
+                <span className="flex items-center gap-1.5 text-xs font-medium text-red-400 bg-red-400/10 px-2 py-1 rounded-full border border-red-400/20" title={errorMsg}>
+                    <AlertTriangle className="w-3 h-3" />
                     {errorMsg.length > 30 ? errorMsg.slice(0, 30) + '...' : errorMsg}
                 </span>
             )}
@@ -299,26 +299,34 @@ export function ProviderSettings({
     const builtinProviders = providers.filter((p) => BUILTIN_PROVIDER_IDS.includes(p.id))
 
     return (
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-8 animate-fade-in pb-10">
             {/* Provider 选择器 */}
             <section>
-                <h4 className="text-sm font-medium text-text-secondary mb-4 uppercase tracking-wider text-xs">
-                    {language === 'zh' ? '选择提供商' : 'Select Provider'}
-                </h4>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-2 mb-4">
+                    <Box className="w-4 h-4 text-accent" />
+                    <h4 className="text-sm font-semibold text-text-primary uppercase tracking-wide">
+                        {language === 'zh' ? '选择提供商' : 'Select Provider'}
+                    </h4>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                     {/* 内置厂商 */}
                     {builtinProviders.map((p) => (
                         <button
                             key={p.id}
                             onClick={() => handleSelectBuiltinProvider(p.id)}
-                            className={`relative flex flex-col items-center justify-center px-6 py-3 rounded-xl border transition-all duration-200 ${
+                            className={`group relative flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200 ${
                                 localConfig.provider === p.id
-                                    ? 'border-accent bg-accent/10 text-accent shadow-[0_0_15px_rgba(var(--accent),0.15)]'
-                                    : 'border-border-subtle bg-surface/30 text-text-muted hover:bg-surface hover:border-border hover:text-text-primary'
+                                    ? 'border-accent bg-accent/5 text-accent shadow-md ring-1 ring-accent/20'
+                                    : 'border-white/5 bg-surface/40 text-text-muted hover:bg-surface/60 hover:border-white/10 hover:text-text-primary'
                             }`}
                         >
                             <span className="font-medium text-sm">{p.name}</span>
-                            {localConfig.provider === p.id && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-accent animate-pulse" />}
+                            {localConfig.provider === p.id && (
+                                <div className="absolute top-2 right-2">
+                                    <Check className="w-3.5 h-3.5 text-accent" />
+                                </div>
+                            )}
                         </button>
                     ))}
 
@@ -327,17 +335,21 @@ export function ProviderSettings({
                         <div
                             key={custom.id}
                             onClick={() => handleSelectCustomProvider(custom)}
-                            className={`group relative flex flex-col items-center justify-center px-6 py-3 rounded-xl border transition-all duration-200 cursor-pointer ${
+                            className={`group relative flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200 cursor-pointer ${
                                 localConfig.provider === custom.id
-                                    ? 'border-accent bg-accent/10 text-accent shadow-[0_0_15px_rgba(var(--accent),0.15)]'
-                                    : 'border-border-subtle bg-surface/30 text-text-muted hover:bg-surface hover:border-border hover:text-text-primary'
+                                    ? 'border-accent bg-accent/5 text-accent shadow-md ring-1 ring-accent/20'
+                                    : 'border-white/5 bg-surface/40 text-text-muted hover:bg-surface/60 hover:border-white/10 hover:text-text-primary'
                             }`}
                         >
-                            <span className="font-medium text-sm">{custom.name}</span>
-                            {localConfig.provider === custom.id && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-accent animate-pulse" />}
+                            <span className="font-medium text-sm truncate w-full text-center">{custom.name}</span>
+                            {localConfig.provider === custom.id && (
+                                <div className="absolute top-2 right-2">
+                                    <Check className="w-3.5 h-3.5 text-accent" />
+                                </div>
+                            )}
                             <button
                                 onClick={(e) => handleDeleteCustomProvider(e, custom)}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all"
+                                className="absolute -top-2 -right-2 p-1 rounded-full bg-surface border border-border-subtle text-text-muted shadow-sm opacity-0 group-hover:opacity-100 hover:text-red-500 hover:border-red-500/30 transition-all scale-90 hover:scale-100"
                                 title={language === 'zh' ? '删除' : 'Delete'}
                             >
                                 <X className="w-3 h-3" />
@@ -348,20 +360,26 @@ export function ProviderSettings({
                     {/* 添加按钮 */}
                     <button
                         onClick={() => setIsAddingCustom(true)}
-                        className={`flex flex-col items-center justify-center px-6 py-3 rounded-xl border-2 border-dashed transition-all duration-200 ${
+                        className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed transition-all duration-200 ${
                             isAddingCustom
-                                ? 'border-accent bg-accent/10 text-accent'
-                                : 'border-border-subtle text-text-muted hover:border-accent/50 hover:text-accent hover:bg-accent/5'
+                                ? 'border-accent/50 bg-accent/5 text-accent'
+                                : 'border-white/10 text-text-muted hover:border-accent/30 hover:text-accent hover:bg-accent/5'
                         }`}
                     >
-                        <Plus className="w-5 h-5" />
-                        <span className="text-xs mt-1">{language === 'zh' ? '添加' : 'Add'}</span>
+                        <Plus className="w-5 h-5 mb-1" />
+                        <span className="text-xs font-medium">{language === 'zh' ? '添加自定义' : 'Add Custom'}</span>
                     </button>
                 </div>
 
                 {/* 添加新 Provider 表单（仅点击"+"时显示） */}
                 {isAddingCustom && (
-                    <div className="mt-4">
+                    <div className="mt-6 p-6 rounded-2xl bg-surface/30 border border-white/5 animate-slide-down">
+                        <div className="flex justify-between items-center mb-4">
+                            <h5 className="text-sm font-medium text-text-primary">{language === 'zh' ? '添加新提供商' : 'Add New Provider'}</h5>
+                            <Button variant="ghost" size="sm" onClick={() => setIsAddingCustom(false)}>
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </div>
                         <InlineProviderEditor
                             language={language}
                             isNew
@@ -388,205 +406,231 @@ export function ProviderSettings({
 
             {/* 配置区域（非添加模式时显示） */}
             {!isAddingCustom && (
-                <section className="space-y-6 p-6 bg-surface/30 rounded-xl border border-border-subtle">
-                    <h4 className="text-sm font-medium text-text-secondary uppercase tracking-wider text-xs mb-2">
-                        {language === 'zh' ? '配置' : 'Configuration'}
-                    </h4>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* 左列：基础配置 */}
+                    <div className="space-y-6">
+                        {/* 模型设置 */}
+                        <section className="p-5 bg-surface/30 rounded-xl border border-white/5 space-y-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Box className="w-4 h-4 text-accent" />
+                                <h5 className="text-sm font-medium text-text-primary">{language === 'zh' ? '模型配置' : 'Model Configuration'}</h5>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '选择模型' : 'Select Model'}</label>
+                                    <Select
+                                        value={localConfig.model}
+                                        onChange={(value) => setLocalConfig({ ...localConfig, model: value })}
+                                        options={(() => {
+                                            const modelsSet = new Set<string>()
+                                            if (isCustomSelected) {
+                                                selectedCustomProvider.models.forEach((m) => modelsSet.add(m))
+                                            } else if (selectedProvider) {
+                                                selectedProvider.models.forEach((m) => modelsSet.add(m))
+                                            }
+                                            const customModels = providerConfigs[localConfig.provider]?.customModels || []
+                                            customModels.forEach((m) => modelsSet.add(m))
+                                            return Array.from(modelsSet).map((m) => ({ value: m, label: m }))
+                                        })()}
+                                        className="w-full bg-black/20 border-white/10"
+                                    />
+                                </div>
 
-                    {/* 模型选择 */}
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '模型' : 'Model'}</label>
-                        <Select
-                            value={localConfig.model}
-                            onChange={(value) => setLocalConfig({ ...localConfig, model: value })}
-                            options={(() => {
-                                const modelsSet = new Set<string>()
-                                if (isCustomSelected) {
-                                    selectedCustomProvider.models.forEach((m) => modelsSet.add(m))
-                                } else if (selectedProvider) {
-                                    selectedProvider.models.forEach((m) => modelsSet.add(m))
-                                }
-                                const customModels = providerConfigs[localConfig.provider]?.customModels || []
-                                customModels.forEach((m) => modelsSet.add(m))
-                                return Array.from(modelsSet).map((m) => ({ value: m, label: m }))
-                            })()}
-                            className="w-full"
-                        />
-
-                        {/* 添加自定义模型 */}
-                        <div className="flex gap-2 items-center mt-3 pt-3 border-t border-border-subtle">
-                            <Input
-                                value={newModelName}
-                                onChange={(e) => setNewModelName(e.target.value)}
-                                placeholder={language === 'zh' ? '添加自定义模型...' : 'Add custom model...'}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAddModel()}
-                                className="flex-1 h-9 text-sm"
-                            />
-                            <Button variant="secondary" size="sm" onClick={handleAddModel} disabled={!newModelName.trim()} className="h-9 px-3">
-                                <Plus className="w-4 h-4" />
-                            </Button>
-                        </div>
-
-                        {providerConfigs[localConfig.provider]?.customModels?.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                {providerConfigs[localConfig.provider]?.customModels.map((model: string) => (
-                                    <div
-                                        key={model}
-                                        className="flex items-center gap-1.5 px-2.5 py-1 bg-surface rounded-full border border-border-subtle text-xs text-text-secondary"
-                                    >
-                                        <span>{model}</span>
-                                        <button onClick={() => removeCustomModel(localConfig.provider, model)} className="text-text-muted hover:text-red-400">
-                                            <Trash className="w-3 h-3" />
-                                        </button>
+                                {/* 添加自定义模型 */}
+                                <div className="pt-2">
+                                    <div className="flex gap-2">
+                                        <Input
+                                            value={newModelName}
+                                            onChange={(e) => setNewModelName(e.target.value)}
+                                            placeholder={language === 'zh' ? '输入新模型名称...' : 'Enter new model name...'}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddModel()}
+                                            className="flex-1 h-9 text-xs bg-black/20 border-white/10"
+                                        />
+                                        <Button variant="secondary" size="sm" onClick={handleAddModel} disabled={!newModelName.trim()} className="h-9 px-3">
+                                            <Plus className="w-4 h-4" />
+                                        </Button>
                                     </div>
-                                ))}
+                                    
+                                    {providerConfigs[localConfig.provider]?.customModels?.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mt-3">
+                                            {providerConfigs[localConfig.provider]?.customModels.map((model: string) => (
+                                                <div
+                                                    key={model}
+                                                    className="group flex items-center gap-1.5 px-2 py-1 bg-surface/50 rounded-md border border-white/5 text-xs text-text-secondary hover:border-white/10"
+                                                >
+                                                    <span>{model}</span>
+                                                    <button onClick={() => removeCustomModel(localConfig.provider, model)} className="text-text-muted hover:text-red-400 opacity-50 group-hover:opacity-100 transition-opacity">
+                                                        <Trash className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        )}
+                        </section>
+
+                        {/* 认证设置 */}
+                        <section className="p-5 bg-surface/30 rounded-xl border border-white/5 space-y-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Key className="w-4 h-4 text-accent" />
+                                <h5 className="text-sm font-medium text-text-primary">{language === 'zh' ? '认证设置' : 'Authentication'}</h5>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-text-secondary">API Key</label>
+                                    <Input
+                                        type={showApiKey ? 'text' : 'password'}
+                                        value={localConfig.apiKey}
+                                        onChange={(e) => setLocalConfig({ ...localConfig, apiKey: e.target.value })}
+                                        placeholder={PROVIDERS[localConfig.provider]?.auth.placeholder || 'sk-...'}
+                                        className="bg-black/20 border-white/10 font-mono text-xs"
+                                        rightIcon={
+                                            <button onClick={() => setShowApiKey(!showApiKey)} className="text-text-muted hover:text-text-primary">
+                                                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        }
+                                    />
+                                </div>
+                                
+                                <div className="flex items-center justify-between">
+                                    <TestConnectionButton localConfig={localConfig} language={language} />
+                                    {!isCustomSelected && PROVIDERS[localConfig.provider]?.auth.helpUrl && (
+                                        <a href={PROVIDERS[localConfig.provider]?.auth.helpUrl} target="_blank" rel="noreferrer" className="text-xs text-text-muted hover:text-accent hover:underline flex items-center gap-1">
+                                            {language === 'zh' ? '获取 Key' : 'Get Key'} <span className="opacity-50">↗</span>
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        </section>
                     </div>
 
-                    {/* API Key */}
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-text-primary">API Key</label>
-                        <Input
-                            type={showApiKey ? 'text' : 'password'}
-                            value={localConfig.apiKey}
-                            onChange={(e) => setLocalConfig({ ...localConfig, apiKey: e.target.value })}
-                            placeholder={PROVIDERS[localConfig.provider]?.auth.placeholder || 'Enter API Key'}
-                            rightIcon={
-                                <button onClick={() => setShowApiKey(!showApiKey)} className="text-text-muted hover:text-text-primary">
-                                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
-                            }
-                        />
-                        {!isCustomSelected && PROVIDERS[localConfig.provider]?.auth.helpUrl && (
-                            <div className="flex justify-end">
-                                <a href={PROVIDERS[localConfig.provider]?.auth.helpUrl} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
-                                    {language === 'zh' ? '获取 API Key →' : 'Get API Key →'}
-                                </a>
+                    {/* 右列：高级参数 */}
+                    <div className="space-y-6">
+                        <section className="p-5 bg-surface/30 rounded-xl border border-white/5 space-y-5">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Sliders className="w-4 h-4 text-accent" />
+                                <h5 className="text-sm font-medium text-text-primary">{language === 'zh' ? '生成参数' : 'Generation Parameters'}</h5>
                             </div>
-                        )}
-                    </div>
 
-                    <TestConnectionButton localConfig={localConfig} language={language} />
-
-                    {/* LLM 参数 */}
-                    <div className="space-y-4 pt-4 border-t border-border-subtle">
-                        <h5 className="text-xs font-medium text-text-secondary uppercase tracking-wider">
-                            {language === 'zh' ? 'LLM 参数' : 'LLM Parameters'}
-                        </h5>
-                        
-                        {/* Max Tokens */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs text-text-secondary">{language === 'zh' ? '最大 Token' : 'Max Tokens'}</label>
-                                <span className="text-xs text-text-muted font-mono">{localConfig.parameters?.maxTokens || 8192}</span>
-                            </div>
-                            <input
-                                type="range"
-                                min={1024}
-                                max={32768}
-                                step={1024}
-                                value={localConfig.parameters?.maxTokens || 8192}
-                                onChange={(e) => setLocalConfig({
-                                    ...localConfig,
-                                    parameters: { ...localConfig.parameters, maxTokens: parseInt(e.target.value) }
-                                })}
-                                className="w-full h-1.5 bg-surface rounded-full appearance-none cursor-pointer accent-accent"
-                            />
-                            <div className="flex justify-between text-[10px] text-text-muted">
-                                <span>1K</span>
-                                <span>32K</span>
-                            </div>
-                        </div>
-
-                        {/* Temperature */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs text-text-secondary">Temperature</label>
-                                <span className="text-xs text-text-muted font-mono">{(localConfig.parameters?.temperature || 0.7).toFixed(1)}</span>
-                            </div>
-                            <input
-                                type="range"
-                                min={0}
-                                max={2}
-                                step={0.1}
-                                value={localConfig.parameters?.temperature || 0.7}
-                                onChange={(e) => setLocalConfig({
-                                    ...localConfig,
-                                    parameters: { ...localConfig.parameters, temperature: parseFloat(e.target.value) }
-                                })}
-                                className="w-full h-1.5 bg-surface rounded-full appearance-none cursor-pointer accent-accent"
-                            />
-                            <div className="flex justify-between text-[10px] text-text-muted">
-                                <span>{language === 'zh' ? '精确' : 'Precise'}</span>
-                                <span>{language === 'zh' ? '创意' : 'Creative'}</span>
-                            </div>
-                        </div>
-
-                        {/* Top P */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs text-text-secondary">Top P</label>
-                                <span className="text-xs text-text-muted font-mono">{(localConfig.parameters?.topP || 1).toFixed(1)}</span>
-                            </div>
-                            <input
-                                type="range"
-                                min={0}
-                                max={1}
-                                step={0.05}
-                                value={localConfig.parameters?.topP || 1}
-                                onChange={(e) => setLocalConfig({
-                                    ...localConfig,
-                                    parameters: { ...localConfig.parameters, topP: parseFloat(e.target.value) }
-                                })}
-                                className="w-full h-1.5 bg-surface rounded-full appearance-none cursor-pointer accent-accent"
-                            />
-                            <div className="flex justify-between text-[10px] text-text-muted">
-                                <span>0</span>
-                                <span>1</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 高级设置 */}
-                    <details className="group pt-2">
-                        <summary className="flex items-center gap-2 text-xs font-medium text-text-muted cursor-pointer hover:text-text-primary select-none">
-                            <span className="group-open:rotate-90 transition-transform">▶</span>
-                            {language === 'zh' ? '高级设置' : 'Advanced Settings'}
-                        </summary>
-                        <div className="mt-4 space-y-4 pl-4 border-l border-border-subtle">
-                            <div>
-                                <label className="text-xs text-text-secondary mb-1.5 block">{language === 'zh' ? '自定义端点' : 'Custom Endpoint'}</label>
-                                <Input
-                                    value={localConfig.baseUrl || ''}
-                                    onChange={(e) => setLocalConfig({ ...localConfig, baseUrl: e.target.value || undefined })}
-                                    placeholder="https://api.example.com/v1"
-                                    className="text-sm"
+                            {/* Max Tokens */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs text-text-secondary">{language === 'zh' ? '最大 Token' : 'Max Tokens'}</label>
+                                    <span className="text-xs font-mono bg-black/20 px-1.5 py-0.5 rounded text-accent">{localConfig.parameters?.maxTokens || 8192}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={1024}
+                                    max={32768}
+                                    step={1024}
+                                    value={localConfig.parameters?.maxTokens || 8192}
+                                    onChange={(e) => setLocalConfig({
+                                        ...localConfig,
+                                        parameters: { ...localConfig.parameters, maxTokens: parseInt(e.target.value) }
+                                    })}
+                                    className="w-full h-1.5 bg-surface-active rounded-full appearance-none cursor-pointer accent-accent hover:accent-accent-hover"
                                 />
                             </div>
-                            <div>
-                                <label className="text-xs text-text-secondary mb-1.5 block">{language === 'zh' ? '超时 (秒)' : 'Timeout (sec)'}</label>
-                                <Input
-                                    type="number"
-                                    value={(localConfig.timeout || 120000) / 1000}
-                                    onChange={(e) => setLocalConfig({ ...localConfig, timeout: (parseInt(e.target.value) || 120) * 1000 })}
-                                    min={30}
-                                    max={600}
-                                    className="w-32 text-sm"
+
+                            {/* Temperature */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs text-text-secondary">{language === 'zh' ? '随机性 (Temperature)' : 'Temperature'}</label>
+                                    <span className="text-xs font-mono bg-black/20 px-1.5 py-0.5 rounded text-accent">{(localConfig.parameters?.temperature || 0.7).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={2}
+                                    step={0.1}
+                                    value={localConfig.parameters?.temperature || 0.7}
+                                    onChange={(e) => setLocalConfig({
+                                        ...localConfig,
+                                        parameters: { ...localConfig.parameters, temperature: parseFloat(e.target.value) }
+                                    })}
+                                    className="w-full h-1.5 bg-surface-active rounded-full appearance-none cursor-pointer accent-accent hover:accent-accent-hover"
+                                />
+                                <div className="flex justify-between text-[10px] text-text-muted px-1">
+                                    <span>{language === 'zh' ? '精确' : 'Precise'}</span>
+                                    <span>{language === 'zh' ? '创意' : 'Creative'}</span>
+                                </div>
+                            </div>
+
+                            {/* Top P */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs text-text-secondary">Top P</label>
+                                    <span className="text-xs font-mono bg-black/20 px-1.5 py-0.5 rounded text-accent">{(localConfig.parameters?.topP || 1).toFixed(2)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={1}
+                                    step={0.05}
+                                    value={localConfig.parameters?.topP || 1}
+                                    onChange={(e) => setLocalConfig({
+                                        ...localConfig,
+                                        parameters: { ...localConfig.parameters, topP: parseFloat(e.target.value) }
+                                    })}
+                                    className="w-full h-1.5 bg-surface-active rounded-full appearance-none cursor-pointer accent-accent hover:accent-accent-hover"
                                 />
                             </div>
-                        </div>
-                    </details>
+                        </section>
 
-                    {/* 适配器配置（显示默认配置，支持覆盖） */}
-                    <AdapterOverridesEditor
-                        overrides={localProviderConfigs[localConfig.provider]?.advanced || adapterConfigToAdvanced(currentAdapterConfig, isCustomSelected)}
-                        onChange={handleAdvancedConfigChange}
-                        language={language}
-                        defaultEndpoint={getAdapterConfig(localConfig.provider)?.request?.endpoint || '/chat/completions'}
-                        defaultConfig={isCustomSelected ? currentAdapterConfig : getAdapterConfig(localConfig.provider)}
-                    />
-                </section>
+                        {/* 网络 & 适配器 */}
+                        <section className="p-5 bg-surface/30 rounded-xl border border-white/5 space-y-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Server className="w-4 h-4 text-accent" />
+                                <h5 className="text-sm font-medium text-text-primary">{language === 'zh' ? '网络 & 适配器' : 'Network & Adapter'}</h5>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? 'API 端点' : 'API Endpoint'}</label>
+                                    <Input
+                                        value={localConfig.baseUrl || ''}
+                                        onChange={(e) => setLocalConfig({ ...localConfig, baseUrl: e.target.value || undefined })}
+                                        placeholder="https://api.example.com/v1"
+                                        className="bg-black/20 border-white/10 text-xs font-mono"
+                                    />
+                                </div>
+                                
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '超时时间 (秒)' : 'Timeout (seconds)'}</label>
+                                    <Input
+                                        type="number"
+                                        value={(localConfig.timeout || 120000) / 1000}
+                                        onChange={(e) => setLocalConfig({ ...localConfig, timeout: (parseInt(e.target.value) || 120) * 1000 })}
+                                        min={10}
+                                        max={600}
+                                        className="bg-black/20 border-white/10 text-xs w-32"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-white/5">
+                                <details className="group">
+                                    <summary className="flex items-center gap-2 text-xs font-medium text-text-muted cursor-pointer hover:text-accent transition-colors select-none py-1">
+                                        <span className="group-open:rotate-90 transition-transform">▶</span>
+                                        {language === 'zh' ? '适配器高级覆盖' : 'Adapter Overrides'}
+                                    </summary>
+                                    <div className="mt-3 pl-2 border-l border-white/10">
+                                        <AdapterOverridesEditor
+                                            overrides={localProviderConfigs[localConfig.provider]?.advanced || adapterConfigToAdvanced(currentAdapterConfig, isCustomSelected)}
+                                            onChange={handleAdvancedConfigChange}
+                                            language={language}
+                                            defaultEndpoint={getAdapterConfig(localConfig.provider)?.request?.endpoint || '/chat/completions'}
+                                            defaultConfig={isCustomSelected ? currentAdapterConfig : getAdapterConfig(localConfig.provider)}
+                                        />
+                                    </div>
+                                </details>
+                            </div>
+                        </section>
+                    </div>
+                </div>
             )}
         </div>
     )

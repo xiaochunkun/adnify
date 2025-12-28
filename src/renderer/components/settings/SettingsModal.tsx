@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Cpu, Settings2, Code, Keyboard, Database, Shield, Monitor } from 'lucide-react'
+import { Cpu, Settings2, Code, Keyboard, Database, Shield, Monitor, Globe } from 'lucide-react'
 import { useStore } from '@store'
 import { PROVIDERS } from '@/shared/config/providers'
 import { getEditorConfig, saveEditorConfig } from '@renderer/config/editorConfig'
@@ -144,50 +144,76 @@ export default function SettingsModal() {
     const selectedProvider = providers.find(p => p.id === localConfig.provider)
 
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
-        { id: 'provider', label: language === 'zh' ? '提供商' : 'Provider', icon: <Cpu className="w-4 h-4" /> },
+        { id: 'provider', label: language === 'zh' ? '模型提供商' : 'Providers', icon: <Cpu className="w-4 h-4" /> },
         { id: 'editor', label: language === 'zh' ? '编辑器' : 'Editor', icon: <Code className="w-4 h-4" /> },
-        { id: 'agent', label: 'Agent', icon: <Settings2 className="w-4 h-4" /> },
+        { id: 'agent', label: language === 'zh' ? '智能体' : 'Agent', icon: <Settings2 className="w-4 h-4" /> },
         { id: 'keybindings', label: language === 'zh' ? '快捷键' : 'Keybindings', icon: <Keyboard className="w-4 h-4" /> },
-        { id: 'indexing', label: language === 'zh' ? '索引' : 'Indexing', icon: <Database className="w-4 h-4" /> },
-        { id: 'security', label: language === 'zh' ? '安全' : 'Security', icon: <Shield className="w-4 h-4" /> },
+        { id: 'indexing', label: language === 'zh' ? '代码索引' : 'Indexing', icon: <Database className="w-4 h-4" /> },
+        { id: 'security', label: language === 'zh' ? '安全设置' : 'Security', icon: <Shield className="w-4 h-4" /> },
         { id: 'system', label: language === 'zh' ? '系统' : 'System', icon: <Monitor className="w-4 h-4" /> },
     ]
 
     return (
-        <Modal isOpen={true} onClose={() => setShowSettings(false)} title={language === 'zh' ? '设置' : 'Settings'} size="4xl" noPadding>
-            <div className="flex h-[650px]">
-                {/* Sidebar */}
-                <div className="w-56 bg-surface/30 border-r border-border-subtle flex flex-col">
-                    <nav className="flex-1 p-3 space-y-1">
+        <Modal isOpen={true} onClose={() => setShowSettings(false)} title="" size="5xl" noPadding className="overflow-hidden bg-background">
+            <div className="flex h-[75vh] max-h-[800px]">
+                {/* Modern Sidebar */}
+                <div className="w-64 bg-surface/40 backdrop-blur-md border-r border-white/5 flex flex-col pt-6 pb-4">
+                    <div className="px-6 mb-6">
+                        <h2 className="text-lg font-semibold text-text-primary tracking-tight">
+                            {language === 'zh' ? '设置' : 'Settings'}
+                        </h2>
+                    </div>
+                    
+                    <nav className="flex-1 px-3 space-y-1 overflow-y-auto custom-scrollbar">
                         {tabs.map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all ${activeTab === tab.id
-                                    ? 'bg-accent/10 text-accent border border-accent/20 shadow-sm'
-                                    : 'text-text-secondary hover:bg-surface/50 hover:text-text-primary border border-transparent'
+                                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
+                                    activeTab === tab.id
+                                    ? 'bg-accent/10 text-accent shadow-sm'
+                                    : 'text-text-secondary hover:bg-surface/50 hover:text-text-primary'
                                     }`}
                             >
-                                {tab.icon}
-                                <span className="font-medium">{tab.label}</span>
+                                <span className={`transition-colors ${activeTab === tab.id ? 'text-accent' : 'text-text-muted group-hover:text-text-primary'}`}>
+                                    {tab.icon}
+                                </span>
+                                {tab.label}
+                                {activeTab === tab.id && (
+                                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-accent shadow-[0_0_8px_rgba(var(--accent),0.5)]" />
+                                )}
                             </button>
                         ))}
                     </nav>
 
-                    {/* Language Selector */}
-                    <div className="p-4 border-t border-border-subtle">
+                    {/* Language & Footer */}
+                    <div className="mt-auto px-4 pt-4 border-t border-white/5 space-y-4">
+                        <div className="flex items-center gap-2 px-2 text-text-muted">
+                            <Globe className="w-4 h-4" />
+                            <span className="text-xs font-medium uppercase tracking-wider">{language === 'zh' ? '语言' : 'Language'}</span>
+                        </div>
                         <Select
                             value={localLanguage}
                             onChange={(value) => setLocalLanguage(value as any)}
                             options={LANGUAGES.map(l => ({ value: l.id, label: l.name }))}
-                            className="w-full"
+                            className="w-full text-sm bg-surface/50 border-white/5"
                         />
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 flex flex-col min-w-0">
-                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                {/* Main Content */}
+                <div className="flex-1 flex flex-col min-w-0 bg-background/50">
+                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar scroll-smooth">
+                        {/* Tab Title */}
+                        <div className="mb-6">
+                            <h3 className="text-2xl font-bold text-text-primary">
+                                {tabs.find(t => t.id === activeTab)?.label}
+                            </h3>
+                            <p className="text-sm text-text-muted mt-1">
+                                {language === 'zh' ? '管理您的应用程序偏好设置' : 'Manage your application preferences and configurations'}
+                            </p>
+                        </div>
+
                         {activeTab === 'provider' && (
                             <ProviderSettings
                                 localConfig={localConfig}
@@ -223,13 +249,21 @@ export default function SettingsModal() {
                         {activeTab === 'system' && <SystemSettings language={language} />}
                     </div>
 
-                    {/* Footer */}
-                    <div className="px-8 py-4 border-t border-border-subtle bg-surface/20 flex items-center justify-end gap-3">
-                        <Button variant="ghost" onClick={() => setShowSettings(false)}>
+                    {/* Floating Footer */}
+                    <div className="px-8 py-5 border-t border-white/5 bg-background/80 backdrop-blur-xl flex items-center justify-end gap-3 z-10">
+                        <Button variant="ghost" onClick={() => setShowSettings(false)} className="hover:bg-white/5">
                             {language === 'zh' ? '取消' : 'Cancel'}
                         </Button>
-                        <Button variant={saved ? 'success' : 'primary'} onClick={handleSave}>
-                            {saved ? (language === 'zh' ? '已保存' : 'Saved') : (language === 'zh' ? '保存' : 'Save')}
+                        <Button 
+                            variant={saved ? 'success' : 'primary'} 
+                            onClick={handleSave}
+                            className={`min-w-[100px] shadow-lg ${saved ? 'bg-green-500 hover:bg-green-600' : 'bg-accent hover:bg-accent-hover shadow-accent/20'}`}
+                        >
+                            {saved ? (
+                                <span className="flex items-center gap-2">
+                                    {language === 'zh' ? '已保存' : 'Saved'}
+                                </span>
+                            ) : (language === 'zh' ? '保存更改' : 'Save Changes')}
                         </Button>
                     </div>
                 </div>

@@ -4,7 +4,7 @@
  */
 
 import { logger } from '@shared/utils/Logger'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, shell } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
 import Store from 'electron-store'
@@ -188,6 +188,31 @@ function createWindow(isEmpty: boolean = false) {
       // Do NOT prevent default, let it propagate to renderer as fallback
       // event.preventDefault()
       win.webContents.toggleDevTools()
+    }
+  })
+
+  // 处理外部链接：在系统默认浏览器中打开
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    // 允许 devtools 和本地开发链接在应用内打开
+    if (url.startsWith('devtools://') || url.startsWith('http://localhost')) {
+      return { action: 'allow' }
+    }
+    // 其他链接在系统浏览器中打开
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  // 阻止页面内导航到外部链接
+  win.webContents.on('will-navigate', (event, url) => {
+    const currentUrl = win.webContents.getURL()
+    // 允许本地开发服务器的导航
+    if (url.startsWith('http://localhost') || url.startsWith('file://')) {
+      return
+    }
+    // 如果是外部链接，阻止导航并在浏览器中打开
+    if (url !== currentUrl) {
+      event.preventDefault()
+      shell.openExternal(url)
     }
   })
 

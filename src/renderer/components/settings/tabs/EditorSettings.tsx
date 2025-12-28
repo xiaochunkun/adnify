@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react'
-import { Layout, Type, Sparkles, Terminal, Check, Settings2 } from 'lucide-react'
+import { Layout, Type, Sparkles, Terminal, Check, Settings2, Zap } from 'lucide-react'
 import { useStore } from '@store'
 import { getEditorConfig, saveEditorConfig, EditorConfig } from '@renderer/config/editorConfig'
 import { themes } from '@components/editor/ThemeManager'
@@ -21,34 +21,39 @@ export function EditorSettings({ settings, setSettings, language }: EditorSettin
     }
 
     return (
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-8 animate-fade-in pb-10">
             {/* Theme Section */}
             <section>
-                <h4 className="flex items-center gap-2 text-sm font-medium text-text-secondary mb-4 uppercase tracking-wider text-xs">
-                    <Layout className="w-4 h-4" />
-                    {language === 'zh' ? '外观' : 'Appearance'}
-                </h4>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="flex items-center gap-2 mb-4">
+                    <Layout className="w-4 h-4 text-accent" />
+                    <h4 className="text-sm font-semibold text-text-primary uppercase tracking-wide">
+                        {language === 'zh' ? '外观' : 'Appearance'}
+                    </h4>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                     {allThemes.map(themeId => {
                         const themeVars = themes[themeId as keyof typeof themes]
                         return (
                             <button
                                 key={themeId}
                                 onClick={() => handleThemeChange(themeId)}
-                                className={`relative p-3 rounded-xl border text-left transition-all duration-200 group overflow-hidden ${currentTheme === themeId
-                                    ? 'border-accent bg-accent/10 shadow-md'
-                                    : 'border-border-subtle bg-surface/30 hover:border-border hover:bg-surface/50'
+                                className={`group relative p-4 rounded-xl border text-left transition-all duration-200 overflow-hidden ${currentTheme === themeId
+                                    ? 'border-accent bg-accent/5 shadow-md ring-1 ring-accent/20'
+                                    : 'border-white/5 bg-surface/40 hover:border-white/10 hover:bg-surface/60'
                                     }`}
                             >
-                                <div className="flex gap-1.5 mb-3">
-                                    <div className="w-5 h-5 rounded-full shadow-sm ring-1 ring-border-subtle" style={{ backgroundColor: `rgb(${themeVars['--background']})` }} />
-                                    <div className="w-5 h-5 rounded-full shadow-sm ring-1 ring-border-subtle" style={{ backgroundColor: `rgb(${themeVars['--accent']})` }} />
-                                    <div className="w-5 h-5 rounded-full shadow-sm ring-1 ring-border-subtle" style={{ backgroundColor: `rgb(${themeVars['--text-primary']})` }} />
+                                <div className="flex gap-2 mb-3">
+                                    <div className="w-6 h-6 rounded-full shadow-sm ring-1 ring-white/10" style={{ backgroundColor: `rgb(${themeVars['--background']})` }} title="Background" />
+                                    <div className="w-6 h-6 rounded-full shadow-sm ring-1 ring-white/10" style={{ backgroundColor: `rgb(${themeVars['--surface']})` }} title="Surface" />
+                                    <div className="w-6 h-6 rounded-full shadow-sm ring-1 ring-white/10" style={{ backgroundColor: `rgb(${themeVars['--accent']})` }} title="Accent" />
+                                    <div className="w-6 h-6 rounded-full shadow-sm ring-1 ring-white/10" style={{ backgroundColor: `rgb(${themeVars['--text-primary']})` }} title="Text" />
                                 </div>
-                                <span className="text-xs font-medium capitalize block truncate">{themeId.replace('-', ' ')}</span>
+                                <span className="text-xs font-medium capitalize block truncate text-text-secondary group-hover:text-text-primary transition-colors">
+                                    {themeId.replace(/-/g, ' ')}
+                                </span>
                                 {currentTheme === themeId && (
-                                    <div className="absolute top-2 right-2">
-                                        <Check className="w-3.5 h-3.5 text-accent" />
+                                    <div className="absolute top-3 right-3 bg-accent rounded-full p-0.5">
+                                        <Check className="w-3 h-3 text-white" />
                                     </div>
                                 )}
                             </button>
@@ -57,133 +62,191 @@ export function EditorSettings({ settings, setSettings, language }: EditorSettin
                 </div>
             </section>
 
-            {/* Typography & Layout */}
-            <section className="space-y-4">
-                <h4 className="flex items-center gap-2 text-sm font-medium text-text-secondary mb-4 uppercase tracking-wider text-xs">
-                    <Type className="w-4 h-4" />
-                    {language === 'zh' ? '排版与布局' : 'Typography & Layout'}
-                </h4>
-                <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '字体大小' : 'Font Size'}</label>
-                        <Input type="number" value={settings.fontSize} onChange={(e) => setSettings({ ...settings, fontSize: parseInt(e.target.value) || 14 })} min={10} max={32} />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-text-primary">{language === 'zh' ? 'Tab 大小' : 'Tab Size'}</label>
-                        <Select value={settings.tabSize.toString()} onChange={(value) => setSettings({ ...settings, tabSize: parseInt(value) })} options={[{ value: '2', label: '2 Spaces' }, { value: '4', label: '4 Spaces' }, { value: '8', label: '8 Spaces' }]} className="w-full" />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '自动换行' : 'Word Wrap'}</label>
-                        <Select value={settings.wordWrap} onChange={(value) => setSettings({ ...settings, wordWrap: value as any })} options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }, { value: 'wordWrapColumn', label: 'Column' }]} className="w-full" />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '行号' : 'Line Numbers'}</label>
-                        <Select value={settings.lineNumbers} onChange={(value) => setSettings({ ...settings, lineNumbers: value as any })} options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }, { value: 'relative', label: 'Relative' }]} className="w-full" />
-                    </div>
-                </div>
-            </section>
-
-            {/* Features Switches */}
-            <section className="space-y-4 p-5 bg-surface/30 rounded-xl border border-border-subtle">
-                <h4 className="text-sm font-medium text-text-secondary uppercase tracking-wider text-xs mb-2">
-                    {language === 'zh' ? '功能特性' : 'Features'}
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-                    <Switch label={language === 'zh' ? '显示小地图' : 'Show Minimap'} checked={settings.minimap} onChange={(e) => setSettings({ ...settings, minimap: e.target.checked })} />
-                    <Switch label={language === 'zh' ? '括号配对着色' : 'Bracket Pair Colorization'} checked={settings.bracketPairColorization} onChange={(e) => setSettings({ ...settings, bracketPairColorization: e.target.checked })} />
-                    <Switch label={language === 'zh' ? '保存时格式化' : 'Format on Save'} checked={settings.formatOnSave} onChange={(e) => setSettings({ ...settings, formatOnSave: e.target.checked })} />
-                </div>
-                <div className="pt-4 border-t border-border-subtle space-y-4">
-                    <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '自动保存' : 'Auto Save'}</label>
-                        <Select value={settings.autoSave} onChange={(value) => setSettings({ ...settings, autoSave: value as any })} options={[{ value: 'off', label: 'Off' }, { value: 'afterDelay', label: language === 'zh' ? '延迟后' : 'After Delay' }, { value: 'onFocusChange', label: language === 'zh' ? '失去焦点时' : 'On Focus Change' }]} className="w-48" />
-                    </div>
-                    {settings.autoSave === 'afterDelay' && (
-                        <div className="flex items-center justify-between animate-fade-in">
-                            <label className="text-sm text-text-secondary">{language === 'zh' ? '自动保存延迟 (ms)' : 'Auto Save Delay (ms)'}</label>
-                            <Input type="number" value={settings.autoSaveDelay} onChange={(e) => setSettings({ ...settings, autoSaveDelay: parseInt(e.target.value) || 1000 })} min={500} max={10000} step={500} className="w-32" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Typography & Layout */}
+                <div className="space-y-6">
+                    <section className="p-5 bg-surface/30 rounded-xl border border-white/5 space-y-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Type className="w-4 h-4 text-accent" />
+                            <h5 className="text-sm font-medium text-text-primary">{language === 'zh' ? '排版与布局' : 'Typography & Layout'}</h5>
                         </div>
-                    )}
-                </div>
-            </section>
-
-            {/* AI Completion */}
-            <section className="space-y-4 p-5 bg-gradient-to-br from-accent/5 to-transparent rounded-xl border border-accent/10">
-                <div className="flex items-center justify-between">
-                    <h4 className="flex items-center gap-2 text-sm font-medium text-accent uppercase tracking-wider text-xs">
-                        <Sparkles className="w-4 h-4" />
-                        {language === 'zh' ? 'AI 代码补全' : 'AI Code Completion'}
-                    </h4>
-                    <Switch checked={settings.completionEnabled} onChange={(e) => setSettings({ ...settings, completionEnabled: e.target.checked })} />
-                </div>
-
-                {settings.completionEnabled && (
-                    <div className="space-y-4 pt-2 animate-fade-in">
-                        <div className="grid grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '触发延迟 (ms)' : 'Trigger Delay (ms)'}</label>
-                                <Input type="number" value={settings.completionDebounceMs} onChange={(e) => setSettings({ ...settings, completionDebounceMs: parseInt(e.target.value) || 150 })} min={50} max={1000} step={50} />
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '字体大小' : 'Font Size'}</label>
+                                <Input 
+                                    type="number" 
+                                    value={settings.fontSize} 
+                                    onChange={(e) => setSettings({ ...settings, fontSize: parseInt(e.target.value) || 14 })} 
+                                    min={10} 
+                                    max={32}
+                                    className="bg-black/20 border-white/10 text-xs" 
+                                />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '最大 Token 数' : 'Max Tokens'}</label>
-                                <Input type="number" value={settings.completionMaxTokens} onChange={(e) => setSettings({ ...settings, completionMaxTokens: parseInt(e.target.value) || 256 })} min={64} max={1024} step={64} />
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? 'Tab 大小' : 'Tab Size'}</label>
+                                <Select 
+                                    value={settings.tabSize.toString()} 
+                                    onChange={(value) => setSettings({ ...settings, tabSize: parseInt(value) })} 
+                                    options={[{ value: '2', label: '2 Spaces' }, { value: '4', label: '4 Spaces' }, { value: '8', label: '8 Spaces' }]} 
+                                    className="w-full bg-black/20 border-white/10 text-xs" 
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '自动换行' : 'Word Wrap'}</label>
+                                <Select 
+                                    value={settings.wordWrap} 
+                                    onChange={(value) => setSettings({ ...settings, wordWrap: value as any })} 
+                                    options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }, { value: 'wordWrapColumn', label: 'Column' }]} 
+                                    className="w-full bg-black/20 border-white/10 text-xs" 
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '行号' : 'Line Numbers'}</label>
+                                <Select 
+                                    value={settings.lineNumbers} 
+                                    onChange={(value) => setSettings({ ...settings, lineNumbers: value as any })} 
+                                    options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }, { value: 'relative', label: 'Relative' }]} 
+                                    className="w-full bg-black/20 border-white/10 text-xs" 
+                                />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '触发字符' : 'Trigger Characters'}</label>
-                            <Input 
-                                value={settings.completionTriggerChars.join(' ')} 
-                                onChange={(e) => setSettings({ ...settings, completionTriggerChars: e.target.value.split(' ').filter(c => c.length > 0) })} 
-                                placeholder=". ( { [ ..."
-                            />
-                            <p className="text-xs text-text-muted">{language === 'zh' ? '用空格分隔触发字符' : 'Separate trigger characters with spaces'}</p>
-                        </div>
-                    </div>
-                )}
-            </section>
+                    </section>
 
-            {/* Terminal Settings */}
-            <section className="space-y-4">
-                <h4 className="flex items-center gap-2 text-sm font-medium text-text-secondary mb-4 uppercase tracking-wider text-xs">
-                    <Terminal className="w-4 h-4" />
-                    {language === 'zh' ? '终端' : 'Terminal'}
-                </h4>
-                <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '终端字体大小' : 'Terminal Font Size'}</label>
-                        <Input type="number" value={advancedConfig.terminal.fontSize} onChange={(e) => { const newConfig = { ...advancedConfig, terminal: { ...advancedConfig.terminal, fontSize: parseInt(e.target.value) || 13 } }; setAdvancedConfig(newConfig); saveEditorConfig(newConfig) }} min={10} max={24} />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '终端行高' : 'Terminal Line Height'}</label>
-                        <Input type="number" value={advancedConfig.terminal.lineHeight} onChange={(e) => { const newConfig = { ...advancedConfig, terminal: { ...advancedConfig.terminal, lineHeight: parseFloat(e.target.value) || 1.2 } }; setAdvancedConfig(newConfig); saveEditorConfig(newConfig) }} min={1} max={2} step={0.1} />
-                    </div>
+                    {/* Features Switches */}
+                    <section className="p-5 bg-surface/30 rounded-xl border border-white/5 space-y-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Settings2 className="w-4 h-4 text-accent" />
+                            <h5 className="text-sm font-medium text-text-primary">{language === 'zh' ? '功能特性' : 'Features'}</h5>
+                        </div>
+                        <div className="space-y-3">
+                            <Switch label={language === 'zh' ? '显示小地图' : 'Show Minimap'} checked={settings.minimap} onChange={(e) => setSettings({ ...settings, minimap: e.target.checked })} />
+                            <Switch label={language === 'zh' ? '括号配对着色' : 'Bracket Pair Colorization'} checked={settings.bracketPairColorization} onChange={(e) => setSettings({ ...settings, bracketPairColorization: e.target.checked })} />
+                            <Switch label={language === 'zh' ? '保存时格式化' : 'Format on Save'} checked={settings.formatOnSave} onChange={(e) => setSettings({ ...settings, formatOnSave: e.target.checked })} />
+                        </div>
+                        
+                        <div className="pt-3 border-t border-white/5">
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '自动保存' : 'Auto Save'}</label>
+                                <Select 
+                                    value={settings.autoSave} 
+                                    onChange={(value) => setSettings({ ...settings, autoSave: value as any })} 
+                                    options={[{ value: 'off', label: 'Off' }, { value: 'afterDelay', label: language === 'zh' ? '延迟后' : 'After Delay' }, { value: 'onFocusChange', label: language === 'zh' ? '失去焦点时' : 'On Focus Change' }]} 
+                                    className="w-32 bg-black/20 border-white/10 text-xs h-7 min-h-0" 
+                                />
+                            </div>
+                            {settings.autoSave === 'afterDelay' && (
+                                <div className="flex items-center justify-between animate-fade-in">
+                                    <label className="text-xs text-text-muted">{language === 'zh' ? '延迟 (ms)' : 'Delay (ms)'}</label>
+                                    <Input 
+                                        type="number" 
+                                        value={settings.autoSaveDelay} 
+                                        onChange={(e) => setSettings({ ...settings, autoSaveDelay: parseInt(e.target.value) || 1000 })} 
+                                        min={500} 
+                                        max={10000} 
+                                        step={500} 
+                                        className="w-24 bg-black/20 border-white/10 text-xs h-7" 
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </section>
                 </div>
-                <div className="pt-2">
-                    <Switch label={language === 'zh' ? '光标闪烁' : 'Cursor Blink'} checked={advancedConfig.terminal.cursorBlink} onChange={(e) => { const newConfig = { ...advancedConfig, terminal: { ...advancedConfig.terminal, cursorBlink: e.target.checked } }; setAdvancedConfig(newConfig); saveEditorConfig(newConfig) }} />
-                </div>
-            </section>
 
-            {/* Performance Settings */}
-            <section className="space-y-4">
-                <h4 className="flex items-center gap-2 text-sm font-medium text-text-secondary mb-4 uppercase tracking-wider text-xs">
-                    <Settings2 className="w-4 h-4" />
-                    {language === 'zh' ? '性能与限制' : 'Performance & Limits'}
-                </h4>
-                <div className="p-5 bg-surface/30 rounded-xl border border-border-subtle space-y-4">
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '大文件警告阈值 (MB)' : 'Large File Warning (MB)'}</label>
-                            <Input type="number" value={settings.largeFileWarningThresholdMB} onChange={(e) => setSettings({ ...settings, largeFileWarningThresholdMB: parseFloat(e.target.value) || 5 })} min={1} max={50} step={1} />
-                            <p className="text-xs text-text-muted">{language === 'zh' ? '超过此大小的文件将显示警告' : 'Files larger than this will show a warning'}</p>
+                {/* Right Column */}
+                <div className="space-y-6">
+                    {/* AI Completion */}
+                    <section className="p-5 bg-gradient-to-br from-accent/5 to-transparent rounded-xl border border-accent/10 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-accent" />
+                                <h5 className="text-sm font-medium text-text-primary">{language === 'zh' ? 'AI 代码补全' : 'AI Completion'}</h5>
+                            </div>
+                            <Switch checked={settings.completionEnabled} onChange={(e) => setSettings({ ...settings, completionEnabled: e.target.checked })} />
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-text-primary">{language === 'zh' ? '命令执行超时 (秒)' : 'Command Timeout (sec)'}</label>
-                            <Input type="number" value={settings.commandTimeoutMs / 1000} onChange={(e) => setSettings({ ...settings, commandTimeoutMs: (parseInt(e.target.value) || 30) * 1000 })} min={10} max={300} step={10} />
-                            <p className="text-xs text-text-muted">{language === 'zh' ? 'Agent 执行命令的最大等待时间' : 'Max wait time for Agent command execution'}</p>
+
+                        {settings.completionEnabled && (
+                            <div className="space-y-4 pt-2 animate-fade-in">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '触发延迟 (ms)' : 'Trigger Delay'}</label>
+                                        <Input 
+                                            type="number" 
+                                            value={settings.completionDebounceMs} 
+                                            onChange={(e) => setSettings({ ...settings, completionDebounceMs: parseInt(e.target.value) || 150 })} 
+                                            min={50} 
+                                            max={1000} 
+                                            step={50} 
+                                            className="bg-black/20 border-white/10 text-xs"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '最大 Token' : 'Max Tokens'}</label>
+                                        <Input 
+                                            type="number" 
+                                            value={settings.completionMaxTokens} 
+                                            onChange={(e) => setSettings({ ...settings, completionMaxTokens: parseInt(e.target.value) || 256 })} 
+                                            min={64} 
+                                            max={1024} 
+                                            step={64} 
+                                            className="bg-black/20 border-white/10 text-xs"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '触发字符' : 'Trigger Characters'}</label>
+                                    <Input 
+                                        value={settings.completionTriggerChars.join(' ')} 
+                                        onChange={(e) => setSettings({ ...settings, completionTriggerChars: e.target.value.split(' ').filter(c => c.length > 0) })} 
+                                        placeholder=". ( { [ ..."
+                                        className="bg-black/20 border-white/10 text-xs font-mono"
+                                    />
+                                    <p className="text-[10px] text-text-muted opacity-70">{language === 'zh' ? '用空格分隔触发字符' : 'Separate trigger characters with spaces'}</p>
+                                </div>
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Terminal Settings */}
+                    <section className="p-5 bg-surface/30 rounded-xl border border-white/5 space-y-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Terminal className="w-4 h-4 text-accent" />
+                            <h5 className="text-sm font-medium text-text-primary">{language === 'zh' ? '终端配置' : 'Terminal'}</h5>
                         </div>
-                    </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '字体大小' : 'Font Size'}</label>
+                                <Input type="number" value={advancedConfig.terminal.fontSize} onChange={(e) => { const newConfig = { ...advancedConfig, terminal: { ...advancedConfig.terminal, fontSize: parseInt(e.target.value) || 13 } }; setAdvancedConfig(newConfig); saveEditorConfig(newConfig) }} min={10} max={24} className="bg-black/20 border-white/10 text-xs" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-text-secondary">{language === 'zh' ? '行高' : 'Line Height'}</label>
+                                <Input type="number" value={advancedConfig.terminal.lineHeight} onChange={(e) => { const newConfig = { ...advancedConfig, terminal: { ...advancedConfig.terminal, lineHeight: parseFloat(e.target.value) || 1.2 } }; setAdvancedConfig(newConfig); saveEditorConfig(newConfig) }} min={1} max={2} step={0.1} className="bg-black/20 border-white/10 text-xs" />
+                            </div>
+                        </div>
+                        <div className="pt-2">
+                            <Switch label={language === 'zh' ? '光标闪烁' : 'Cursor Blink'} checked={advancedConfig.terminal.cursorBlink} onChange={(e) => { const newConfig = { ...advancedConfig, terminal: { ...advancedConfig.terminal, cursorBlink: e.target.checked } }; setAdvancedConfig(newConfig); saveEditorConfig(newConfig) }} />
+                        </div>
+                    </section>
+
+                    {/* Performance */}
+                    <section className="p-5 bg-surface/30 rounded-xl border border-white/5 space-y-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Zap className="w-4 h-4 text-accent" />
+                            <h5 className="text-sm font-medium text-text-primary">{language === 'zh' ? '性能与限制' : 'Performance'}</h5>
+                        </div>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs text-text-secondary">{language === 'zh' ? '大文件警告 (MB)' : 'Large File Warning (MB)'}</label>
+                                <Input type="number" value={settings.largeFileWarningThresholdMB} onChange={(e) => setSettings({ ...settings, largeFileWarningThresholdMB: parseFloat(e.target.value) || 5 })} min={1} max={50} step={1} className="w-24 bg-black/20 border-white/10 text-xs h-7" />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs text-text-secondary">{language === 'zh' ? '命令超时 (秒)' : 'Command Timeout (s)'}</label>
+                                <Input type="number" value={settings.commandTimeoutMs / 1000} onChange={(e) => setSettings({ ...settings, commandTimeoutMs: (parseInt(e.target.value) || 30) * 1000 })} min={10} max={300} step={10} className="w-24 bg-black/20 border-white/10 text-xs h-7" />
+                            </div>
+                        </div>
+                    </section>
                 </div>
-            </section>
+            </div>
         </div>
     )
 }

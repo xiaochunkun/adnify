@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import {
+  Folder,
   FolderOpen,
   File,
   ChevronRight,
@@ -14,6 +15,13 @@ import {
   FilePlus,
   FolderPlus,
   ExternalLink,
+  FileJson,
+  FileCode,
+  FileImage,
+  FileType,
+  FileText,
+  FileTerminal,
+  FileCog,
 } from 'lucide-react'
 import { useStore } from '@store'
 import { FileItem } from '@app-types/electron'
@@ -23,7 +31,49 @@ import { toast } from '../../common/ToastProvider'
 import { directoryCacheService } from '@services/directoryCacheService'
 import { Input, ContextMenu, ContextMenuItem } from '../../ui'
 import { InlineCreateInput } from './InlineCreateInput'
-import { getFileIcon } from '../utils'
+
+// 获取文件图标的辅助函数
+const getFileIcon = (fileName: string) => {
+  const ext = fileName.split('.').pop()?.toLowerCase()
+  
+  switch (ext) {
+    case 'json':
+      return <FileJson className="w-3.5 h-3.5 text-yellow-400" />
+    case 'ts':
+    case 'tsx':
+      return <FileCode className="w-3.5 h-3.5 text-blue-400" />
+    case 'js':
+    case 'jsx':
+      return <FileCode className="w-3.5 h-3.5 text-yellow-300" />
+    case 'css':
+    case 'scss':
+    case 'less':
+      return <FileType className="w-3.5 h-3.5 text-sky-300" />
+    case 'html':
+      return <FileCode className="w-3.5 h-3.5 text-orange-400" />
+    case 'md':
+    case 'txt':
+      return <FileText className="w-3.5 h-3.5 text-gray-300" />
+    case 'png':
+    case 'jpg':
+    case 'jpeg':
+    case 'gif':
+    case 'svg':
+    case 'ico':
+      return <FileImage className="w-3.5 h-3.5 text-purple-400" />
+    case 'sh':
+    case 'bat':
+    case 'ps1':
+      return <FileTerminal className="w-3.5 h-3.5 text-green-400" />
+    case 'yml':
+    case 'yaml':
+    case 'toml':
+    case 'xml':
+      return <FileCog className="w-3.5 h-3.5 text-red-300" />
+    default:
+      return <File className="w-3.5 h-3.5 text-text-muted" />
+  }
+}
 
 interface FileTreeItemProps {
   item: FileItem
@@ -213,17 +263,17 @@ export function FileTreeItem({
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         className={`
-          group flex items-center gap-1.5 py-1 pr-2 cursor-pointer transition-all duration-200 relative select-none
+          group flex items-center gap-1.5 py-1 pr-2 cursor-pointer transition-all duration-200 relative select-none rounded-r-md mr-2
           ${isActive ? 'bg-accent/10 text-text-primary' : 'text-text-muted hover:text-text-primary hover:bg-white/5'}
         `}
-        style={{ paddingLeft: `${depth * 12 + 12}px` }}
+        style={{ paddingLeft: `${depth * 14 + 12}px` }}
       >
         {isActive && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" />}
 
         {depth > 0 && (
           <div
             className="absolute left-0 top-0 bottom-0 border-l border-border-subtle group-hover:border-white/10"
-            style={{ left: `${depth * 12}px` }}
+            style={{ left: `${depth * 14}px` }}
           />
         )}
 
@@ -235,15 +285,19 @@ export function FileTreeItem({
             {isLoading ? (
               <div className="w-3.5 h-3.5 border-2 border-text-muted border-t-transparent rounded-full animate-spin flex-shrink-0" />
             ) : (
-              <FolderOpen
-                className={`w-3.5 h-3.5 flex-shrink-0 ${isExpanded ? 'text-accent' : 'text-text-muted group-hover:text-text-primary'}`}
-              />
+              <>
+                {isExpanded ? (
+                  <FolderOpen className="w-3.5 h-3.5 flex-shrink-0 text-accent" />
+                ) : (
+                  <Folder className="w-3.5 h-3.5 flex-shrink-0 text-text-muted group-hover:text-text-primary" />
+                )}
+              </>
             )}
           </>
         ) : (
           <>
             <span className="w-3.5 flex-shrink-0" />
-            <File className={`w-3.5 h-3.5 flex-shrink-0 ${getFileIcon(item.name)}`} />
+            {getFileIcon(item.name)}
           </>
         )}
 
@@ -259,7 +313,7 @@ export function FileTreeItem({
             autoFocus
           />
         ) : (
-          <span className="text-[13px] truncate leading-normal flex-1 opacity-90 group-hover:opacity-100">
+          <span className="text-[13px] truncate leading-normal flex-1 opacity-90 group-hover:opacity-100 font-medium">
             {item.name}
           </span>
         )}
@@ -278,7 +332,7 @@ export function FileTreeItem({
         <div className="relative">
           <div
             className="absolute left-0 top-0 bottom-0 border-l border-border-subtle/30"
-            style={{ left: `${(depth + 1) * 12}px` }}
+            style={{ left: `${(depth + 1) * 14}px` }}
           />
 
           {isCreatingHere && (
