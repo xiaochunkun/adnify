@@ -3,4 +3,3 @@
  */
 
 export { InlineCreateInput } from './InlineCreateInput'
-export { FileTreeItem } from './FileTreeItem'

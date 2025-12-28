@@ -6,20 +6,21 @@ import { useState, useEffect, useCallback } from 'react'
 import { FolderOpen, Plus, RefreshCw, FolderPlus, GitBranch, FilePlus, ExternalLink } from 'lucide-react'
 import { useStore } from '@store'
 import { t } from '@renderer/i18n'
-import { getFileName, joinPath } from '@utils/pathUtils'
+import { joinPath } from '@utils/pathUtils'
 import { gitService } from '@renderer/agent/services/gitService'
 import { getEditorConfig } from '@renderer/config/editorConfig'
 import { toast } from '../../common/ToastProvider'
 import { adnifyDir } from '@services/adnifyDirService'
 import { directoryCacheService } from '@services/directoryCacheService'
 import { Button, Tooltip, ContextMenu, ContextMenuItem } from '../../ui'
-import { FileTreeItem } from '../components/FileTreeItem'
+import { VirtualFileTree } from '../../tree/VirtualFileTree'
 
 export function ExplorerView() {
   const {
     workspacePath,
     workspace,
     setWorkspacePath,
+    files,
     setFiles,
     language,
     triggerFileTreeRefresh,
@@ -27,6 +28,7 @@ export function ExplorerView() {
     setGitStatus,
     isGitRepo,
     setIsGitRepo,
+    expandFolder,
   } = useStore()
 
   const [creatingIn, setCreatingIn] = useState<{ path: string; type: 'file' | 'folder' } | null>(null)
@@ -118,8 +120,10 @@ export function ExplorerView() {
   }
 
   const handleStartCreate = useCallback((path: string, type: 'file' | 'folder') => {
+    // 确保父文件夹展开
+    expandFolder(path)
     setCreatingIn({ path, type })
-  }, [])
+  }, [expandFolder])
 
   const handleCancelCreate = useCallback(() => {
     setCreatingIn(null)
@@ -204,25 +208,18 @@ export function ExplorerView() {
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col" onContextMenu={handleRootContextMenu}>
-        {workspace && workspace.roots.length > 0 ? (
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar py-1">
-            {workspace.roots.map((root) => (
-              <FileTreeItem
-                key={root}
-                item={{
-                  name: getFileName(root),
-                  path: root,
-                  isDirectory: true,
-                  isRoot: true,
-                }}
-                depth={0}
-                onRefresh={refreshFiles}
-                creatingIn={creatingIn}
-                onStartCreate={handleStartCreate}
-                onCancelCreate={handleCancelCreate}
-                onCreateSubmit={handleCreateSubmit}
-              />
-            ))}
+        {workspace && workspace.roots.length > 0 && files.length > 0 ? (
+          <VirtualFileTree
+            items={files}
+            onRefresh={refreshFiles}
+            creatingIn={creatingIn}
+            onStartCreate={handleStartCreate}
+            onCancelCreate={handleCancelCreate}
+            onCreateSubmit={handleCreateSubmit}
+          />
+        ) : workspace && workspace.roots.length > 0 ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="w-5 h-5 border-2 border-text-muted border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-6">
