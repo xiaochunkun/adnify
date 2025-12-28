@@ -9,7 +9,7 @@ import { ChevronDown, ChevronRight, Layers } from 'lucide-react'
 import { ToolCall } from '@/renderer/agent/types'
 import ToolCallCard from './ToolCallCard'
 import FileChangeCard from './FileChangeCard'
-import { isWriteTool } from '@shared/config/agentConfig'
+import { isWriteTool } from '@/shared/config/tools'
 import { useStore } from '@store'
 
 interface ToolCallGroupProps {

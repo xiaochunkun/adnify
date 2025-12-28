@@ -29,21 +29,14 @@ const CACHE_TTL_MS = 30 * 60 * 1000
 const CACHE_MAX_SIZE = 10
 const CACHE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000
 
-interface LLMServiceOptions {
-  /** 静默模式：不发送事件到渲染进程 */
-  silent?: boolean
-}
-
 export class LLMService {
   private window: BrowserWindow
   private providerCache: Map<string, ProviderCacheEntry> = new Map()
   private currentAbortController: AbortController | null = null
   private cleanupTimer: NodeJS.Timeout | null = null
-  private silent: boolean
 
-  constructor(window: BrowserWindow, options?: LLMServiceOptions) {
+  constructor(window: BrowserWindow) {
     this.window = window
-    this.silent = options?.silent ?? false
     this.startCacheCleanup()
   }
 

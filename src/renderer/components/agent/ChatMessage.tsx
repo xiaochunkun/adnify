@@ -26,7 +26,7 @@ import {
 import FileChangeCard from './FileChangeCard'
 import ToolCallCard from './ToolCallCard'
 import ToolCallGroup from './ToolCallGroup'
-import { isWriteTool } from '@shared/config/agentConfig'
+import { isWriteTool } from '@/shared/config/tools'
 import { useStore } from '@store'
 
 interface ChatMessageProps {

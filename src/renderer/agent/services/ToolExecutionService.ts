@@ -13,7 +13,7 @@ import { ToolStatus } from '../types'
 import type { ToolExecutionResult } from '../tools'
 import { LLMToolCall } from '@/renderer/types/electron'
 import { truncateToolResult } from '@/renderer/utils/partialJson'
-import { isFileModifyingTool } from '@/shared/constants'
+import { isWriteTool } from '@/shared/config/tools'
 import { getAgentConfig } from '../utils/AgentConfig'
 import { compressToolResult } from '../utils/ContextCompressor'
 
@@ -80,7 +80,7 @@ export class ToolExecutionService {
     let originalContent: string | null = null
     let fullPath: string | null = null
 
-    if (isFileModifyingTool(name)) {
+    if (isWriteTool(name)) {
       const filePath = args.path as string
       if (filePath && workspacePath) {
         fullPath = filePath.startsWith(workspacePath) ? filePath : `${workspacePath}/${filePath}`
@@ -115,7 +115,7 @@ export class ToolExecutionService {
     }
 
     // 记录文件变更
-    if (result.success && fullPath && isFileModifyingTool(name)) {
+    if (result.success && fullPath && isWriteTool(name)) {
       await this.recordFileChange(store, fullPath, id, name, originalContent, result, workspacePath)
     }
 

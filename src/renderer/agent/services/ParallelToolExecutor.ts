@@ -6,7 +6,11 @@
 import { logger } from '@utils/Logger'
 import { LLMToolCall } from '@/renderer/types/electron'
 import { toolRegistry } from '../tools'
+import { getReadOnlyTools } from '@/shared/config/tools'
 import { toolExecutionService, ToolExecutionContext } from './ToolExecutionService'
+
+// 只读工具集合（缓存以提高性能）
+const READ_ONLY_SET = new Set(getReadOnlyTools())
 
 // 工具依赖分析结果
 interface ToolDependencyAnalysis {
@@ -37,7 +41,7 @@ function analyzeToolDependencies(toolCalls: LLMToolCall[]): ToolDependencyAnalys
   
   for (const tc of toolCalls) {
     const isParallel = parallelTools.includes(tc.name)
-    const isReadTool = isReadOnlyTool(tc.name)
+    const isReadTool = READ_ONLY_SET.has(tc.name)
     
     if (isReadTool && isParallel) {
       readTools.push(tc)
@@ -79,22 +83,7 @@ function analyzeToolDependencies(toolCalls: LLMToolCall[]): ToolDependencyAnalys
   return { parallelGroups, serialTools }
 }
 
-/**
- * 判断是否为只读工具
- */
-function isReadOnlyTool(name: string): boolean {
-  const readOnlyTools = [
-    'read_file',
-    'list_directory',
-    'search_files',
-    'grep_search',
-    'get_file_info',
-    'get_document_symbols',
-    'get_lint_errors',
-    'web_search',
-  ]
-  return readOnlyTools.includes(name)
-}
+
 
 /**
  * 获取工具操作的目标路径

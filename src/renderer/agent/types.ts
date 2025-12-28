@@ -29,11 +29,8 @@ export type {
 // 从配置中心导入基础类型
 // ============================================
 
-export type {
-    ToolCategory,
-    ToolConfig,
-    AgentRuntimeConfig,
-} from '@/shared/config/agentConfig'
+export type { ToolCategory, ToolConfig } from '@/shared/config/tools'
+export type { AgentRuntimeConfig } from '@/shared/config/agentConfig'
 
 // ============================================
 // Agent 专用消息类型

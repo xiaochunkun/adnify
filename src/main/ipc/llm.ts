@@ -47,7 +47,7 @@ export function registerLLMHandlers(_getMainWindow: () => BrowserWindow | null) 
     // 使用独立的压缩服务
     if (!compactionServices.has(webContentsId)) {
       logger.ipc.info('[LLMService] Creating compaction service for window:', webContentsId)
-      compactionServices.set(webContentsId, new LLMService(window, { silent: true }))
+      compactionServices.set(webContentsId, new LLMService(window))
     }
 
     try {

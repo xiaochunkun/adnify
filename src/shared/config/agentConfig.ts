@@ -9,39 +9,6 @@
  * 3. 默认配置 (本文件)
  */
 
-// 从 tools.ts 重新导出工具相关类型和函数
-export type { ToolCategory, ToolConfig } from './tools'
-export {
-    TOOL_CONFIGS,
-    TOOL_DEFINITIONS,
-    TOOL_SCHEMAS,
-    TOOL_DISPLAY_NAMES,
-    getToolDefinitions,
-    getToolApprovalType,
-    getToolDisplayName,
-    getReadOnlyTools,
-    getWriteTools,
-    getApprovalRequiredTools,
-    isParallelTool,
-    isWriteTool,
-    getToolMetadata,
-} from './tools'
-
-// 从 llm.ts 重新导出 ToolApprovalType
-export type { ToolApprovalType } from '@/shared/types/llm'
-
-// ============================================
-// 兼容性别名（逐步废弃）
-// ============================================
-
-import { TOOL_CONFIGS } from './tools'
-
-/** @deprecated 使用 TOOL_CONFIGS 代替 */
-export const DEFAULT_TOOL_METADATA = TOOL_CONFIGS
-
-/** @deprecated 使用 ToolConfig 代替 */
-export type ToolMetadata = typeof TOOL_CONFIGS[keyof typeof TOOL_CONFIGS]
-
 // ============================================
 // Agent 运行时配置
 // ============================================
@@ -56,6 +23,9 @@ export interface AgentRuntimeConfig {
     maxFileContentChars: number
     maxTotalContextChars: number
     maxSingleFileChars: number
+    maxContextFiles: number
+    maxSemanticResults: number
+    maxTerminalChars: number
 
     // 重试配置
     maxRetries: number
@@ -64,6 +34,7 @@ export interface AgentRuntimeConfig {
 
     // 工具执行
     toolTimeoutMs: number
+    enableAutoFix: boolean
 
     // 上下文压缩
     contextCompressThreshold: number
@@ -87,10 +58,14 @@ export const DEFAULT_AGENT_CONFIG: AgentRuntimeConfig = {
     maxFileContentChars: 15000,
     maxTotalContextChars: 60000,
     maxSingleFileChars: 6000,
+    maxContextFiles: 6,
+    maxSemanticResults: 5,
+    maxTerminalChars: 3000,
     maxRetries: 3,
     retryDelayMs: 1000,
     retryBackoffMultiplier: 1.5,
     toolTimeoutMs: 60000,
+    enableAutoFix: true,
     contextCompressThreshold: 40000,
     keepRecentTurns: 3,
     loopDetection: {

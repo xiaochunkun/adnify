@@ -31,7 +31,7 @@ export {
     getToolDefinitions,
     TOOL_DISPLAY_NAMES,
 } from './tools'
-export { getToolApprovalType, getToolDisplayName } from '@shared/config/agentConfig'
+export { getToolApprovalType, getToolDisplayName } from '@/shared/config/tools'
 
 // 其他服务
 export { checkpointService } from './services/checkpointService'

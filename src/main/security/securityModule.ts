@@ -6,7 +6,7 @@
 import { logger } from '@shared/utils/Logger'
 import Store from 'electron-store'
 import * as path from 'path'
-import { SECURITY_DEFAULTS } from '../../shared/constants'
+import { SECURITY_DEFAULTS, isSensitivePath as sharedIsSensitivePath } from '@shared/constants'
 
 // 敏感操作类型
 export enum OperationType {
@@ -103,19 +103,6 @@ const DEFAULT_PERMISSIONS: PermissionConfig = {
   [OperationType.GIT_EXEC]: PermissionLevel.ALLOWED,
   [OperationType.SYSTEM_SHELL]: PermissionLevel.DENIED,
 }
-
-// 敏感路径模式
-const SENSITIVE_PATHS = [
-  /^C:\\Windows\\/i,
-  /^C:\\Program Files\\/i,
-  /^C:\\Program Files \(x86\)\\/i,
-  /^\/etc\//i,
-  /^\/usr\/bin\//i,
-  /^\/root\//i,
-  /\/\.ssh\//i,
-  /\/\.env$/i,
-  /\/password|secret|credential/i,
-]
 
 // 命令白名单（已统一到 constants.ts）
 const ALLOWED_SHELL_COMMANDS = new Set(SECURITY_DEFAULTS.SHELL_COMMANDS.map(cmd => cmd.toLowerCase()))
@@ -253,8 +240,7 @@ class SecurityManager implements SecurityModule {
    */
   isSensitivePath(filePath: string): boolean {
     if (typeof filePath !== 'string') return true
-    const normalized = filePath.replace(/\\/g, '/')
-    return SENSITIVE_PATHS.some(pattern => pattern.test(normalized))
+    return sharedIsSensitivePath(filePath)
   }
 
   /**

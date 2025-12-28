@@ -3,66 +3,22 @@
  * 统一处理跨平台路径操作
  */
 
-// ============ 安全相关常量 ============
-
-/** 敏感文件/目录模式 - 禁止 Agent 访问 */
-const SENSITIVE_PATTERNS = [
-  // 系统文件
-  /^\/etc\//i,
-  /^\/var\//i,
-  /^\/usr\//i,
-  /^\/bin\//i,
-  /^\/sbin\//i,
-  /^C:\\Windows/i,
-  /^C:\\Program Files/i,
-  /^C:\\ProgramData/i,
-  // 用户敏感目录
-  /\.ssh\//i,
-  /\.gnupg\//i,
-  /\.aws\//i,
-  /\.azure\//i,
-  /\.kube\//i,
-  /\.docker\//i,
-  // 敏感文件
-  /\.env\.local$/i,
-  /\.env\.production$/i,
-  /secrets?\.(json|ya?ml|toml)$/i,
-  /credentials?\.(json|ya?ml|toml)$/i,
-  /private[_-]?key/i,
-  /id_rsa/i,
-  /id_ed25519/i,
-  /\.pem$/i,
-  /\.key$/i,
-  /\.p12$/i,
-  /\.pfx$/i,
-]
-
-/** 危险路径模式 - 可能导致目录遍历 */
-const DANGEROUS_PATTERNS = [
-  /\.\.\//,           // ../
-  /\.\.\\/,           // ..\
-  /^~\//,             // ~/（除非明确允许）
-  /\0/,               // null byte
-  /%2e%2e/i,          // URL encoded ..
-  /%252e%252e/i,      // Double URL encoded ..
-]
+import {
+  isSensitivePath as sharedIsSensitivePath,
+  hasPathTraversal as sharedHasPathTraversal,
+} from '@shared/constants'
 
 // ============ 安全验证函数 ============
 
 /**
  * 检查路径是否包含目录遍历攻击
  */
-export function hasPathTraversal(path: string): boolean {
-  return DANGEROUS_PATTERNS.some(pattern => pattern.test(path))
-}
+export const hasPathTraversal = sharedHasPathTraversal
 
 /**
  * 检查路径是否为敏感文件/目录
  */
-export function isSensitivePath(path: string): boolean {
-  const normalized = normalizePath(path)
-  return SENSITIVE_PATTERNS.some(pattern => pattern.test(normalized))
-}
+export const isSensitivePath = sharedIsSensitivePath
 
 /**
  * 验证路径是否在工作区内（防止目录遍历）

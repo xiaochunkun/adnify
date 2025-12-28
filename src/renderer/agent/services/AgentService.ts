@@ -16,7 +16,7 @@ import {
   TextContent,
 } from '../types'
 import { LLMStreamChunk, LLMToolCall } from '@/renderer/types/electron'
-import { READ_ONLY_TOOLS } from '@/shared/constants'
+import { getReadOnlyTools } from '@/shared/config/tools'
 
 // 导入拆分的模块
 import {
@@ -244,7 +244,8 @@ class AgentServiceClass {
       if (!result.toolCalls || result.toolCalls.length === 0) {
         // 只有在 plan 模式下才提醒更新 plan
         if (chatMode === 'plan' && store.plan) {
-          const hasWriteOps = llmMessages.some(m => m.role === 'assistant' && m.tool_calls?.some((tc: any) => !READ_ONLY_TOOLS.includes(tc.function.name)))
+          const readOnlyTools = getReadOnlyTools()
+          const hasWriteOps = llmMessages.some(m => m.role === 'assistant' && m.tool_calls?.some((tc: any) => !readOnlyTools.includes(tc.function.name)))
           const hasUpdatePlan = llmMessages.some(m => m.role === 'assistant' && m.tool_calls?.some((tc: any) => tc.function.name === 'update_plan'))
 
           if (hasWriteOps && !hasUpdatePlan && loopCount < agentLoopConfig.maxToolLoops) {

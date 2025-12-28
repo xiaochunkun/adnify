@@ -53,6 +53,63 @@ export const WINDOW_DEFAULTS = {
 // 安全设置默认值（统一 main.ts 和 settingsSlice.ts）
 // ==========================================
 
+/** 敏感文件/目录模式 - 禁止访问 */
+export const SENSITIVE_PATH_PATTERNS = [
+    // 系统目录 - Windows
+    /^C:\\Windows/i,
+    /^C:\\Program Files/i,
+    /^C:\\Program Files \(x86\)/i,
+    /^C:\\ProgramData/i,
+    // 系统目录 - Unix
+    /^\/etc\//i,
+    /^\/var\//i,
+    /^\/usr\//i,
+    /^\/bin\//i,
+    /^\/sbin\//i,
+    /^\/root\//i,
+    // 用户敏感目录
+    /[/\\]\.ssh[/\\]/i,
+    /[/\\]\.gnupg[/\\]/i,
+    /[/\\]\.aws[/\\]/i,
+    /[/\\]\.azure[/\\]/i,
+    /[/\\]\.kube[/\\]/i,
+    /[/\\]\.docker[/\\]/i,
+    // 敏感文件
+    /\.env\.local$/i,
+    /\.env\.production$/i,
+    /secrets?\.(json|ya?ml|toml)$/i,
+    /credentials?\.(json|ya?ml|toml)$/i,
+    /private[_-]?key/i,
+    /id_rsa/i,
+    /id_ed25519/i,
+    /\.pem$/i,
+    /\.key$/i,
+    /\.p12$/i,
+    /\.pfx$/i,
+    // 密码相关
+    /password|secret|credential/i,
+] as const
+
+/** 危险路径模式 - 可能导致目录遍历 */
+export const DANGEROUS_PATH_PATTERNS = [
+    /\.\.\//,           // ../
+    /\.\.\\/,           // ..\
+    /\0/,               // null byte
+    /%2e%2e/i,          // URL encoded ..
+    /%252e%252e/i,      // Double URL encoded ..
+] as const
+
+/** 检查路径是否为敏感路径 */
+export function isSensitivePath(path: string): boolean {
+    const normalized = path.replace(/\\/g, '/')
+    return SENSITIVE_PATH_PATTERNS.some(pattern => pattern.test(normalized))
+}
+
+/** 检查路径是否包含目录遍历 */
+export function hasPathTraversal(path: string): boolean {
+    return DANGEROUS_PATH_PATTERNS.some(pattern => pattern.test(path))
+}
+
 export const SECURITY_DEFAULTS = {
     /** 允许的 Shell 命令 */
     SHELL_COMMANDS: [
@@ -179,49 +236,6 @@ export const AGENT_DEFAULTS = {
 } as const
 
 // ==========================================
-// 工具分类（用于工具注册表）
-// ==========================================
-
-export const TOOL_CATEGORIES = {
-    READ: 'read',
-    WRITE: 'write',
-    TERMINAL: 'terminal',
-    SEARCH: 'search',
-    LSP: 'lsp',
-    NETWORK: 'network',
-    PLAN: 'plan',
-} as const
-
-/** 只读类工具列表（可并行执行）- 从 agentConfig 动态获取更佳 */
-export const READ_ONLY_TOOLS = [
-    'read_file',
-    'read_multiple_files',
-    'list_directory',
-    'get_dir_tree',
-    'search_files',
-    'search_in_file',
-    'codebase_search',
-    'find_references',
-    'go_to_definition',
-    'get_hover_info',
-    'get_document_symbols',
-    'get_lint_errors',
-    'web_search',
-    'read_url',
-] as const
-
-/** 写入类工具列表（需要预览）- 从 agentConfig 动态获取更佳 */
-export const WRITE_TOOLS = [
-    'edit_file',
-    'write_file',
-    'replace_file_content',
-    'create_file_or_folder',
-] as const
-
-// 注意：更灵活的工具分类请使用 src/shared/config/agentConfig.ts 中的
-// DEFAULT_TOOL_METADATA 和相关辅助函数
-
-// ==========================================
 // 服务层默认值（统一各服务的超时和间隔）
 // ==========================================
 
@@ -245,46 +259,3 @@ export const SERVICE_DEFAULTS = {
     /** 终端输出最大行数 */
     MAX_TERMINAL_OUTPUT_LINES: 1000,
 } as const
-
-// ==========================================
-// 工具分类辅助函数
-// ==========================================
-
-/** 检查工具是否需要用户审批 */
-export const isApprovalRequired = (toolName: string): boolean => {
-    return toolName === 'delete_file_or_folder' || toolName === 'run_command'
-}
-
-/** 检查工具是否为文件写入类（需要代码预览） */
-export const isFileWriteTool = (toolName: string): boolean => {
-    return WRITE_TOOLS.includes(toolName as typeof WRITE_TOOLS[number])
-}
-
-/** 检查工具是否会修改文件系统（写入或删除） */
-export const isFileModifyingTool = (toolName: string): boolean => {
-    return isFileWriteTool(toolName) || toolName === 'delete_file_or_folder'
-}
-
-/** 检查工具是否为只读类（可并行执行） */
-export const isReadOnlyTool = (toolName: string): boolean => {
-    return READ_ONLY_TOOLS.includes(toolName as typeof READ_ONLY_TOOLS[number])
-}
-
-/** 检查工具是否需要显示代码差异（写入+删除+终端） */
-export const shouldShowToolPreview = (toolName: string): boolean => {
-    return isFileWriteTool(toolName) ||
-        toolName === 'run_command' ||
-        toolName === 'delete_file_or_folder'
-}
-
-/** 检查工具是否需要创建文件快照（用于撤销） */
-export const shouldCreateSnapshot = (toolName: string): boolean => {
-    return isFileModifyingTool(toolName)
-}
-
-/** 获取工具的审批类型 */
-export const getToolApprovalType = (toolName: string): 'dangerous' | 'terminal' | undefined => {
-    if (toolName === 'delete_file_or_folder') return 'dangerous'
-    if (toolName === 'run_command') return 'terminal'
-    return undefined
-}

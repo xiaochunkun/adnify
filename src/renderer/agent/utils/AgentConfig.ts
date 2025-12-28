@@ -6,11 +6,8 @@
  */
 
 import { useStore } from '@store'
-import {
-    DEFAULT_AGENT_CONFIG,
-    getReadOnlyTools,
-    type AgentRuntimeConfig,
-} from '@/shared/config/agentConfig'
+import { DEFAULT_AGENT_CONFIG, type AgentRuntimeConfig } from '@/shared/config/agentConfig'
+import { getReadOnlyTools } from '@/shared/config/tools'
 
 // 重新导出类型
 export type { AgentRuntimeConfig }
@@ -31,14 +28,18 @@ export function getAgentConfig(): AgentRuntimeConfig {
         maxFileContentChars: agentConfig.maxFileContentChars ?? DEFAULT_AGENT_CONFIG.maxFileContentChars,
         maxTotalContextChars: agentConfig.maxTotalContextChars ?? DEFAULT_AGENT_CONFIG.maxTotalContextChars,
         maxSingleFileChars: (agentConfig as any).maxSingleFileChars ?? DEFAULT_AGENT_CONFIG.maxSingleFileChars,
+        maxContextFiles: (agentConfig as any).maxContextFiles ?? DEFAULT_AGENT_CONFIG.maxContextFiles,
+        maxSemanticResults: (agentConfig as any).maxSemanticResults ?? DEFAULT_AGENT_CONFIG.maxSemanticResults,
+        maxTerminalChars: (agentConfig as any).maxTerminalChars ?? DEFAULT_AGENT_CONFIG.maxTerminalChars,
 
         // 重试配置（从 store 获取）
         maxRetries: (agentConfig as any).maxRetries ?? DEFAULT_AGENT_CONFIG.maxRetries,
         retryDelayMs: (agentConfig as any).retryDelayMs ?? DEFAULT_AGENT_CONFIG.retryDelayMs,
         retryBackoffMultiplier: DEFAULT_AGENT_CONFIG.retryBackoffMultiplier,
 
-        // 工具执行超时
+        // 工具执行
         toolTimeoutMs: (agentConfig as any).toolTimeoutMs ?? DEFAULT_AGENT_CONFIG.toolTimeoutMs,
+        enableAutoFix: (agentConfig as any).enableAutoFix ?? DEFAULT_AGENT_CONFIG.enableAutoFix,
 
         // 上下文压缩阈值
         contextCompressThreshold: (agentConfig as any).contextCompressThreshold ?? DEFAULT_AGENT_CONFIG.contextCompressThreshold,
