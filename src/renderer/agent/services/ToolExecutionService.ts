@@ -8,7 +8,7 @@ import { logger } from '@utils/Logger'
 import { performanceMonitor } from '@shared/utils/PerformanceMonitor'
 import { useAgentStore } from '../store/AgentStore'
 import { useStore } from '@store'
-import { toolRegistry, getToolApprovalType } from '../tools'
+import { toolManager, initializeToolProviders } from '../tools'
 import { ToolStatus } from '../types'
 import type { ToolExecutionResult } from '../tools'
 import { LLMToolCall } from '@/renderer/types/electron'
@@ -38,7 +38,9 @@ export class ToolExecutionService {
     const { workspacePath, currentAssistantId } = context
 
     // 检查是否需要审批
-    const approvalType = getToolApprovalType(name)
+    // 确保工具提供者已初始化
+    initializeToolProviders()
+    const approvalType = toolManager.getApprovalType(name)
     const { autoApprove } = useStore.getState()
     // 只有 terminal 和 dangerous 类型需要审批，none 类型不需要
     const needsApproval = approvalType !== 'none' && !(autoApprove as any)[approvalType]
@@ -163,7 +165,7 @@ export class ToolExecutionService {
     const retryDelayMs = config.retryDelayMs
 
     const executeWithTimeout = () => Promise.race([
-      toolRegistry.execute(name, args, { workspacePath }),
+      toolManager.execute(name, args, { workspacePath }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error(`Tool execution timed out after ${timeoutMs / 1000}s`)), timeoutMs)
       )

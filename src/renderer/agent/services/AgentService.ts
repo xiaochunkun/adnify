@@ -8,7 +8,7 @@ import { performanceMonitor } from '@shared/utils/PerformanceMonitor'
 import { useAgentStore } from '../store/AgentStore'
 import { useStore } from '@store'
 import { WorkMode } from '@/renderer/modes/types'
-import { toolRegistry, getToolDefinitions } from '../tools'
+import { toolRegistry, toolManager, initializeToolProviders, setIncludePlanTools } from '../tools'
 import { OpenAIMessage } from '../llm/MessageConverter'
 import {
   ContextItem,
@@ -547,10 +547,15 @@ class AgentServiceClass {
       )
 
       // 发送请求
+      // 初始化工具提供者并获取所有工具定义
+      initializeToolProviders()
+      setIncludePlanTools(chatMode === 'plan')
+      const allTools = chatMode === 'chat' ? [] : toolManager.getAllToolDefinitions()
+      
       window.electronAPI.sendMessage({
         config,
         messages: messages as any,
-        tools: chatMode === 'chat' ? [] : getToolDefinitions(chatMode === 'plan'),
+        tools: allTools,
         systemPrompt: '',
       }).catch((err) => {
         cleanupListeners()

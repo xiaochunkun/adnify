@@ -70,7 +70,11 @@ export function SystemSettings({ language }: SystemSettingsProps) {
                         <div className="flex items-center justify-between">
                             <div>
                                 <div className="text-sm font-medium text-text-primary">{language === 'zh' ? '配置存储路径' : 'Config Storage Path'}</div>
-                                <div className="text-xs text-text-muted mt-1">{language === 'zh' ? '仅更改配置文件的存储位置，不影响缓存' : 'Only changes where config files are stored, cache remains default'}</div>
+                                <div className="text-xs text-text-muted mt-1">
+                                    {language === 'zh' 
+                                        ? '所有配置文件（config.json、mcp.json 等）的存储位置' 
+                                        : 'Storage location for all config files (config.json, mcp.json, etc.)'}
+                                </div>
                             </div>
                             <Button variant="secondary" size="sm" onClick={async () => {
                                 const newPath = await window.electronAPI.openFolder()

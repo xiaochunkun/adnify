@@ -14,6 +14,7 @@ import { registerLLMHandlers, updateLLMServiceWindow, cleanupLLMService } from '
 import { registerIndexingHandlers } from './indexing'
 import { registerLspHandlers } from './lsp'
 import { registerHttpHandlers } from './http'
+import { registerMcpHandlers, cleanupMcpHandlers } from './mcp'
 
 // 安全模块
 import {
@@ -84,6 +85,9 @@ export function registerAllHandlers(context: IPCContext) {
   // HTTP 请求（用于 web_search / read_url）
   registerHttpHandlers()
 
+  // MCP 服务
+  registerMcpHandlers(getMainWindow)
+
   logger.ipc.info('[Security] 所有安全IPC处理器已注册')
 }
 
@@ -93,6 +97,7 @@ export function registerAllHandlers(context: IPCContext) {
 export function cleanupAllHandlers() {
   logger.ipc.info('[IPC] Cleaning up all handlers...')
   cleanupSecureFileWatcher()
+  cleanupMcpHandlers()
   logger.ipc.info('[IPC] All handlers cleaned up')
 }
 

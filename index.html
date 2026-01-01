@@ -34,16 +34,19 @@
       overflow: hidden;
     }
 
-    /* 防止内容闪烁 */
+    /* 防止内容闪烁 - root 初始隐藏，loader 消失后显示 */
     #root {
       opacity: 0;
-      transition: opacity 0.3s ease;
+      pointer-events: none;
     }
     
     #root.ready {
       opacity: 1;
+      pointer-events: auto;
+      transition: opacity 0.15s ease-out;
     }
-
+    
+    /* 确保 loader 在 root 之上 */
     #initial-loader {
       position: fixed;
       inset: 0;
@@ -53,7 +56,7 @@
       justify-content: center;
       z-index: 9999;
       opacity: 1;
-      transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     #initial-loader.fade-out {

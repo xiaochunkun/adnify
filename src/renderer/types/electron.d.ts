@@ -2,6 +2,25 @@
  * Electron API 类型定义 - 安全版本
  */
 
+import type {
+  McpServerState,
+  McpTool,
+  McpToolCallRequest,
+  McpToolCallResult,
+  McpResourceReadRequest,
+  McpResourceReadResult,
+  McpPromptGetRequest,
+  McpPromptGetResult,
+  McpServerStatusEvent,
+  McpToolsUpdatedEvent,
+  McpResourcesUpdatedEvent,
+} from '@shared/types/mcp'
+
+// MCP 工具带服务器信息
+export interface McpToolWithServer extends McpTool {
+  serverId: string
+}
+
 export interface FileItem {
   name: string
   path: string
@@ -331,6 +350,35 @@ export interface ElectronAPI {
     }>
     error?: string
   }>
+
+  // MCP (Model Context Protocol)
+  mcpInitialize: (workspaceRoots: string[]) => Promise<{ success: boolean; error?: string }>
+  mcpGetServersState: () => Promise<{ success: boolean; servers?: McpServerState[]; error?: string }>
+  mcpGetAllTools: () => Promise<{ success: boolean; tools?: McpToolWithServer[]; error?: string }>
+  mcpConnectServer: (serverId: string) => Promise<{ success: boolean; error?: string }>
+  mcpDisconnectServer: (serverId: string) => Promise<{ success: boolean; error?: string }>
+  mcpReconnectServer: (serverId: string) => Promise<{ success: boolean; error?: string }>
+  mcpCallTool: (request: McpToolCallRequest) => Promise<McpToolCallResult>
+  mcpReadResource: (request: McpResourceReadRequest) => Promise<McpResourceReadResult>
+  mcpGetPrompt: (request: McpPromptGetRequest) => Promise<McpPromptGetResult>
+  mcpRefreshCapabilities: (serverId: string) => Promise<{ success: boolean; error?: string }>
+  mcpGetConfigPaths: () => Promise<{ success: boolean; paths?: { user: string; workspace: string[] }; error?: string }>
+  mcpReloadConfig: () => Promise<{ success: boolean; error?: string }>
+  mcpAddServer: (config: {
+    id: string
+    name: string
+    command: string
+    args: string[]
+    env: Record<string, string>
+    autoApprove: string[]
+    disabled: boolean
+  }) => Promise<{ success: boolean; error?: string }>
+  mcpRemoveServer: (serverId: string) => Promise<{ success: boolean; error?: string }>
+  mcpToggleServer: (serverId: string, disabled: boolean) => Promise<{ success: boolean; error?: string }>
+  onMcpServerStatus: (callback: (event: McpServerStatusEvent) => void) => () => void
+  onMcpToolsUpdated: (callback: (event: McpToolsUpdatedEvent) => void) => () => void
+  onMcpResourcesUpdated: (callback: (event: McpResourcesUpdatedEvent) => void) => () => void
+  onMcpStateChanged: (callback: (servers: McpServerState[]) => void) => () => void
 
   // Command Execution
   onExecuteCommand: (callback: (commandId: string) => void) => () => void

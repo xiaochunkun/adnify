@@ -1,5 +1,5 @@
 import { logger } from '@utils/Logger'
-import { useEffect, useState, useCallback, lazy, Suspense, memo } from 'react'
+import { useEffect, useState, useCallback, lazy, Suspense, memo, useRef } from 'react'
 import { useStore } from './store'
 import TitleBar from './components/layout/TitleBar'
 import { Sidebar } from '@components/sidebar'
@@ -23,6 +23,7 @@ import { LAYOUT_LIMITS } from '@shared/constants'
 import { startupMetrics } from '@shared/utils/startupMetrics'
 import { useWindowTitle } from './hooks/useWindowTitle'
 import { removeFileFromTypeService } from './services/monacoTypeService'
+import { mcpService } from './services/mcpService'
 
 // 记录 App 模块加载时间
 startupMetrics.mark('app-module-loaded')
@@ -87,6 +88,9 @@ function AppContent() {
   // 引导状态
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
+  
+  // 防止 StrictMode 下重复初始化
+  const initRef = useRef(false)
 
   // Layout State
   const [isResizingSidebar, setIsResizingSidebar] = useState(false)
@@ -102,17 +106,27 @@ function AppContent() {
   const removeInitialLoader = useCallback((_status?: string) => {
     const loader = document.getElementById('initial-loader')
     const root = document.getElementById('root')
-    if (loader) {
-      loader.classList.add('fade-out')
-      setTimeout(() => loader.remove(), 300)
-    }
-    // 显示 React 应用
+    
+    // 先显示 React 应用内容
     if (root) {
       root.classList.add('ready')
+    }
+    
+    // 等待 root 显示后再移除 loader（避免空白闪烁）
+    if (loader) {
+      // 使用 requestAnimationFrame 确保 root 已经开始渲染
+      requestAnimationFrame(() => {
+        loader.classList.add('fade-out')
+        setTimeout(() => loader.remove(), 300)
+      })
     }
   }, [])
 
   useEffect(() => {
+    // 防止 StrictMode 下重复初始化
+    if (initRef.current) return
+    initRef.current = true
+    
     // Load saved settings & restore workspace
     const loadSettings = async () => {
       try {
@@ -178,6 +192,7 @@ function AppContent() {
             Promise.all([
               checkpointService.init(),
               useAgentStore.persist.rehydrate(),
+              mcpService.initialize(workspaceConfig.roots),
             ]).catch(console.error)
 
             // 初始化诊断监听器（同步，很快）
@@ -188,6 +203,9 @@ function AppContent() {
             await restoreWorkspaceState()
           }
           startupMetrics.end('restore-workspace')
+        } else {
+          // 空窗口也初始化 MCP（使用空工作区列表）
+          mcpService.initialize([]).catch(console.error)
         }
 
         // 注册设置同步监听器（返回清理函数供 useEffect 使用）

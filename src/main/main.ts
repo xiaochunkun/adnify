@@ -151,10 +151,25 @@ async function loadDeferredModules() {
 // ==========================================
 
 function createWindow(isEmpty: boolean = false) {
-  // 图标路径：开发环境用 public，生产环境用 resources
-  const iconPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'icon.png')
-    : path.join(__dirname, '../../public/icon.png')
+  // 图标路径：Windows 使用 .ico，其他平台使用 .png
+  // 开发环境：从项目根目录的 public 文件夹加载
+  // 生产环境：从 resources 文件夹加载
+  let iconPath: string
+  
+  if (app.isPackaged) {
+    // 生产环境
+    iconPath = process.platform === 'win32'
+      ? path.join(process.resourcesPath, 'icon.ico')
+      : path.join(process.resourcesPath, 'icon.png')
+  } else {
+    // 开发环境 - 使用 app.getAppPath() 获取正确的项目根目录
+    const appRoot = app.getAppPath()
+    iconPath = process.platform === 'win32'
+      ? path.join(appRoot, 'public/icon.ico')
+      : path.join(appRoot, 'public/icon.png')
+  }
+  
+  logger.system.info('[Main] Window icon path:', iconPath, 'exists:', fs.existsSync(iconPath))
 
   const win = new BrowserWindow({
     width: WINDOW_DEFAULTS.WIDTH,
@@ -383,11 +398,7 @@ function registerMinimalIPC() {
   // 窗口控制 - 使用 once 风格的检查避免重复
   if (!(ipcMain as any).__minimalIPCRegistered) {
     (ipcMain as any).__minimalIPCRegistered = true
-    
-    // 渲染进程就绪通知（空操作，窗口已显示）
-    ipcMain.on('app:ready', () => {
-      logger.system.info('[Main] Renderer reported ready')
-    })
+    // app:ready 监听器在 window.ts 中注册，这里不需要重复注册
   }
 }
 

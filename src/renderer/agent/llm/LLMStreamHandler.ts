@@ -6,7 +6,7 @@
 import { logger } from '@utils/Logger'
 import { useAgentStore } from '../store/AgentStore'
 import { useModeStore } from '@/renderer/modes'
-import { getToolDefinitions, ToolDefinition } from '../tools'
+import { toolManager, initializeToolProviders, setIncludePlanTools } from '../tools'
 import { parsePartialArgs, parseXMLToolCalls, removeXMLToolCallsFromContent, generateToolCallId } from '../utils/XMLToolParser'
 import { LLMStreamChunk, LLMToolCall } from '@/renderer/types/electron'
 
@@ -59,8 +59,13 @@ export function createStreamHandlerState(): StreamHandlerState {
  */
 export function isValidToolName(name: string): boolean {
   if (!/^[a-zA-Z0-9_-]+$/.test(name)) return false
+  
+  // 确保工具提供者已初始化
+  initializeToolProviders()
   const isPlanMode = useModeStore.getState().currentMode === 'plan'
-  return getToolDefinitions(isPlanMode).some((t: ToolDefinition) => t.name === name)
+  setIncludePlanTools(isPlanMode)
+  
+  return toolManager.hasTool(name)
 }
 
 /**

@@ -6,6 +6,7 @@ import { logger } from '@shared/utils/Logger'
 import { ipcMain, BrowserWindow } from 'electron'
 import * as fs from 'fs'
 import Store from 'electron-store'
+import { getUserConfigDir, setUserConfigDir } from '../services/configPath'
 
 // 安全模块接口
 interface SecurityModuleRef {
@@ -91,7 +92,7 @@ export function registerSettingsHandlers(
 
   // 获取配置路径
   ipcMain.handle('settings:getConfigPath', () => {
-    return mainStore.path
+    return getUserConfigDir()
   })
 
   // 设置配置路径
@@ -101,8 +102,8 @@ export function registerSettingsHandlers(
         fs.mkdirSync(newPath, { recursive: true })
       }
 
-      // 保存到 bootstrapStore (存储在默认位置)
-      bootstrapStore.set('customConfigPath', newPath)
+      // 保存新路径
+      setUserConfigDir(newPath)
 
       // 迁移当前配置到新位置
       const currentData = mainStore.store

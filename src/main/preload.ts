@@ -280,6 +280,49 @@ export interface ElectronAPI {
     error?: string
   }>
 
+  // MCP (Model Context Protocol)
+  mcpInitialize: (workspaceRoots: string[]) => Promise<{ success: boolean; error?: string }>
+  mcpGetServersState: () => Promise<{ success: boolean; servers?: any[]; error?: string }>
+  mcpGetAllTools: () => Promise<{ success: boolean; tools?: any[]; error?: string }>
+  mcpConnectServer: (serverId: string) => Promise<{ success: boolean; error?: string }>
+  mcpDisconnectServer: (serverId: string) => Promise<{ success: boolean; error?: string }>
+  mcpReconnectServer: (serverId: string) => Promise<{ success: boolean; error?: string }>
+  mcpCallTool: (request: { serverId: string; toolName: string; arguments: Record<string, unknown> }) => Promise<{
+    success: boolean
+    content?: any[]
+    error?: string
+    isError?: boolean
+  }>
+  mcpReadResource: (request: { serverId: string; uri: string }) => Promise<{
+    success: boolean
+    contents?: any[]
+    error?: string
+  }>
+  mcpGetPrompt: (request: { serverId: string; promptName: string; arguments?: Record<string, string> }) => Promise<{
+    success: boolean
+    description?: string
+    messages?: any[]
+    error?: string
+  }>
+  mcpRefreshCapabilities: (serverId: string) => Promise<{ success: boolean; error?: string }>
+  mcpGetConfigPaths: () => Promise<{ success: boolean; paths?: { user: string; workspace: string[] }; error?: string }>
+  mcpReloadConfig: () => Promise<{ success: boolean; error?: string }>
+  mcpAddServer: (config: {
+    id: string
+    name: string
+    command: string
+    args: string[]
+    env: Record<string, string>
+    autoApprove: string[]
+    disabled: boolean
+  }) => Promise<{ success: boolean; error?: string }>
+  mcpRemoveServer: (serverId: string) => Promise<{ success: boolean; error?: string }>
+  mcpToggleServer: (serverId: string, disabled: boolean) => Promise<{ success: boolean; error?: string }>
+  onMcpServerStatus: (callback: (event: { serverId: string; status: string; error?: string }) => void) => () => void
+  onMcpToolsUpdated: (callback: (event: { serverId: string; tools: any[] }) => void) => () => void
+  onMcpResourcesUpdated: (callback: (event: { serverId: string; resources: any[] }) => void) => () => void
+  onMcpStateChanged: (callback: (servers: any[]) => void) => () => void
+
   // Command Execution
   onExecuteCommand: (callback: (commandId: string) => void) => () => void
 }
@@ -444,6 +487,54 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // HTTP API
   httpReadUrl: (url: string, timeout?: number) => ipcRenderer.invoke('http:readUrl', url, timeout),
   httpWebSearch: (query: string, maxResults?: number) => ipcRenderer.invoke('http:webSearch', query, maxResults),
+
+  // MCP API
+  mcpInitialize: (workspaceRoots: string[]) => ipcRenderer.invoke('mcp:initialize', workspaceRoots),
+  mcpGetServersState: () => ipcRenderer.invoke('mcp:getServersState'),
+  mcpGetAllTools: () => ipcRenderer.invoke('mcp:getAllTools'),
+  mcpConnectServer: (serverId: string) => ipcRenderer.invoke('mcp:connectServer', serverId),
+  mcpDisconnectServer: (serverId: string) => ipcRenderer.invoke('mcp:disconnectServer', serverId),
+  mcpReconnectServer: (serverId: string) => ipcRenderer.invoke('mcp:reconnectServer', serverId),
+  mcpCallTool: (request: { serverId: string; toolName: string; arguments: Record<string, unknown> }) =>
+    ipcRenderer.invoke('mcp:callTool', request),
+  mcpReadResource: (request: { serverId: string; uri: string }) =>
+    ipcRenderer.invoke('mcp:readResource', request),
+  mcpGetPrompt: (request: { serverId: string; promptName: string; arguments?: Record<string, string> }) =>
+    ipcRenderer.invoke('mcp:getPrompt', request),
+  mcpRefreshCapabilities: (serverId: string) => ipcRenderer.invoke('mcp:refreshCapabilities', serverId),
+  mcpGetConfigPaths: () => ipcRenderer.invoke('mcp:getConfigPaths'),
+  mcpReloadConfig: () => ipcRenderer.invoke('mcp:reloadConfig'),
+  mcpAddServer: (config: {
+    id: string
+    name: string
+    command: string
+    args: string[]
+    env: Record<string, string>
+    autoApprove: string[]
+    disabled: boolean
+  }) => ipcRenderer.invoke('mcp:addServer', config),
+  mcpRemoveServer: (serverId: string) => ipcRenderer.invoke('mcp:removeServer', serverId),
+  mcpToggleServer: (serverId: string, disabled: boolean) => ipcRenderer.invoke('mcp:toggleServer', serverId, disabled),
+  onMcpServerStatus: (callback: (event: { serverId: string; status: string; error?: string }) => void) => {
+    const handler = (_: IpcRendererEvent, event: { serverId: string; status: string; error?: string }) => callback(event)
+    ipcRenderer.on('mcp:serverStatus', handler)
+    return () => ipcRenderer.removeListener('mcp:serverStatus', handler)
+  },
+  onMcpToolsUpdated: (callback: (event: { serverId: string; tools: any[] }) => void) => {
+    const handler = (_: IpcRendererEvent, event: { serverId: string; tools: any[] }) => callback(event)
+    ipcRenderer.on('mcp:toolsUpdated', handler)
+    return () => ipcRenderer.removeListener('mcp:toolsUpdated', handler)
+  },
+  onMcpResourcesUpdated: (callback: (event: { serverId: string; resources: any[] }) => void) => {
+    const handler = (_: IpcRendererEvent, event: { serverId: string; resources: any[] }) => callback(event)
+    ipcRenderer.on('mcp:resourcesUpdated', handler)
+    return () => ipcRenderer.removeListener('mcp:resourcesUpdated', handler)
+  },
+  onMcpStateChanged: (callback: (servers: any[]) => void) => {
+    const handler = (_: IpcRendererEvent, servers: any[]) => callback(servers)
+    ipcRenderer.on('mcp:stateChanged', handler)
+    return () => ipcRenderer.removeListener('mcp:stateChanged', handler)
+  },
 
   // Command Execution
   onExecuteCommand: (callback: (commandId: string) => void) => {

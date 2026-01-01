@@ -31,6 +31,7 @@ export type LogCategory =
   | 'Terminal'
   | 'Performance'
   | 'Cache'
+  | 'MCP'
 
 // 日志条目
 export interface LogEntry {
@@ -78,6 +79,7 @@ const CATEGORY_COLORS: Record<LogCategory, string> = {
   Terminal: '#00bcd4',
   Performance: '#ff5722',
   Cache: '#795548',
+  MCP: '#00acc1',
 }
 
 // 日志配置
@@ -466,6 +468,7 @@ class LoggerClass {
   terminal = this.createCategoryLogger('Terminal')
   perf = this.createCategoryLogger('Performance')
   cache = this.createCategoryLogger('Cache')
+  mcp = this.createCategoryLogger('MCP')
 
   // 通用方法（用于动态分类）
   logWithCategory(level: LogLevel, category: LogCategory, message: string, data?: unknown): void {
