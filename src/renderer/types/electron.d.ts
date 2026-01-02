@@ -185,10 +185,11 @@ export interface EmbeddingProvider {
 }
 
 export interface EmbeddingConfigInput {
-  provider?: 'jina' | 'voyage' | 'openai' | 'cohere' | 'huggingface' | 'ollama'
+  provider?: 'jina' | 'voyage' | 'openai' | 'cohere' | 'huggingface' | 'ollama' | 'custom'
   apiKey?: string
   model?: string
   baseUrl?: string
+  dimensions?: number
 }
 
 export interface ElectronAPI {

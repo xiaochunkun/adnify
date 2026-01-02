@@ -27,33 +27,33 @@ export function getAgentConfig(): AgentRuntimeConfig {
         maxToolResultChars: agentConfig.maxToolResultChars ?? DEFAULT_AGENT_CONFIG.maxToolResultChars,
         maxFileContentChars: agentConfig.maxFileContentChars ?? DEFAULT_AGENT_CONFIG.maxFileContentChars,
         maxTotalContextChars: agentConfig.maxTotalContextChars ?? DEFAULT_AGENT_CONFIG.maxTotalContextChars,
-        maxSingleFileChars: (agentConfig as any).maxSingleFileChars ?? DEFAULT_AGENT_CONFIG.maxSingleFileChars,
-        maxContextFiles: (agentConfig as any).maxContextFiles ?? DEFAULT_AGENT_CONFIG.maxContextFiles,
-        maxSemanticResults: (agentConfig as any).maxSemanticResults ?? DEFAULT_AGENT_CONFIG.maxSemanticResults,
-        maxTerminalChars: (agentConfig as any).maxTerminalChars ?? DEFAULT_AGENT_CONFIG.maxTerminalChars,
+        maxSingleFileChars: agentConfig.maxSingleFileChars ?? DEFAULT_AGENT_CONFIG.maxSingleFileChars,
+        maxContextFiles: agentConfig.maxContextFiles ?? DEFAULT_AGENT_CONFIG.maxContextFiles,
+        maxSemanticResults: agentConfig.maxSemanticResults ?? DEFAULT_AGENT_CONFIG.maxSemanticResults,
+        maxTerminalChars: agentConfig.maxTerminalChars ?? DEFAULT_AGENT_CONFIG.maxTerminalChars,
 
-        // 重试配置（从 store 获取）
-        maxRetries: (agentConfig as any).maxRetries ?? DEFAULT_AGENT_CONFIG.maxRetries,
-        retryDelayMs: (agentConfig as any).retryDelayMs ?? DEFAULT_AGENT_CONFIG.retryDelayMs,
+        // 重试配置
+        maxRetries: agentConfig.maxRetries ?? DEFAULT_AGENT_CONFIG.maxRetries,
+        retryDelayMs: agentConfig.retryDelayMs ?? DEFAULT_AGENT_CONFIG.retryDelayMs,
         retryBackoffMultiplier: DEFAULT_AGENT_CONFIG.retryBackoffMultiplier,
 
         // 工具执行
-        toolTimeoutMs: (agentConfig as any).toolTimeoutMs ?? DEFAULT_AGENT_CONFIG.toolTimeoutMs,
-        enableAutoFix: (agentConfig as any).enableAutoFix ?? DEFAULT_AGENT_CONFIG.enableAutoFix,
+        toolTimeoutMs: agentConfig.toolTimeoutMs ?? DEFAULT_AGENT_CONFIG.toolTimeoutMs,
+        enableAutoFix: agentConfig.enableAutoFix ?? DEFAULT_AGENT_CONFIG.enableAutoFix,
 
         // 上下文压缩阈值
-        contextCompressThreshold: (agentConfig as any).contextCompressThreshold ?? DEFAULT_AGENT_CONFIG.contextCompressThreshold,
-        keepRecentTurns: (agentConfig as any).keepRecentTurns ?? DEFAULT_AGENT_CONFIG.keepRecentTurns,
+        contextCompressThreshold: agentConfig.contextCompressThreshold ?? DEFAULT_AGENT_CONFIG.contextCompressThreshold,
+        keepRecentTurns: agentConfig.keepRecentTurns ?? DEFAULT_AGENT_CONFIG.keepRecentTurns,
 
-        // 循环检测配置（从 store 获取）
+        // 循环检测配置
         loopDetection: {
-            maxHistory: (agentConfig as any).loopDetection?.maxHistory ?? DEFAULT_AGENT_CONFIG.loopDetection.maxHistory,
-            maxExactRepeats: (agentConfig as any).loopDetection?.maxExactRepeats ?? DEFAULT_AGENT_CONFIG.loopDetection.maxExactRepeats,
-            maxSameTargetRepeats: (agentConfig as any).loopDetection?.maxSameTargetRepeats ?? DEFAULT_AGENT_CONFIG.loopDetection.maxSameTargetRepeats,
+            maxHistory: agentConfig.loopDetection?.maxHistory ?? DEFAULT_AGENT_CONFIG.loopDetection.maxHistory,
+            maxExactRepeats: agentConfig.loopDetection?.maxExactRepeats ?? DEFAULT_AGENT_CONFIG.loopDetection.maxExactRepeats,
+            maxSameTargetRepeats: agentConfig.loopDetection?.maxSameTargetRepeats ?? DEFAULT_AGENT_CONFIG.loopDetection.maxSameTargetRepeats,
         },
 
-        // 忽略目录（从 store 获取）
-        ignoredDirectories: (agentConfig as any).ignoredDirectories ?? DEFAULT_AGENT_CONFIG.ignoredDirectories,
+        // 忽略目录
+        ignoredDirectories: agentConfig.ignoredDirectories ?? DEFAULT_AGENT_CONFIG.ignoredDirectories,
     }
 }
 

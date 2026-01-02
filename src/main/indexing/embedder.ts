@@ -29,6 +29,7 @@ const RATE_LIMITS: Record<EmbeddingProvider, { rpm: number; batchSize: number }>
   cohere: { rpm: 100, batchSize: 96 },     // Cohere 免费 100/min
   huggingface: { rpm: 30, batchSize: 1 },  // HuggingFace 逐个请求
   ollama: { rpm: 1000, batchSize: 1 },     // 本地无限制
+  custom: { rpm: 60, batchSize: 50 },      // 自定义服务默认配置
 }
 
 /**
@@ -75,8 +76,13 @@ export class EmbeddingService {
    * 解析并验证 model，确保与 provider 匹配
    */
   private resolveModel(provider: string, model?: string): string {
+    // 自定义服务直接使用用户指定的 model
+    if (provider === 'custom') {
+      return model || ''
+    }
+
     if (!model) {
-      return DEFAULT_EMBEDDING_MODELS[provider as keyof typeof DEFAULT_EMBEDDING_MODELS]
+      return DEFAULT_EMBEDDING_MODELS[provider as keyof typeof DEFAULT_EMBEDDING_MODELS] || ''
     }
 
     const pattern = PROVIDER_MODEL_PATTERNS[provider]
@@ -84,7 +90,7 @@ export class EmbeddingService {
       console.warn(
         `[EmbeddingService] Model "${model}" doesn't match provider "${provider}", using default: ${DEFAULT_EMBEDDING_MODELS[provider as keyof typeof DEFAULT_EMBEDDING_MODELS]}`
       )
-      return DEFAULT_EMBEDDING_MODELS[provider as keyof typeof DEFAULT_EMBEDDING_MODELS]
+      return DEFAULT_EMBEDDING_MODELS[provider as keyof typeof DEFAULT_EMBEDDING_MODELS] || ''
     }
 
     return model
@@ -191,6 +197,8 @@ export class EmbeddingService {
         return this.embedHuggingFace(texts)
       case 'ollama':
         return this.embedOllama(texts)
+      case 'custom':
+        return this.embedCustom(texts)
       default:
         throw new Error(`Unsupported embedding provider: ${this.config.provider}`)
     }
@@ -376,6 +384,44 @@ export class EmbeddingService {
     }
 
     return results
+  }
+
+  /**
+   * 自定义 Embedding 服务（兼容 OpenAI API 格式）
+   * 支持任何兼容 OpenAI embeddings API 的服务
+   */
+  private async embedCustom(texts: string[]): Promise<number[][]> {
+    if (!this.config.baseUrl) {
+      throw new Error('Custom embedding service requires baseUrl')
+    }
+
+    const response = await fetch(this.config.baseUrl, {
+      method: 'POST',
+      headers: {
+        ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: this.config.model || 'default',
+        input: texts,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`Custom embedding API error: ${response.status} - ${error}`)
+    }
+
+    const data = (await response.json()) as { data: { embedding: number[]; index?: number }[] }
+    
+    // 处理可能有 index 字段的情况
+    if (data.data[0]?.index !== undefined) {
+      return data.data
+        .sort((a, b) => (a.index || 0) - (b.index || 0))
+        .map(item => item.embedding)
+    }
+    
+    return data.data.map(item => item.embedding)
   }
 
   /**

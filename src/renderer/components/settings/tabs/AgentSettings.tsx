@@ -213,12 +213,12 @@ export function AgentSettings({
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-xs font-medium text-text-secondary">{t('单文件限制', 'Single File Limit')}</label>
+                                <label className="text-xs font-medium text-text-secondary">{t('单文件内容限制', 'File Content Limit')}</label>
                                 <Input
                                     type="number"
-                                    value={agentConfig.maxSingleFileChars ?? 6000}
-                                    onChange={(e) => setAgentConfig({ ...agentConfig, maxSingleFileChars: parseInt(e.target.value) || 6000 })}
-                                    step={1000}
+                                    value={agentConfig.maxFileContentChars ?? 15000}
+                                    onChange={(e) => setAgentConfig({ ...agentConfig, maxFileContentChars: parseInt(e.target.value) || 15000 })}
+                                    step={5000}
                                     className="bg-black/20 border-white/10 text-xs"
                                 />
                             </div>
@@ -230,6 +230,27 @@ export function AgentSettings({
                                     onChange={(e) => setAgentConfig({ ...agentConfig, maxContextFiles: parseInt(e.target.value) || 6 })}
                                     min={1}
                                     max={20}
+                                    className="bg-black/20 border-white/10 text-xs"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-text-secondary">{t('语义搜索结果数', 'Semantic Results')}</label>
+                                <Input
+                                    type="number"
+                                    value={agentConfig.maxSemanticResults ?? 5}
+                                    onChange={(e) => setAgentConfig({ ...agentConfig, maxSemanticResults: parseInt(e.target.value) || 5 })}
+                                    min={1}
+                                    max={20}
+                                    className="bg-black/20 border-white/10 text-xs"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-text-secondary">{t('终端输出限制', 'Terminal Limit')}</label>
+                                <Input
+                                    type="number"
+                                    value={agentConfig.maxTerminalChars ?? 3000}
+                                    onChange={(e) => setAgentConfig({ ...agentConfig, maxTerminalChars: parseInt(e.target.value) || 3000 })}
+                                    step={1000}
                                     className="bg-black/20 border-white/10 text-xs"
                                 />
                             </div>
@@ -256,6 +277,18 @@ export function AgentSettings({
                                             type="number"
                                             value={agentConfig.maxRetries ?? 3}
                                             onChange={(e) => setAgentConfig({ ...agentConfig, maxRetries: parseInt(e.target.value) || 3 })}
+                                            min={0}
+                                            max={10}
+                                            className="bg-black/20 border-white/10 text-xs"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-text-secondary">{t('重试延迟 (ms)', 'Retry Delay')}</label>
+                                        <Input
+                                            type="number"
+                                            value={agentConfig.retryDelayMs ?? 1000}
+                                            onChange={(e) => setAgentConfig({ ...agentConfig, retryDelayMs: parseInt(e.target.value) || 1000 })}
+                                            step={500}
                                             className="bg-black/20 border-white/10 text-xs"
                                         />
                                     </div>
@@ -268,6 +301,74 @@ export function AgentSettings({
                                             step={5000}
                                             className="bg-black/20 border-white/10 text-xs"
                                         />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-text-secondary">{t('压缩阈值', 'Compress Threshold')}</label>
+                                        <Input
+                                            type="number"
+                                            value={agentConfig.contextCompressThreshold ?? 40000}
+                                            onChange={(e) => setAgentConfig({ ...agentConfig, contextCompressThreshold: parseInt(e.target.value) || 40000 })}
+                                            step={10000}
+                                            className="bg-black/20 border-white/10 text-xs"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 循环检测 */}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-text-secondary">{t('循环检测', 'Loop Detection')}</label>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] text-text-muted">{t('历史记录', 'History')}</label>
+                                            <Input
+                                                type="number"
+                                                value={agentConfig.loopDetection?.maxHistory ?? 15}
+                                                onChange={(e) => setAgentConfig({
+                                                    ...agentConfig,
+                                                    loopDetection: {
+                                                        ...agentConfig.loopDetection,
+                                                        maxHistory: parseInt(e.target.value) || 15
+                                                    }
+                                                })}
+                                                min={5}
+                                                max={50}
+                                                className="bg-black/20 border-white/10 text-xs"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] text-text-muted">{t('精确重复', 'Exact Repeats')}</label>
+                                            <Input
+                                                type="number"
+                                                value={agentConfig.loopDetection?.maxExactRepeats ?? 2}
+                                                onChange={(e) => setAgentConfig({
+                                                    ...agentConfig,
+                                                    loopDetection: {
+                                                        ...agentConfig.loopDetection,
+                                                        maxExactRepeats: parseInt(e.target.value) || 2
+                                                    }
+                                                })}
+                                                min={1}
+                                                max={10}
+                                                className="bg-black/20 border-white/10 text-xs"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] text-text-muted">{t('同目标重复', 'Same Target')}</label>
+                                            <Input
+                                                type="number"
+                                                value={agentConfig.loopDetection?.maxSameTargetRepeats ?? 3}
+                                                onChange={(e) => setAgentConfig({
+                                                    ...agentConfig,
+                                                    loopDetection: {
+                                                        ...agentConfig.loopDetection,
+                                                        maxSameTargetRepeats: parseInt(e.target.value) || 3
+                                                    }
+                                                })}
+                                                min={1}
+                                                max={10}
+                                                className="bg-black/20 border-white/10 text-xs"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 

@@ -42,8 +42,10 @@ export interface SecuritySettings {
   showSecurityWarnings?: boolean
 }
 
-// Agent 配置（扩展 ServiceAgentConfig）
-export interface AgentConfig extends ServiceAgentConfig { }
+// Agent 配置（完整类型，与 ServiceAgentConfig 一致）
+export interface AgentConfig extends ServiceAgentConfig {
+  // 继承所有 ServiceAgentConfig 的属性
+}
 
 // ============ Slice 接口 ============
 

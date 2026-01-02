@@ -2,8 +2,8 @@
  * 代码库索引类型定义
  */
 
-// Embedding 提供商类型
-export type EmbeddingProvider = 'jina' | 'voyage' | 'openai' | 'cohere' | 'huggingface' | 'ollama'
+// Embedding 提供商类型（包含自定义）
+export type EmbeddingProvider = 'jina' | 'voyage' | 'openai' | 'cohere' | 'huggingface' | 'ollama' | 'custom'
 
 // Embedding 配置
 export interface EmbeddingConfig {
@@ -11,6 +11,7 @@ export interface EmbeddingConfig {
   apiKey?: string
   model?: string
   baseUrl?: string  // 自定义端点
+  dimensions?: number  // 向量维度（自定义服务需要指定）
 }
 
 // 默认模型配置
@@ -21,6 +22,7 @@ export const DEFAULT_EMBEDDING_MODELS: Record<EmbeddingProvider, string> = {
   cohere: 'embed-english-v3.0',
   huggingface: 'sentence-transformers/all-MiniLM-L6-v2',
   ollama: 'nomic-embed-text',
+  custom: '',  // 自定义服务需要用户指定
 }
 
 // Embedding API 端点
@@ -31,6 +33,7 @@ export const EMBEDDING_ENDPOINTS: Record<EmbeddingProvider, string> = {
   cohere: 'https://api.cohere.ai/v1/embed',
   huggingface: 'https://api-inference.huggingface.co/pipeline/feature-extraction',
   ollama: 'http://localhost:11434/api/embeddings',
+  custom: '',  // 自定义服务需要用户指定
 }
 
 // 向量维度
