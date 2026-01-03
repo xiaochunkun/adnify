@@ -235,7 +235,13 @@ export async function buildLLMMessages(
   logger.agent.info(`[MessageBuilder] System prompt size: ${effectiveSystemPrompt.length} chars`)
 
   // 转换为 OpenAI 格式
-  const openaiMessages = buildOpenAIMessages(filteredMessages as any, effectiveSystemPrompt)
+  // 排除最后一条用户消息（刚添加到 store 的），因为会在后面重新添加带上下文的版本
+  const lastMsg = filteredMessages[filteredMessages.length - 1]
+  const messagesToConvert = lastMsg?.role === 'user' 
+    ? filteredMessages.slice(0, -1) 
+    : filteredMessages
+  
+  const openaiMessages = buildOpenAIMessages(messagesToConvert as any, effectiveSystemPrompt)
 
   // 截断过长的工具结果
   for (const msg of openaiMessages) {

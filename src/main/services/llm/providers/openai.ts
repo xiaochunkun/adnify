@@ -1,11 +1,15 @@
 /**
  * OpenAI Provider
  * 支持 OpenAI API 及兼容的第三方 API
+ * 
+ * 认证方式：
+ * - 默认: Bearer token (Authorization header)
+ * - 可通过 advanced.auth 配置自定义认证
  */
 
 import OpenAI from 'openai'
 import { BaseProvider } from './base'
-import { ChatParams, ToolDefinition, LLMToolCall, MessageContent, LLMErrorCode } from '../types'
+import { ChatParams, ToolDefinition, LLMToolCall, MessageContent, LLMErrorCode, LLMConfig } from '../types'
 import { adapterService } from '../adapterService'
 import { AGENT_DEFAULTS } from '@shared/constants'
 import { cleanToolCallArgs, fixUnescapedNewlines, fixMalformedJson } from '@shared/utils/jsonUtils'
@@ -13,15 +17,43 @@ import { cleanToolCallArgs, fixUnescapedNewlines, fixMalformedJson } from '@shar
 export class OpenAIProvider extends BaseProvider {
   private client: OpenAI
 
-  constructor(apiKey: string, baseUrl?: string, timeout?: number) {
+  constructor(config: LLMConfig) {
     super('OpenAI')
-    const timeoutMs = timeout || AGENT_DEFAULTS.DEFAULT_LLM_TIMEOUT
-    this.client = new OpenAI({
-      apiKey,
-      baseURL: baseUrl,
+    const timeoutMs = config.timeout || AGENT_DEFAULTS.DEFAULT_LLM_TIMEOUT
+    
+    const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
+      apiKey: config.apiKey || 'ollama',
+      baseURL: config.baseUrl,
       timeout: timeoutMs,
       maxRetries: 0,
-    })
+    }
+    
+    // 应用高级配置
+    if (config.advanced) {
+      const defaultHeaders: Record<string, string> = {}
+      
+      // 自定义认证
+      if (config.advanced.auth) {
+        const { type, headerName } = config.advanced.auth
+        if (type === 'api-key' && headerName) {
+          // 使用自定义 header 名称传递 API key
+          defaultHeaders[headerName] = config.apiKey
+        }
+        // bearer 是 OpenAI SDK 默认行为，无需额外处理
+      }
+      
+      // 自定义请求头
+      if (config.advanced.request?.headers) {
+        Object.assign(defaultHeaders, config.advanced.request.headers)
+      }
+      
+      if (Object.keys(defaultHeaders).length > 0) {
+        clientOptions.defaultHeaders = defaultHeaders
+      }
+    }
+    
+    this.log('info', 'Initialized', { baseUrl: config.baseUrl || 'default' })
+    this.client = new OpenAI(clientOptions)
   }
 
   private convertContent(

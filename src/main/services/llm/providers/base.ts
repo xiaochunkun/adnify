@@ -19,14 +19,29 @@ export abstract class BaseProvider implements LLMProvider {
    * 解析 API 错误，转换为统一的 LLMErrorClass
    */
   protected parseError(error: unknown): LLMErrorClass {
+    // 打印完整的原始错误信息用于调试
+    logger.system.error(`[${this.name}] Raw error:`, JSON.stringify(error, Object.getOwnPropertyNames(error as object), 2))
+    
     const err = error as {
       message?: string
       status?: number
       statusCode?: number
       code?: string
       name?: string
+      error?: { message?: string; type?: string }
+      body?: unknown
+      response?: { body?: unknown }
     }
-    const message = err.message || 'Unknown error'
+    
+    // 尝试从不同位置提取真实错误信息
+    let message = err.message || 'Unknown error'
+    if (err.error?.message) {
+      message = err.error.message
+    }
+    if (err.body) {
+      logger.system.error(`[${this.name}] Response body:`, err.body)
+    }
+    
     const status = err.status || err.statusCode
 
     if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
@@ -59,8 +74,9 @@ export abstract class BaseProvider implements LLMProvider {
           )
         case 402:
         case 403:
+          // 403 可能是多种原因：配额、被封、地区限制等，显示原始消息
           return new LLMErrorClass(
-            'Quota exceeded or access denied',
+            message.includes('blocked') ? message : `Access denied: ${message}`,
             LLMErrorCode.QUOTA_EXCEEDED,
             status,
             false

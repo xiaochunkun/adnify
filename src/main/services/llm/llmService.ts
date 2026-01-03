@@ -113,16 +113,16 @@ export class LLMService {
     let provider: LLMProvider
     const providerId = config.provider
 
-    // 路由到对应的 Provider 实现
+    // 路由到对应的 Provider 实现（统一传递完整 config）
     switch (providerId) {
       case 'anthropic':
         provider = new AnthropicProvider(config)
         break
       case 'gemini':
-        provider = new GeminiProvider(config.apiKey, config.baseUrl, config.timeout)
+        provider = new GeminiProvider(config)
         break
       case 'openai':
-        provider = new OpenAIProvider(config.apiKey || 'ollama', config.baseUrl, config.timeout)
+        provider = new OpenAIProvider(config)
         break
       default:
         // 自定义 Provider

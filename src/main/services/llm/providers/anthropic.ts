@@ -71,6 +71,14 @@ export class AnthropicProvider extends BaseProvider {
       }
     }
     
+    // 应用自定义请求头
+    if (config.advanced?.request?.headers) {
+      clientOptions.defaultHeaders = {
+        ...clientOptions.defaultHeaders,
+        ...config.advanced.request.headers,
+      }
+    }
+    
     this.client = new Anthropic(clientOptions)
   }
 
@@ -143,7 +151,13 @@ export class AnthropicProvider extends BaseProvider {
     } = params
 
     try {
-      this.log('info', 'Chat', { model, messageCount: messages.length })
+      this.log('info', 'Chat', { 
+        model, 
+        messageCount: messages.length,
+        temperature: params.temperature,
+        topP: params.topP,
+        maxTokens: params.maxTokens,
+      })
 
       const anthropicMessages: Anthropic.MessageParam[] = []
       let extractedSystemPrompt = systemPrompt || ''
@@ -301,6 +315,14 @@ export class AnthropicProvider extends BaseProvider {
         delete requestParams.temperature
         delete requestParams.top_p
       }
+
+      // 打印请求体用于调试（不含 system 和 tools 详情）
+      const debugParams = {
+        ...requestParams,
+        system: requestParams.system ? `[${(requestParams.system as string).length} chars]` : undefined,
+        tools: convertedTools ? `[${convertedTools.length} tools]` : undefined,
+      }
+      logger.system.info('[Anthropic] Request body:', JSON.stringify(debugParams, null, 2))
 
       const stream = this.client.messages.stream(
         requestParams as unknown as Anthropic.MessageCreateParamsStreaming,

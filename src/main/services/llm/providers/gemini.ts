@@ -1,11 +1,15 @@
 /**
  * Gemini Provider
  * 支持 Google Gemini 系列模型
+ * 
+ * 认证方式：
+ * - 默认: API key 作为参数传递
+ * - 可通过 advanced.request.headers 添加自定义请求头
  */
 
 import { GoogleGenerativeAI, SchemaType, Content } from '@google/generative-ai'
 import { BaseProvider } from './base'
-import { ChatParams, ToolDefinition, LLMToolCall, LLMErrorClass, LLMErrorCode } from '../types'
+import { ChatParams, ToolDefinition, LLMToolCall, LLMErrorClass, LLMErrorCode, LLMConfig } from '../types'
 import { adapterService } from '../adapterService'
 import { AGENT_DEFAULTS } from '@shared/constants'
 
@@ -13,13 +17,20 @@ export class GeminiProvider extends BaseProvider {
   private client: GoogleGenerativeAI
   private timeout: number
   private baseUrl?: string
+  private customHeaders?: Record<string, string>
 
-  constructor(apiKey: string, baseUrl?: string, timeout?: number) {
+  constructor(config: LLMConfig) {
     super('Gemini')
-    this.timeout = timeout || AGENT_DEFAULTS.DEFAULT_LLM_TIMEOUT
-    this.baseUrl = baseUrl
-    this.log('info', 'Initializing', { timeout: this.timeout, baseUrl: baseUrl || 'default' })
-    this.client = new GoogleGenerativeAI(apiKey)
+    this.timeout = config.timeout || AGENT_DEFAULTS.DEFAULT_LLM_TIMEOUT
+    this.baseUrl = config.baseUrl
+    
+    // 应用高级配置
+    if (config.advanced?.request?.headers) {
+      this.customHeaders = config.advanced.request.headers
+    }
+    
+    this.log('info', 'Initializing', { timeout: this.timeout, baseUrl: config.baseUrl || 'default' })
+    this.client = new GoogleGenerativeAI(config.apiKey)
   }
 
   private convertTools(tools?: ToolDefinition[], adapterId?: string) {
@@ -77,7 +88,11 @@ export class GeminiProvider extends BaseProvider {
         return
       }
 
-      const requestOptions = this.baseUrl ? { baseUrl: this.baseUrl } : undefined
+      const requestOptions = this.baseUrl 
+        ? { baseUrl: this.baseUrl, customHeaders: this.customHeaders } 
+        : this.customHeaders 
+          ? { customHeaders: this.customHeaders }
+          : undefined
 
       // 构建模型配置
       const modelConfig: Record<string, unknown> = {
