@@ -101,9 +101,20 @@ function findWindowByWorkspace(roots: string[]): BrowserWindow | null {
 // ==========================================
 
 function createWindow(isEmpty = false): BrowserWindow {
-  const iconPath = app.isPackaged
-    ? path.join(process.resourcesPath, process.platform === 'win32' ? 'icon.ico' : 'icon.png')
-    : path.join(app.getAppPath(), process.platform === 'win32' ? 'public/icon.ico' : 'public/icon.png')
+  // 根据平台选择正确的图标格式
+  const getIconPath = () => {
+    const platform = process.platform
+    if (app.isPackaged) {
+      if (platform === 'win32') return path.join(process.resourcesPath, 'icon.ico')
+      if (platform === 'darwin') return path.join(process.resourcesPath, 'icon.icns')
+      return path.join(process.resourcesPath, 'icon.png')
+    } else {
+      if (platform === 'win32') return path.join(app.getAppPath(), 'public/icon.ico')
+      if (platform === 'darwin') return path.join(app.getAppPath(), 'resources/icon.icns')
+      return path.join(app.getAppPath(), 'public/icon.png')
+    }
+  }
+  const iconPath = getIconPath()
 
   const win = new BrowserWindow({
     width: WINDOW_CONFIG.WIDTH,

@@ -93,7 +93,9 @@
       "node_modules/node-pty/**",
       "node_modules/@vscode/ripgrep/**",
       "node_modules/dugite/**",
-      "node_modules/@lancedb/**"
+      "node_modules/@lancedb/**",
+      "node_modules/@parcel/watcher/**",
+      "node_modules/sharp/**"
     ],
     "files": [
       "dist/**/*",
@@ -142,19 +144,25 @@
       "target": [
         "dmg",
         "zip"
-      ]
+      ],
+      "category": "public.app-category.developer-tools"
     },
     "linux": {
       "icon": "resources/icon.png",
       "target": [
         "AppImage",
         "tar.gz"
-      ]
+      ],
+      "category": "Development"
     },
     "extraResources": [
       {
         "from": "resources/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "resources/icon.icns",
+        "to": "icon.icns"
       },
       {
         "from": "resources/tree-sitter",
