@@ -69,18 +69,31 @@ class WorkspaceManager {
     })
     
     try {
-      // 1. 保存当前工作区数据
+      // 1. 先检查是否已在其他窗口打开（在做任何状态变更之前）
+      if (newWorkspace.roots.length > 0) {
+        const result = await api.workspace.setActive(newWorkspace.roots)
+        // 如果返回 redirected，说明已聚焦到其他窗口，关闭当前窗口
+        if (result && typeof result === 'object' && 'redirected' in result) {
+          logger.system.info('[WorkspaceManager] Workspace already open in another window, closing this window')
+          this.switching = false
+          // 关闭当前窗口
+          api.window.close()
+          return false
+        }
+      }
+      
+      // 2. 保存当前工作区数据
       await this.saveCurrentWorkspace()
       
-      // 2. 重置所有状态
+      // 3. 重置所有状态
       this.resetAllStates()
       
-      // 3. 切换到新工作区
+      // 4. 切换到新工作区
       await this.loadNewWorkspace(newWorkspace)
       
-      // 4. 通知主进程
-      if (newWorkspace.roots.length > 0) {
-        await api.workspace.setActive(newWorkspace.roots)
+      // 5. 如果是从空窗口切换，调整窗口大小
+      if (!oldWorkspace || oldWorkspace.roots.length === 0) {
+        await api.window.resize(1600, 1000, 1200, 700)
       }
       
       logger.system.info('[WorkspaceManager] Switch completed successfully')
@@ -180,7 +193,15 @@ class WorkspaceManager {
   private resetAllStates(): void {
     logger.system.info('[WorkspaceManager] Resetting all states...')
     
-    // 重置 AgentStore
+    // 重置文件编辑器状态
+    useStore.setState({
+      openFiles: [],
+      activeFilePath: null,
+      expandedFolders: new Set(),
+      selectedFolderPath: null,
+    })
+    
+    // 重置 AgentStore（对话、线程等）
     useAgentStore.setState({
       // ThreadSlice
       threads: {},

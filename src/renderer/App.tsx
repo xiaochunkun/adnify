@@ -34,6 +34,7 @@ const CommandPalette = lazy(() => import('./components/dialogs/CommandPalette'))
 const KeyboardShortcuts = lazy(() => import('./components/dialogs/KeyboardShortcuts'))
 const QuickOpen = lazy(() => import('./components/dialogs/QuickOpen'))
 const AboutDialog = lazy(() => import('./components/dialogs/AboutDialog'))
+const WelcomePage = lazy(() => import('./components/welcome/WelcomePage'))
 
 // 暴露 store 给插件系统
 ;(window as any).__ADNIFY_STORE__ = { getState: () => useStore.getState() }
@@ -69,6 +70,7 @@ function ToastInitializer() {
 // 主应用内容
 function AppContent() {
   const {
+    workspace,
     showSettings, setShowSettings,
     setTerminalVisible, terminalVisible, setDebugVisible, debugVisible,
     activeSidePanel, showComposer, setShowComposer,
@@ -333,6 +335,9 @@ function AppContent() {
     }
   }, [handleGlobalKeyDown])
 
+  // 是否有工作区
+  const hasWorkspace = workspace && workspace.roots.length > 0
+
   return (
     <div className="h-screen flex flex-col bg-transparent overflow-hidden text-text-primary selection:bg-accent/30 selection:text-white relative">
       {/* Background is handled by globals.css body style for better performance and consistency */}
@@ -340,53 +345,65 @@ function AppContent() {
       <div className="relative z-10 flex flex-col h-full">
         <TitleBar />
 
-        <div className="flex-1 flex overflow-hidden">
-          <ActivityBar />
+        {hasWorkspace ? (
+          // 有工作区：显示完整 IDE 界面
+          <>
+            <div className="flex-1 flex overflow-hidden">
+              <ActivityBar />
 
-          {activeSidePanel && (
-            <div style={{ width: sidebarWidth }} className="flex-shrink-0 relative">
-              <Sidebar />
-              <div
-                className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent/50 transition-colors z-50 translate-x-[2px]"
-                onMouseDown={(e) => { e.preventDefault(); setIsResizingSidebar(true) }}
-              />
-            </div>
-          )}
+              {activeSidePanel && (
+                <div style={{ width: sidebarWidth }} className="flex-shrink-0 relative">
+                  <Sidebar />
+                  <div
+                    className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent/50 transition-colors z-50 translate-x-[2px]"
+                    onMouseDown={(e) => { e.preventDefault(); setIsResizingSidebar(true) }}
+                  />
+                </div>
+              )}
 
-          <div className="flex-1 flex min-w-0 bg-background relative">
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-              <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">
-                <ErrorBoundary>
-                  <Suspense fallback={<EditorSkeleton />}>
-                    <Editor />
-                  </Suspense>
-                </ErrorBoundary>
+              <div className="flex-1 flex min-w-0 bg-background relative">
+                <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                  <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">
+                    <ErrorBoundary>
+                      <Suspense fallback={<EditorSkeleton />}>
+                        <Editor />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                  <ErrorBoundary>
+                    <Suspense fallback={null}>
+                      <TerminalPanel />
+                    </Suspense>
+                  </ErrorBoundary>
+                  <ErrorBoundary>
+                    <Suspense fallback={null}>
+                      <DebugPanel />
+                    </Suspense>
+                  </ErrorBoundary>
+                </div>
+
+                <div style={{ width: chatWidth }} className="flex-shrink-0 relative border-l border-border-subtle">
+                  <div
+                    className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent/50 transition-colors z-50 -translate-x-[2px]"
+                    onMouseDown={(e) => { e.preventDefault(); setIsResizingChat(true) }}
+                  />
+                  <ErrorBoundary>
+                    <ChatPanel />
+                  </ErrorBoundary>
+                </div>
               </div>
-              <ErrorBoundary>
-                <Suspense fallback={null}>
-                  <TerminalPanel />
-                </Suspense>
-              </ErrorBoundary>
-              <ErrorBoundary>
-                <Suspense fallback={null}>
-                  <DebugPanel />
-                </Suspense>
-              </ErrorBoundary>
             </div>
 
-            <div style={{ width: chatWidth }} className="flex-shrink-0 relative border-l border-border-subtle">
-              <div
-                className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent/50 transition-colors z-50 -translate-x-[2px]"
-                onMouseDown={(e) => { e.preventDefault(); setIsResizingChat(true) }}
-              />
-              <ErrorBoundary>
-                <ChatPanel />
-              </ErrorBoundary>
-            </div>
+            <StatusBar />
+          </>
+        ) : (
+          // 无工作区：显示欢迎页面
+          <div className="flex-1 overflow-hidden">
+            <Suspense fallback={null}>
+              <WelcomePage />
+            </Suspense>
           </div>
-        </div>
-
-        <StatusBar />
+        )}
       </div>
 
       {showSettings && (

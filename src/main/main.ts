@@ -15,6 +15,11 @@ const WINDOW_CONFIG = {
   HEIGHT: 1000,
   MIN_WIDTH: 1200,
   MIN_HEIGHT: 700,
+  // 空窗口（欢迎页）尺寸
+  EMPTY_WIDTH: 800,
+  EMPTY_HEIGHT: 600,
+  EMPTY_MIN_WIDTH: 600,
+  EMPTY_MIN_HEIGHT: 400,
   BG_COLOR: '#09090b',
 } as const
 
@@ -117,10 +122,10 @@ function createWindow(isEmpty = false): BrowserWindow {
   const iconPath = getIconPath()
 
   const win = new BrowserWindow({
-    width: WINDOW_CONFIG.WIDTH,
-    height: WINDOW_CONFIG.HEIGHT,
-    minWidth: WINDOW_CONFIG.MIN_WIDTH,
-    minHeight: WINDOW_CONFIG.MIN_HEIGHT,
+    width: isEmpty ? WINDOW_CONFIG.EMPTY_WIDTH : WINDOW_CONFIG.WIDTH,
+    height: isEmpty ? WINDOW_CONFIG.EMPTY_HEIGHT : WINDOW_CONFIG.HEIGHT,
+    minWidth: isEmpty ? WINDOW_CONFIG.EMPTY_MIN_WIDTH : WINDOW_CONFIG.MIN_WIDTH,
+    minHeight: isEmpty ? WINDOW_CONFIG.EMPTY_MIN_HEIGHT : WINDOW_CONFIG.MIN_HEIGHT,
     frame: false,
     titleBarStyle: 'hidden',
     icon: iconPath,

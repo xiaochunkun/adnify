@@ -142,6 +142,7 @@ export interface ElectronAPI {
   close: () => void
   newWindow: () => void
   getWindowId: () => Promise<number>
+  resizeWindow: (width: number, height: number, minWidth?: number, minHeight?: number) => Promise<void>
 
   // File operations
   openFile: () => Promise<{ path: string; content: string } | null>
@@ -340,6 +341,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleDevTools: () => ipcRenderer.send('window:toggleDevTools'),
   newWindow: () => ipcRenderer.invoke('window:new'),
   getWindowId: () => ipcRenderer.invoke('window:getId'),
+  resizeWindow: (width: number, height: number, minWidth?: number, minHeight?: number) => 
+    ipcRenderer.invoke('window:resize', width, height, minWidth, minHeight),
 
   openFile: () => ipcRenderer.invoke('file:open'),
   openFolder: () => ipcRenderer.invoke('file:openFolder'),

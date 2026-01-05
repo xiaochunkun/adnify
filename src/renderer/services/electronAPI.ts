@@ -20,6 +20,8 @@ function createGroupedAPI() {
       toggleDevTools: () => raw.toggleDevTools(),
       new: () => raw.newWindow(),
       getId: () => raw.getWindowId(),
+      resize: (width: number, height: number, minWidth?: number, minHeight?: number) => 
+        raw.resizeWindow(width, height, minWidth, minHeight),
     },
 
     // 文件操作

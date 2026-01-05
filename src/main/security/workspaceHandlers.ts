@@ -227,6 +227,20 @@ export function registerWorkspaceHandlers(
   ipcMain.handle('workspace:setActive', async (event, roots: string[]) => {
     if (!roots || roots.length === 0) return false
 
+    // 检查是否已有窗口打开了该项目
+    const mainWindow = getMainWindowFn()
+    if (windowManager?.findWindowByWorkspace && roots.length > 0) {
+      const existingWindow = windowManager.findWindowByWorkspace(roots)
+      if (existingWindow && existingWindow !== mainWindow) {
+        if (existingWindow.isMinimized()) {
+          existingWindow.restore()
+        }
+        existingWindow.focus()
+        logger.security.info('[Workspace] Workspace already open in another window:', roots)
+        return { redirected: true, roots }
+      }
+    }
+
     const webContentsId = event.sender.id
     if (windowManager?.setWindowWorkspace) {
       windowManager.setWindowWorkspace(webContentsId, roots)

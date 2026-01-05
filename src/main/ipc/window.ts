@@ -53,6 +53,18 @@ export function registerWindowHandlers(createWindow: (isEmpty?: boolean) => Brow
     ipcMain.handle('window:getId', (event) => {
       return BrowserWindow.fromWebContents(event.sender)?.id
     })
+
+    // 调整窗口大小（用于从欢迎页切换到工作区时）
+    ipcMain.handle('window:resize', (event, width: number, height: number, minWidth?: number, minHeight?: number) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (win && !win.isDestroyed()) {
+        if (minWidth !== undefined && minHeight !== undefined) {
+          win.setMinimumSize(minWidth, minHeight)
+        }
+        win.setSize(width, height, true)
+        win.center()
+      }
+    })
   }
 
   // 新增：打开新窗口（需要 createWindow 函数）
