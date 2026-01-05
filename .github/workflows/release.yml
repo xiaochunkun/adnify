@@ -170,6 +170,12 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release-files
+          find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.tar.gz" \) -exec cp {} release-files/ \;
+          ls -la release-files/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -188,7 +194,7 @@ jobs:
             | Windows 便携版 | arm64 | `Adnify-${{ needs.get-version.outputs.version }}-arm64-Portable.exe` |
             | macOS | Intel (x64) | `Adnify-${{ needs.get-version.outputs.version }}-x64-mac.dmg` |
             | macOS | Apple Silicon (arm64) | `Adnify-${{ needs.get-version.outputs.version }}-arm64-mac.dmg` |
-            | Linux | x64 | `Adnify-${{ needs.get-version.outputs.version }}-x64-linux.AppImage` |
+            | Linux | x64 | `Adnify-${{ needs.get-version.outputs.version }}-x86_64-linux.AppImage` |
             | Linux | arm64 | `Adnify-${{ needs.get-version.outputs.version }}-arm64-linux.AppImage` |
             
             ### 安装说明
@@ -200,12 +206,7 @@ jobs:
             
             ---
             📦 [Gitee 镜像](https://gitee.com/adnaan/adnify/releases/tag/v${{ needs.get-version.outputs.version }})
-          files: |
-            artifacts/**/*.exe
-            artifacts/**/*.dmg
-            artifacts/**/*.zip
-            artifacts/**/*.AppImage
-            artifacts/**/*.tar.gz
+          files: release-files/*
           fail_on_unmatched_files: false
           draft: false
           prerelease: false
