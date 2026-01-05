@@ -10,26 +10,26 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Build and Package
         run: npm run dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: List release files
         run: dir release
-        
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -37,101 +37,175 @@ jobs:
           path: release/*
           if-no-files-found: error
 
-  build-macos:
-    runs-on: macos-latest
+  build-macos-x64:
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and Package
-        run: npm run dist
+
+      - name: Build and Package for x64
+        run: npm run build && npx electron-builder --mac --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: List release files
         run: ls -la release/
-        
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-builds
+          name: macos-x64-builds
           path: release/*
           if-no-files-found: error
 
-  build-linux:
-    runs-on: ubuntu-latest
+  build-macos-arm64:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and Package
-        run: npm run dist
+
+      - name: Build and Package for arm64
+        run: npm run build && npx electron-builder --mac --arm64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: List release files
         run: ls -la release/
-        
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-builds
+          name: macos-arm64-builds
+          path: release/*
+          if-no-files-found: error
+
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Package for x64
+        run: npm run build && npx electron-builder --linux --x64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List release files
+        run: ls -la release/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64-builds
+          path: release/*
+          if-no-files-found: error
+
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Package for arm64
+        run: npm run build && npx electron-builder --linux --arm64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List release files
+        run: ls -la release/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64-builds
           path: release/*
           if-no-files-found: error
 
   release:
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build-windows, build-macos-x64, build-macos-arm64, build-linux-x64, build-linux-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
           name: windows-builds
           path: release-files
-          
-      - name: Download macOS artifacts
+
+      - name: Download macOS x64 artifacts
         uses: actions/download-artifact@v4
         with:
-          name: macos-builds
+          name: macos-x64-builds
           path: release-files
-          
-      - name: Download Linux artifacts
+
+      - name: Download macOS arm64 artifacts
         uses: actions/download-artifact@v4
         with:
-          name: linux-builds
+          name: macos-arm64-builds
           path: release-files
-      
+
+      - name: Download Linux x64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-x64-builds
+          path: release-files
+
+      - name: Download Linux arm64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-arm64-builds
+          path: release-files
+
       - name: List all release files
         run: ls -la release-files/
-      
+
       - name: Get version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -141,17 +215,23 @@ jobs:
             
             ### 下载 / Downloads
             
-            | 平台 | 文件 |
-            |------|------|
-            | Windows 安装版 | `Adnify-Setup-${{ steps.version.outputs.VERSION }}.exe` |
-            | Windows 便携版 | `Adnify-${{ steps.version.outputs.VERSION }}-Portable.exe` |
-            | macOS | `Adnify-${{ steps.version.outputs.VERSION }}.dmg` |
-            | Linux | `Adnify-${{ steps.version.outputs.VERSION }}.AppImage` |
+            | 平台 | 架构 | 文件 |
+            |------|------|------|
+            | Windows 安装版 | x64 | `Adnify-Setup-${{ steps.version.outputs.VERSION }}.exe` |
+            | Windows 安装版 | arm64 | `Adnify-Setup-${{ steps.version.outputs.VERSION }}-arm64.exe` |
+            | Windows 便携版 | x64 | `Adnify-${{ steps.version.outputs.VERSION }}-Portable.exe` |
+            | Windows 便携版 | arm64 | `Adnify-${{ steps.version.outputs.VERSION }}-arm64-Portable.exe` |
+            | macOS | Intel (x64) | `Adnify-${{ steps.version.outputs.VERSION }}.dmg` |
+            | macOS | Apple Silicon (arm64) | `Adnify-${{ steps.version.outputs.VERSION }}-arm64.dmg` |
+            | Linux | x64 | `Adnify-${{ steps.version.outputs.VERSION }}.AppImage` |
+            | Linux | arm64 | `Adnify-${{ steps.version.outputs.VERSION }}-arm64.AppImage` |
             
             ### 安装说明
-            - **Windows**: 下载 Setup.exe 运行安装，或下载 Portable 版本直接运行
-            - **macOS**: 下载 .dmg 拖入 Applications
-            - **Linux**: 下载 .AppImage，`chmod +x` 后运行
+            - **Windows**: 下载对应架构的 Setup.exe 运行安装，或下载 Portable 版本直接运行
+            - **macOS**: 下载对应架构的 .dmg 拖入 Applications。如提示"已损坏"，请在终端执行：`xattr -cr /Applications/Adnify.app`
+            - **Linux**: 下载对应架构的 .AppImage，`chmod +x` 后运行
+            
+            > 💡 不确定架构？Windows/macOS 大多数电脑选 x64，M1/M2/M3 Mac 选 arm64
             
             ---
             📦 [Gitee 镜像](https://gitee.com/adnaan/adnify/releases/tag/v${{ steps.version.outputs.VERSION }})
@@ -174,7 +254,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Sync to Gitee
         run: |
           git remote add gitee https://${{ secrets.GITEE_USERNAME }}:${{ secrets.GITEE_TOKEN }}@gitee.com/adnaan/adnify.git

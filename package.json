@@ -114,15 +114,11 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64", "arm64"]
         },
         {
           "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64", "arm64"]
         }
       ]
     },
@@ -142,16 +138,28 @@
     "mac": {
       "icon": "resources/icon.icns",
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
       ],
       "category": "public.app-category.developer-tools"
     },
     "linux": {
       "icon": "resources/icon.png",
       "target": [
-        "AppImage",
-        "tar.gz"
+        {
+          "target": "AppImage",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "tar.gz",
+          "arch": ["x64", "arm64"]
+        }
       ],
       "category": "Development"
     },
