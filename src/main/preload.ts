@@ -153,6 +153,7 @@ export interface ElectronAPI {
   restoreWorkspace: () => Promise<{ configPath: string | null; roots: string[] } | null>
   getRecentWorkspaces: () => Promise<string[]>
   clearRecentWorkspaces: () => Promise<boolean>
+  removeFromRecentWorkspaces: (path: string) => Promise<boolean>
   readDir: (path: string) => Promise<{ name: string; path: string; isDirectory: boolean }[]>
   getFileTree: (path: string, maxDepth?: number) => Promise<string>
   readFile: (path: string) => Promise<string | null>
@@ -353,6 +354,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setActiveWorkspace: (roots: string[]) => ipcRenderer.invoke('workspace:setActive', roots),
   getRecentWorkspaces: () => ipcRenderer.invoke('workspace:getRecent'),
   clearRecentWorkspaces: () => ipcRenderer.invoke('workspace:clearRecent'),
+  removeFromRecentWorkspaces: (path: string) => ipcRenderer.invoke('workspace:removeFromRecent', path),
   readDir: (path: string) => ipcRenderer.invoke('file:readDir', path),
   getFileTree: (path: string, maxDepth?: number) => ipcRenderer.invoke('file:getTree', path, maxDepth),
   readFile: (path: string) => ipcRenderer.invoke('file:read', path),

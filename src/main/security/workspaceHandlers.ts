@@ -267,4 +267,14 @@ export function registerWorkspaceHandlers(
     store.set('recentWorkspaces', [])
     return true
   })
+
+  // 从最近工作区列表中移除指定路径
+  ipcMain.handle('workspace:removeFromRecent', (_, path: string) => {
+    if (!path) return false
+    const recent = store.get('recentWorkspaces', []) as string[]
+    const filtered = recent.filter((p: string) => p.toLowerCase() !== path.toLowerCase())
+    store.set('recentWorkspaces', filtered)
+    logger.security.info('[Workspace] Removed from recent:', path)
+    return true
+  })
 }

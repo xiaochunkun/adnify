@@ -122,8 +122,16 @@ class WorkspaceManager {
   
   /**
    * 打开文件夹作为工作区
+   * @throws Error 如果文件夹不存在
    */
   async openFolder(folderPath: string): Promise<boolean> {
+    // 检查路径是否存在
+    const exists = await api.file.exists(folderPath)
+    if (!exists) {
+      // 从最近列表中移除
+      await api.workspace.removeFromRecent(folderPath)
+      throw new Error(`文件夹不存在: ${folderPath}`)
+    }
     return this.switchTo({
       configPath: null,
       roots: [folderPath]

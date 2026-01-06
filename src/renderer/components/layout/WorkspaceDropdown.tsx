@@ -8,6 +8,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Plus, FolderOpen, History, Folder } from 'lucide-react'
 import { useStore } from '@store'
 import { workspaceManager } from '@services/WorkspaceManager'
+import { toast } from '@components/common/ToastProvider'
 
 interface RecentWorkspace {
     path: string
@@ -26,20 +27,21 @@ export default function WorkspaceDropdown() {
         : 'No Workspace'
 
     // 加载最近工作区列表
-    useEffect(() => {
-        async function loadRecent() {
-            try {
-                const recent = await api.workspace.getRecent()
-                setRecentWorkspaces(
-                    recent.map((path: string) => ({
-                        path,
-                        name: path.split(/[\\/]/).pop() || path,
-                    }))
-                )
-            } catch (e) {
-                logger.ui.error('[WorkspaceDropdown] Failed to load recent workspaces:', e)
-            }
+    const loadRecent = async () => {
+        try {
+            const recent = await api.workspace.getRecent()
+            setRecentWorkspaces(
+                recent.map((path: string) => ({
+                    path,
+                    name: path.split(/[\\/]/).pop() || path,
+                }))
+            )
+        } catch (e) {
+            logger.ui.error('[WorkspaceDropdown] Failed to load recent workspaces:', e)
         }
+    }
+
+    useEffect(() => {
         if (isOpen) {
             loadRecent()
         }
@@ -92,7 +94,12 @@ export default function WorkspaceDropdown() {
 
     const handleOpenRecent = async (path: string) => {
         setIsOpen(false)
-        await workspaceManager.openFolder(path)
+        try {
+            await workspaceManager.openFolder(path)
+        } catch (e) {
+            toast.error('文件夹不存在，已从列表移除', path.split(/[\\/]/).pop() || path)
+            loadRecent() // 刷新列表
+        }
     }
 
     return (

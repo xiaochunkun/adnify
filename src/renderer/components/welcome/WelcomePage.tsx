@@ -8,6 +8,7 @@ import { api } from '@/renderer/services/electronAPI'
 import { workspaceManager } from '@/renderer/services/WorkspaceManager'
 import { useStore } from '@/renderer/store'
 import { logger } from '@utils/Logger'
+import { toast } from '@components/common/ToastProvider'
 
 interface RecentWorkspace {
   path: string
@@ -51,7 +52,12 @@ export default function WelcomePage() {
   }
 
   const handleOpenRecent = async (path: string) => {
-    await workspaceManager.openFolder(path)
+    try {
+      await workspaceManager.openFolder(path)
+    } catch (e) {
+      toast.error('文件夹不存在，已从列表移除', path.split(/[\\/]/).pop() || path)
+      loadRecentWorkspaces() // 刷新列表
+    }
   }
 
   const handleNewWindow = () => {

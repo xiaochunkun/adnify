@@ -295,6 +295,7 @@ export interface ElectronAPI {
   setActiveWorkspace: (roots: string[]) => Promise<boolean | { redirected: true; roots: string[] }>
   getRecentWorkspaces: () => Promise<string[]>
   clearRecentWorkspaces: () => Promise<boolean>
+  removeFromRecentWorkspaces: (path: string) => Promise<boolean>
   readDir: (path: string) => Promise<FileItem[]>
   getFileTree: (path: string, maxDepth?: number) => Promise<string>
   readFile: (path: string) => Promise<string | null>

@@ -54,6 +54,7 @@ function createGroupedAPI() {
       setActive: (roots: string[]) => raw.setActiveWorkspace(roots),
       getRecent: () => raw.getRecentWorkspaces(),
       clearRecent: () => raw.clearRecentWorkspaces(),
+      removeFromRecent: (path: string) => raw.removeFromRecentWorkspaces(path),
     },
 
     // 设置
