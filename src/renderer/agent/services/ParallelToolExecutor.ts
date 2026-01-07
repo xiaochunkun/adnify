@@ -4,6 +4,7 @@
  */
 
 import { logger } from '@utils/Logger'
+import { normalizePath } from '@shared/utils/pathUtils'
 import { LLMToolCall } from '@/renderer/types/electron'
 import { getReadOnlyTools, getParallelTools } from '@/shared/config/tools'
 import { toolExecutionService, ToolExecutionContext } from './ToolExecutionService'
@@ -49,7 +50,7 @@ function analyzeToolDependencies(toolCalls: LLMToolCall[]): ToolDependencyAnalys
       // 记录写操作的目标文件
       const targetPath = getToolTargetPath(tc)
       if (targetPath) {
-        writeTargets.add(normalizePathForComparison(targetPath))
+        writeTargets.add(normalizePath(targetPath))
       }
     }
   }
@@ -60,7 +61,7 @@ function analyzeToolDependencies(toolCalls: LLMToolCall[]): ToolDependencyAnalys
   
   for (const readTool of readTools) {
     const targetPath = getToolTargetPath(readTool)
-    if (targetPath && writeTargets.has(normalizePathForComparison(targetPath))) {
+    if (targetPath && writeTargets.has(normalizePath(targetPath))) {
       // 这个读操作依赖于前面的写操作
       dependentReads.push(readTool)
     } else {
@@ -92,12 +93,6 @@ function getToolTargetPath(toolCall: LLMToolCall): string | null {
   return (args.path || args.file_path || args.directory) as string | null
 }
 
-/**
- * 标准化路径用于比较
- */
-function normalizePathForComparison(path: string): string {
-  return path.replace(/\\/g, '/').toLowerCase()
-}
 
 /**
  * 并行执行工具组

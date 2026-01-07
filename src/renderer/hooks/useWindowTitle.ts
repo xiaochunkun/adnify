@@ -6,6 +6,7 @@
 
 import { useEffect } from 'react'
 import { useStore } from '@store'
+import { getFileName } from '@shared/utils/pathUtils'
 
 export function useWindowTitle() {
   const activeFilePath = useStore((state) => state.activeFilePath)
@@ -18,14 +19,14 @@ export function useWindowTitle() {
     // 1. 当前文件名 + 修改标记
     if (activeFilePath) {
       const activeFile = openFiles.find((f) => f.path === activeFilePath)
-      const fileName = activeFilePath.split(/[\\/]/).pop() || ''
+      const fileName = getFileName(activeFilePath)
       const isDirty = activeFile?.isDirty ? ' ●' : ''
       parts.push(`${fileName}${isDirty}`)
     }
 
     // 2. 工作区名称
     if (workspace && workspace.roots && workspace.roots.length > 0) {
-      const workspaceName = workspace.roots[0].split(/[\\/]/).pop() || ''
+      const workspaceName = getFileName(workspace.roots[0])
       parts.push(workspaceName)
     }
 

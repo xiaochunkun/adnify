@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { PendingChange } from '@renderer/agent/types'
 import { motion, AnimatePresence } from 'framer-motion'
+import { getFileName } from '@shared/utils/pathUtils'
 
 interface AgentStatusBarProps {
   pendingChanges: PendingChange[]
@@ -132,7 +133,7 @@ export default function AgentStatusBar({
                 >
                   <div className="border-t border-white/[0.04] max-h-32 overflow-y-auto custom-scrollbar">
                     {pendingChanges.map((change) => {
-                      const fileName = change.filePath.split(/[\\/]/).pop() || change.filePath
+                      const fileName = getFileName(change.filePath)
                       return (
                         <div
                           key={change.id}

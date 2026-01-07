@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react'
-import { User, Copy, Check, RefreshCw, Edit2, RotateCcw, Sparkles, ChevronDown } from 'lucide-react'
+import { User, Copy, Check, RefreshCw, Edit2, RotateCcw, ChevronDown } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'

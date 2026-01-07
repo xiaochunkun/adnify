@@ -4,13 +4,14 @@
  * 修复：响应式布局，解决小窗口遮挡问题
  */
 import { useState, useEffect } from 'react'
-import { FolderOpen, History, Folder, Plus, Settings, Keyboard } from 'lucide-react'
+import { FolderOpen, History, Folder, Plus, Settings } from 'lucide-react'
 import { api } from '@/renderer/services/electronAPI'
 import { workspaceManager } from '@/renderer/services/WorkspaceManager'
 import { useStore } from '@/renderer/store'
 import { logger } from '@utils/Logger'
 import { toast } from '@components/common/ToastProvider'
 import { Logo } from '../common/Logo'
+import { getFileName } from '@shared/utils/pathUtils'
 
 interface RecentWorkspace {
   path: string
@@ -31,7 +32,7 @@ export default function WelcomePage() {
       setRecentWorkspaces(
         recent.slice(0, 8).map((path: string) => ({
           path,
-          name: path.split(/[\\/]/).pop() || path,
+          name: getFileName(path),
         }))
       )
     } catch (e) {
@@ -57,7 +58,7 @@ export default function WelcomePage() {
     try {
       await workspaceManager.openFolder(path)
     } catch (e) {
-      toast.error('文件夹不存在，已从列表移除', path.split(/[\\/]/).pop() || path)
+      toast.error('文件夹不存在，已从列表移除', getFileName(path))
       loadRecentWorkspaces()
     }
   }

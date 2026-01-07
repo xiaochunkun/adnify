@@ -7,7 +7,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { ChevronRight, ChevronDown, FileText, Edit2, Box, MoreHorizontal, Loader2, Search } from 'lucide-react'
 import { useStore } from '@store'
 import { t } from '@renderer/i18n'
-import { getFileName } from '@utils/pathUtils'
+import { getFileName } from '@shared/utils/pathUtils'
 import { Input } from '../../ui'
 
 export function SearchView() {

@@ -18,6 +18,7 @@ import { keybindingService } from './services/keybindingService'
 import { LAYOUT_LIMITS } from '@shared/constants'
 import { startupMetrics } from '@shared/utils/startupMetrics'
 import { useWindowTitle } from './hooks/useWindowTitle'
+import { getFileName } from '@shared/utils/pathUtils'
 import { removeFileFromTypeService } from './services/monacoTypeService'
 
 // 记录 App 模块加载时间
@@ -182,7 +183,7 @@ function AppContent() {
       if (openFile.isDirty) {
         // 文件有未保存更改，显示冲突提示
         const shouldReload = confirm(
-          `文件 "${event.path.split(/[\\/]/).pop()}" 已被外部修改。\n\n是否重新加载？（本地更改将丢失）`
+          `文件 "${getFileName(event.path)}" 已被外部修改。\n\n是否重新加载？（本地更改将丢失）`
         )
         if (shouldReload) {
           reloadFileFromDisk(event.path, newContent)

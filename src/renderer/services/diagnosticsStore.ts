@@ -7,6 +7,7 @@
 import { create } from 'zustand'
 import type { LspDiagnostic } from '@shared/types'
 import { onDiagnostics } from './lspService'
+import { normalizePath } from '@shared/utils/pathUtils'
 
 interface DiagnosticsState {
   // URI -> 诊断列表
@@ -33,8 +34,8 @@ export function getFileStats(
 ): { errors: number; warnings: number } {
   if (!filePath) return { errors: 0, warnings: 0 }
 
-  // 标准化路径用于比较
-  const normalizedFilePath = filePath.replace(/\\/g, '/').toLowerCase()
+  // 使用统一的路径规范化函数
+  const normalizedFilePath = normalizePath(filePath)
 
   let diags: LspDiagnostic[] | undefined
 
@@ -48,8 +49,8 @@ export function getFileStats(
       uriPath = decodeURIComponent(uri.slice(7))
     }
 
-    // 标准化 URI 路径
-    const normalizedUri = uriPath.replace(/\\/g, '/').toLowerCase()
+    // 使用统一的路径规范化函数
+    const normalizedUri = normalizePath(uriPath)
 
     // 比较路径
     if (normalizedUri === normalizedFilePath || normalizedUri.endsWith(normalizedFilePath)) {

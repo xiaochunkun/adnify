@@ -8,6 +8,7 @@ import { ChevronRight, FileText, AlertCircle, AlertTriangle, Info, CheckCircle2 
 import { useStore } from '@store'
 import type { LspDiagnostic } from '@shared/types'
 import { useDiagnosticsStore } from '@services/diagnosticsStore'
+import { getFileName } from '@shared/utils/pathUtils'
 
 export function ProblemsView() {
   const { openFile, setActiveFile, language } = useStore()
@@ -135,7 +136,7 @@ export function ProblemsView() {
           </div>
         ) : (
           Array.from(filteredDiagnostics.entries()).map(([uri, diags]) => {
-            const fileName = uri.split(/[\\/]/).pop() || uri
+            const fileName = getFileName(uri)
             const isExpanded = expandedFiles.has(uri)
 
             return (

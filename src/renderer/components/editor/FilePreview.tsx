@@ -10,6 +10,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Eye, Edit, FileQuestion, Image as ImageIcon, AlertTriangle, Columns } from 'lucide-react'
 import { Button } from '../ui'
+import { getFileName } from '@shared/utils/pathUtils'
 
 // 文件类型分类
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']
@@ -219,7 +220,7 @@ export function ImagePreview({ path }: ImagePreviewProps) {
                 {imageSrc && (
                     <img
                         src={imageSrc}
-                        alt={path.split(/[\\/]/).pop()}
+                        alt={getFileName(path)}
                         className="max-w-none transition-transform"
                         style={{ transform: `scale(${zoom})` }}
                         onError={() => setError(true)}
@@ -239,7 +240,7 @@ interface UnsupportedFileProps {
 
 export function UnsupportedFile({ path, fileType }: UnsupportedFileProps) {
     const ext = path.split('.').pop()?.toLowerCase() || ''
-    const fileName = path.split(/[\\/]/).pop() || path
+    const fileName = getFileName(path)
 
     const handleOpenExternal = useCallback(() => {
         // 使用 shell:openPath IPC 打开文件

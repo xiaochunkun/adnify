@@ -18,7 +18,7 @@ import {
 import { useStore } from '@store'
 import type { FileItem } from '@shared/types'
 import { t } from '@renderer/i18n'
-import { getDirPath, joinPath } from '@utils/pathUtils'
+import { getDirPath, joinPath } from '@shared/utils/pathUtils'
 import { toast } from '../common/ToastProvider'
 import { Input, ContextMenu, ContextMenuItem } from '../ui'
 import { directoryCacheService } from '@services/directoryCacheService'

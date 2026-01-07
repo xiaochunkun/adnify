@@ -3,7 +3,7 @@
  */
 import { StateCreator } from 'zustand'
 import type { FileItem } from '@shared/types'
-import { normalizePath } from '@utils/pathUtils'
+import { normalizePath } from '@shared/utils/pathUtils'
 
 export interface WorkspaceConfig {
   configPath: string | null

@@ -6,11 +6,12 @@
 import { useState, useMemo, memo } from 'react'
 import {
   Image as ImageIcon, Code, FileText, Link as LinkIcon,
-  Table, Copy, Check, ExternalLink, Download, Maximize2, X
+  Table, Copy, Check, ExternalLink, Maximize2, X
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ToolRichContent } from '@/shared/types'
 import { JsonHighlight } from '@utils/jsonHighlight'
+import { getFileName } from '@shared/utils/pathUtils'
 
 interface RichContentRendererProps {
   content: ToolRichContent[]
@@ -177,7 +178,7 @@ function TableContent({ item, maxHeight }: { item: ToolRichContent; maxHeight: s
 
 // =================== 文件/链接内容 ===================
 function FileContent({ item }: { item: ToolRichContent }) {
-  const fileName = item.title || item.uri?.split(/[/\\]/).pop() || 'File'
+  const fileName = item.title || (item.uri ? getFileName(item.uri) : 'File')
   return (
     <div className="flex items-center gap-4 p-4 bg-surface/20 backdrop-blur-md rounded-2xl border border-border hover:bg-surface/40 hover:border-accent/30 transition-all group cursor-pointer shadow-sm">
       <div className="p-2.5 rounded-xl bg-accent/10 text-accent group-hover:bg-accent group-hover:text-white transition-all duration-300">

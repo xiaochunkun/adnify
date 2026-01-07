@@ -4,7 +4,7 @@
  * 升级版：统一卡片风格，使用 Logo 组件
  */
 
-import { FileCode, Search, Terminal } from 'lucide-react'
+import { Search, Terminal } from 'lucide-react'
 import { useStore } from '@store'
 import { t } from '@renderer/i18n'
 import { Logo } from '../common/Logo'

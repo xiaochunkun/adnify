@@ -14,6 +14,7 @@ import { useStore } from '@store'
 import { Button } from '../ui'
 import { toast } from '@components/common/ToastProvider'
 import type { DebugConfig, DebugEvent } from '@renderer/types/electron'
+import { getFileName, getDirPath } from '@shared/utils/pathUtils'
 
 type DebugTab = 'variables' | 'callstack' | 'breakpoints' | 'console'
 
@@ -209,8 +210,8 @@ export default function DebugPanel() {
     return value
       .replace(/\$\{file\}/g, activeFilePath || '')
       .replace(/\$\{workspaceFolder\}/g, workspacePath || '')
-      .replace(/\$\{fileBasename\}/g, activeFilePath?.split(/[\\/]/).pop() || '')
-      .replace(/\$\{fileDirname\}/g, activeFilePath?.split(/[\\/]/).slice(0, -1).join('/') || '')
+      .replace(/\$\{fileBasename\}/g, activeFilePath ? getFileName(activeFilePath) : '')
+      .replace(/\$\{fileDirname\}/g, activeFilePath ? getDirPath(activeFilePath) : '')
   }
 
   // 启动调试 (F5)
@@ -538,7 +539,7 @@ export default function DebugPanel() {
                 stackFrames.map((frame, i) => {
                   const source = frame.source
                   const filePath = (typeof source === 'object' && source?.path) || frame.file || ''
-                  const fileName = filePath.split(/[\\/]/).pop() || filePath
+                  const fileName = getFileName(filePath)
                   const isActive = i === 0
                   return (
                     <div
@@ -579,7 +580,7 @@ export default function DebugPanel() {
                 // 按文件分组显示
                 Object.entries(
                   breakpoints.reduce((acc, bp) => {
-                    const file = bp.filePath.split(/[\\/]/).pop() || bp.filePath
+                    const file = getFileName(bp.filePath)
                     if (!acc[file]) acc[file] = []
                     acc[file].push(bp)
                     return acc

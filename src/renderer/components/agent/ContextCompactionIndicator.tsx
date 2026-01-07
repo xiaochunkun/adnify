@@ -4,9 +4,8 @@
  */
 
 import { useState, useCallback, useMemo } from 'react'
-import { Minimize2, ChevronDown, ChevronUp, Trash2, RefreshCw, Sparkles, Clock } from 'lucide-react'
+import { Minimize2, ChevronDown, Trash2, RefreshCw, Sparkles, Clock } from 'lucide-react'
 import { useAgentStore, selectContextSummary, selectMessages, contextCompactionService } from '@/renderer/agent'
-import { Button } from '../ui'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface ContextCompactionIndicatorProps {

@@ -3,7 +3,7 @@
  * 整合 Embedding、分块、向量存储
  */
 
-import { logger } from '@shared/utils/Logger'
+import { logger, normalizePath } from '@shared/utils'
 import * as path from 'path'
 import { BrowserWindow } from 'electron'
 import { Worker } from 'worker_threads'
@@ -466,18 +466,11 @@ export class CodebaseIndexService {
 const indexServiceInstances = new Map<string, CodebaseIndexService>()
 
 /**
- * 规范化工作区路径（用于 Map key）
- */
-function normalizeWorkspacePath(workspacePath: string): string {
-  return workspacePath.replace(/\\/g, '/').toLowerCase()
-}
-
-/**
  * 获取或创建索引服务实例
  * 每个工作区有独立的实例，支持多窗口同时打开不同工作区
  */
 export function getIndexService(workspacePath: string): CodebaseIndexService {
-  const normalizedPath = normalizeWorkspacePath(workspacePath)
+  const normalizedPath = normalizePath(workspacePath)
   
   let instance = indexServiceInstances.get(normalizedPath)
   if (!instance) {
@@ -494,7 +487,7 @@ export function getIndexService(workspacePath: string): CodebaseIndexService {
  * 如果实例已存在，会更新其配置
  */
 export function initIndexServiceWithConfig(workspacePath: string, config: Partial<IndexConfig>): CodebaseIndexService {
-  const normalizedPath = normalizeWorkspacePath(workspacePath)
+  const normalizedPath = normalizePath(workspacePath)
   
   let instance = indexServiceInstances.get(normalizedPath)
   if (!instance) {
@@ -515,7 +508,7 @@ export function initIndexServiceWithConfig(workspacePath: string, config: Partia
  */
 export function destroyIndexService(workspacePath?: string): void {
   if (workspacePath) {
-    const normalizedPath = normalizeWorkspacePath(workspacePath)
+    const normalizedPath = normalizePath(workspacePath)
     const instance = indexServiceInstances.get(normalizedPath)
     if (instance) {
       instance.destroy()

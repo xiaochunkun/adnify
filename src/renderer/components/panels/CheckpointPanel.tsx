@@ -9,7 +9,7 @@ import { useState, useCallback, memo } from 'react'
 import { History, RotateCcw, ChevronDown, ChevronUp, FileText, MessageSquare, X } from 'lucide-react'
 import { useAgentStore } from '@/renderer/agent/store/AgentStore'
 import { MessageCheckpoint } from '@/renderer/agent/types'
-import { getFileName } from '@/renderer/utils/pathUtils'
+import { getFileName } from '@shared/utils/pathUtils'
 
 interface CheckpointItemProps {
   checkpoint: MessageCheckpoint

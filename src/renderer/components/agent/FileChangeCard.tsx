@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ToolCall } from '@renderer/agent/types'
 import { streamingEditService } from '@renderer/agent/services/streamingEditService'
 import InlineDiffPreview, { getDiffStats } from './InlineDiffPreview'
+import { getFileName } from '@shared/utils/pathUtils'
 
 interface FileChangeCardProps {
     toolCall: ToolCall
@@ -34,7 +35,7 @@ export default function FileChangeCard({
     const args = toolCall.arguments as Record<string, unknown>
     const meta = args._meta as Record<string, unknown> | undefined
     const filePath = (args.path || meta?.filePath) as string || 'unknown'
-    const fileName = filePath.split(/[\\/]/).pop() || filePath
+    const fileName = getFileName(filePath)
 
     const isStreaming = args._streaming === true
     const isRunning = toolCall.status === 'running' || toolCall.status === 'pending'

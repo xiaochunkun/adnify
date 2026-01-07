@@ -4,12 +4,36 @@
 
 export { logger, type LogLevel, type LogCategory, type LogEntry } from './Logger'
 
+// 路径工具函数
+export {
+  normalizePath,
+  pathEquals,
+  pathStartsWith,
+  getBasename,
+  getFileName,
+  getDirname,
+  getDirPath,
+  getExtension,
+  getPathSeparator,
+  joinPaths,
+  joinPath,
+  toFullPath,
+  toRelativePath,
+  pathMatches,
+  resolveImportPath,
+  isPathInWorkspace,
+  validatePath,
+  hasPathTraversal,
+  isSensitivePath,
+  type PathValidationResult,
+} from './pathUtils'
+
 // JSON 工具函数
 export {
   getByPath,
   setByPath,
   hasPath,
-  joinPath,
+  joinJsonPath,
   cleanToolCallArgs,
   fixUnescapedNewlines,
   fixMalformedJson,

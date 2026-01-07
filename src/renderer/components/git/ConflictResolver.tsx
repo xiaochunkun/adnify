@@ -11,6 +11,7 @@ import { t } from '@renderer/i18n'
 import { gitService } from '@renderer/agent/services/gitService'
 import { toast } from '@components/common/ToastProvider'
 import { Button } from '@components/ui'
+import { getFileName } from '@shared/utils/pathUtils'
 
 interface ConflictMarker {
   startLine: number
@@ -243,7 +244,7 @@ export function ConflictResolver({ filePath, onResolved, onCancel }: ConflictRes
           <GitMerge className="w-4 h-4 text-accent" />
           <span className="text-sm font-medium">{tt('git.resolveConflicts')}</span>
           <span className="text-xs text-text-muted">
-            {filePath.split(/[\\/]/).pop()}
+            {getFileName(filePath)}
           </span>
         </div>
         <div className="flex items-center gap-2">

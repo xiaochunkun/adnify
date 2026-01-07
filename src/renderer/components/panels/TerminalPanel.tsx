@@ -15,6 +15,7 @@ import { useAgentStore } from '@/renderer/agent'
 import { themes } from '../editor/ThemeManager'
 import { Button, Select } from '../ui'
 import { terminalManager, TerminalManagerState } from '@/renderer/services/TerminalManager'
+import { getFileName } from '@shared/utils/pathUtils'
 
 // xterm 样式
 const XTERM_STYLE = `
@@ -319,7 +320,7 @@ export default function TerminalPanel() {
                     <div className="relative flex-shrink-0 h-full flex items-center px-1 gap-1 border-l border-border mx-1">
                         {workspace && workspace.roots.length > 1 && (
                             <div className="w-[120px]">
-                                <Select value={selectedRoot} onChange={setSelectedRoot} options={workspace.roots.map(root => ({ value: root, label: root.split(/[\\/]/).pop() || root }))} className="h-7 text-xs border-transparent bg-transparent hover:bg-white/5" />
+                                <Select value={selectedRoot} onChange={setSelectedRoot} options={workspace.roots.map(root => ({ value: root, label: getFileName(root) }))} className="h-7 text-xs border-transparent bg-transparent hover:bg-white/5" />
                             </div>
                         )}
                         <div className="relative">

@@ -18,6 +18,7 @@ import {
   Loader2, FolderOpen, CheckCheck, XCircle
 } from 'lucide-react'
 import { useStore } from '@store'
+import { getFileName } from '@shared/utils/pathUtils'
 import DiffViewer from '../editor/DiffViewer'
 import { t } from '@renderer/i18n'
 import { composerService, FileChange } from '@renderer/agent/services/composerService'
@@ -325,7 +326,7 @@ export default function ComposerPanel({ onClose, initialChanges }: ComposerPanel
                             >
                               <FileText className="w-4 h-4 text-text-muted group-hover:text-accent transition-colors" />
                               <div className="flex flex-col min-w-0">
-                                <span className="text-xs font-bold text-text-primary truncate">{file.path.split(/[\\/]/).pop()}</span>
+                                <span className="text-xs font-bold text-text-primary truncate">{getFileName(file.path)}</span>
                                 <span className="text-[9px] text-text-muted truncate opacity-50">{file.path}</span>
                               </div>
                             </button>
@@ -352,7 +353,7 @@ export default function ComposerPanel({ onClose, initialChanges }: ComposerPanel
                       className="flex items-center gap-2 px-3 py-1.5 bg-surface/20 text-text-primary text-[11px] font-bold rounded-xl border border-border-subtle hover:border-accent/30 hover:bg-accent/5 transition-all duration-300 group"
                     >
                       <FileText className="w-3.5 h-3.5 text-text-muted group-hover:text-accent transition-colors" />
-                      <span className="truncate max-w-[180px]">{path.split(/[\\/]/).pop()}</span>
+                      <span className="truncate max-w-[180px]">{getFileName(path)}</span>
                       <button
                         onClick={() => removeFile(path)}
                         className="p-1 hover:bg-red-500/10 rounded-lg text-text-muted hover:text-red-400 transition-all duration-300"
@@ -486,7 +487,7 @@ export default function ComposerPanel({ onClose, initialChanges }: ComposerPanel
                             {expandedEdits.has(edit.path) ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-xs font-bold text-text-primary">{edit.path.split(/[\\/]/).pop()}</span>
+                            <span className="text-xs font-bold text-text-primary">{getFileName(edit.path)}</span>
                             <span className="text-[9px] text-text-muted opacity-40 truncate max-w-[200px]">{edit.path}</span>
                           </div>
                         </div>
@@ -553,7 +554,7 @@ export default function ComposerPanel({ onClose, initialChanges }: ComposerPanel
                                 {expandedEdits.has(change.filePath) ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                               </div>
                               <div className="flex flex-col">
-                                <span className="text-xs font-bold text-text-primary">{change.filePath.split(/[\\/]/).pop()}</span>
+                                <span className="text-xs font-bold text-text-primary">{getFileName(change.filePath)}</span>
                                 <div className="flex items-center gap-2">
                                   <span className={`text-[9px] font-black uppercase tracking-tighter ${change.changeType === 'create' ? 'text-green-400' :
                                     change.changeType === 'delete' ? 'text-red-400' : 'text-blue-400'

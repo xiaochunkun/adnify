@@ -12,6 +12,7 @@ import {
   isLargeFile
 } from '@services/largeFileService'
 import { toast } from '@components/common/ToastProvider'
+import { getFileName } from '@shared/utils/pathUtils'
 
 // ============ 配置常量 ============
 
@@ -105,7 +106,7 @@ export async function safeOpenFile(
       ? '无法打开二进制文件'
       : 'Cannot open binary file'
     if (showWarning) {
-      toast.warning(msg, filePath.split(/[\\/]/).pop() || filePath)
+      toast.warning(msg, getFileName(filePath))
     }
     return { success: false, error: msg, isBinary: true }
   }

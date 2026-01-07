@@ -5,6 +5,7 @@
 
 import { api } from '@/renderer/services/electronAPI'
 import { logger } from '@utils/Logger'
+import { normalizePath } from '@shared/utils/pathUtils'
 import { performanceMonitor, CacheService, withRetry, isRetryableError } from '@shared/utils'
 import { AppError, formatErrorMessage } from '@/shared/errors'
 import { useAgentStore } from '../store/AgentStore'
@@ -85,24 +86,21 @@ class AgentServiceClass {
    * 检查文件缓存是否有效
    */
   hasValidFileCache(filePath: string): boolean {
-    const normalizedPath = filePath.replace(/\\/g, '/').toLowerCase()
-    return agentFileCache.has(normalizedPath)
+    return agentFileCache.has(normalizePath(filePath))
   }
 
   /**
    * 标记文件已读取
    */
   markFileAsRead(filePath: string, content: string): void {
-    const normalizedPath = filePath.replace(/\\/g, '/').toLowerCase()
-    agentFileCache.set(normalizedPath, this.fnvHash(content))
+    agentFileCache.set(normalizePath(filePath), this.fnvHash(content))
   }
 
   /**
    * 获取文件的缓存内容哈希
    */
   getFileCacheHash(filePath: string): string | null {
-    const normalizedPath = filePath.replace(/\\/g, '/').toLowerCase()
-    return agentFileCache.get(normalizedPath) ?? null
+    return agentFileCache.get(normalizePath(filePath)) ?? null
   }
 
   /**

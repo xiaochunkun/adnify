@@ -16,6 +16,7 @@ import {
     ContextItem,
     FileContext,
 } from '@/renderer/agent/types'
+import { getFileName } from '@shared/utils/pathUtils'
 
 interface ContextPanelProps {
     contextItems: ContextItem[]
@@ -41,7 +42,7 @@ export default function ContextPanel({
 
     const getIconAndLabel = (item: ContextItem) => {
         switch (item.type) {
-            case 'File': return { icon: <File className="w-3 h-3 text-accent" />, label: (item as FileContext).uri.split(/[\\/]/).pop() || 'File' }
+            case 'File': return { icon: <File className="w-3 h-3 text-accent" />, label: getFileName((item as FileContext).uri) || 'File' }
             case 'CodeSelection': return { icon: <Code className="w-3 h-3 text-blue-400" />, label: 'Selection' }
             case 'Folder': return { icon: <Folder className="w-3 h-3 text-yellow-400" />, label: 'Folder' }
             case 'Codebase': return { icon: <Database className="w-3 h-3 text-purple-400" />, label: '@codebase' }
@@ -103,7 +104,7 @@ export default function ContextPanel({
                                 title="Add active file to context"
                             >
                                 <Plus className="w-3.5 h-3.5" />
-                                <span className="truncate max-w-[150px] font-semibold">{activeFilePath.split(/[\\/]/).pop()}</span>
+                                <span className="truncate max-w-[150px] font-semibold">{getFileName(activeFilePath)}</span>
                             </button>
                         )}
 

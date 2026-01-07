@@ -10,7 +10,6 @@ import {
   GitBranch,
   Terminal,
   Database,
-  Paperclip,
   ArrowUp,
   Plus,
   Folder,
@@ -18,6 +17,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react'
 import { useStore } from '@store'
+import { getFileName } from '@shared/utils/pathUtils'
 import { WorkMode } from '@/renderer/modes/types'
 import { t } from '@renderer/i18n'
 import { Button } from '../ui'
@@ -170,7 +170,7 @@ export default function ChatInput({
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-accent/5 text-accent text-[11px] font-bold rounded-full border border-accent/10 animate-fade-in select-none hover:bg-accent/15 transition-colors hover:border-accent/30"
               >
                 <Plus className="w-3 h-3" strokeWidth={3} />
-                <span>{activeFilePath.split(/[/\\]/).pop()}</span>
+                <span>{getFileName(activeFilePath)}</span>
               </button>
             )}
             {/* Context Items */}
@@ -190,12 +190,12 @@ export default function ChatInput({
                   case 'File':
                   case 'Folder': {
                     const uri = (item as any).uri || ''
-                    return uri.split(/[/\\]/).pop() || uri
+                    return getFileName(uri) || uri
                   }
                   case 'CodeSelection': {
                     const uri = (item as any).uri || ''
                     const range = (item as any).range as [number, number] | undefined
-                    const name = uri.split(/[/\\]/).pop() || uri
+                    const name = getFileName(uri) || uri
                     return range ? `${name}:${range[0]}-${range[1]}` : name
                   }
                   default: return 'Context'

@@ -10,7 +10,7 @@ import { useState, useMemo, useCallback, useRef, useEffect, memo } from 'react'
 import { X, Check, ChevronDown, ChevronUp, Copy, FileEdit, Columns, AlignJustify } from 'lucide-react'
 import { useStore } from '@store'
 import { t } from '@renderer/i18n'
-import { getFileName } from '@utils/pathUtils'
+import { getFileName } from '@shared/utils/pathUtils'
 
 // ===== 类型定义 =====
 interface DiffLine {

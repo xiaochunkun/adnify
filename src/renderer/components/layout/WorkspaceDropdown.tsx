@@ -9,6 +9,7 @@ import { ChevronDown, Plus, FolderOpen, History, Folder } from 'lucide-react'
 import { useStore } from '@store'
 import { workspaceManager } from '@services/WorkspaceManager'
 import { toast } from '@components/common/ToastProvider'
+import { getFileName } from '@shared/utils/pathUtils'
 
 interface RecentWorkspace {
     path: string
@@ -23,7 +24,7 @@ export default function WorkspaceDropdown() {
 
     // 获取当前工作区显示名称
     const currentWorkspaceName = workspace?.roots[0]
-        ? workspace.roots[0].split(/[\\/]/).pop() || 'Workspace'
+        ? getFileName(workspace.roots[0]) || 'Workspace'
         : 'No Workspace'
 
     // 加载最近工作区列表
@@ -33,7 +34,7 @@ export default function WorkspaceDropdown() {
             setRecentWorkspaces(
                 recent.map((path: string) => ({
                     path,
-                    name: path.split(/[\\/]/).pop() || path,
+                    name: getFileName(path),
                 }))
             )
         } catch (e) {
@@ -97,7 +98,7 @@ export default function WorkspaceDropdown() {
         try {
             await workspaceManager.openFolder(path)
         } catch (e) {
-            toast.error('文件夹不存在，已从列表移除', path.split(/[\\/]/).pop() || path)
+            toast.error('文件夹不存在，已从列表移除', getFileName(path))
             loadRecent() // 刷新列表
         }
     }

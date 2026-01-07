@@ -6,7 +6,7 @@
 import { api } from '@/renderer/services/electronAPI'
 import { logger } from '@utils/Logger'
 import type { languages, editor, IRange } from 'monaco-editor'
-import { getPathSeparator, getDirPath, joinPath } from '@utils/pathUtils'
+import { getPathSeparator, getDirPath, joinPath } from '@shared/utils/pathUtils'
 import { useStore } from '@store'
 
 // ============ 类型定义 ============

@@ -7,7 +7,7 @@ import { FileCode, X, ChevronRight, AlertCircle, AlertTriangle, RefreshCw, Home,
 import { useStore } from '@store'
 import { useAgent } from '@hooks/useAgent'
 import { t } from '@renderer/i18n'
-import { getFileName, getPathSeparator } from '@utils/pathUtils'
+import { getFileName, getPathSeparator } from '@shared/utils/pathUtils'
 import { toast } from '../common/ToastProvider'
 import DiffViewer from './DiffViewer'
 import InlineEdit from './InlineEdit'
@@ -29,7 +29,8 @@ import {
   onDiagnostics,
 } from '@services/lspService'
 import { registerLspProviders } from '@services/lspProviders'
-import { getFileInfo, getLargeFileEditorOptions, getLargeFileWarning } from '@services/largeFileService'
+import { getFileInfo, getLargeFileWarning } from '@services/largeFileService'
+import { getMonacoEditorOptions } from '@renderer/config/monacoConfig'
 import { pathLinkService } from '@services/pathLinkService'
 import { getEditorConfig } from '@renderer/config/editorConfig'
 import { keybindingService } from '@services/keybindingService'
@@ -76,9 +77,6 @@ export default function Editor() {
     selectedCode: string
     lineRange: [number, number]
   } | null>(null)
-
-  // AI 代码补全状态 - 从配置读取
-
 
   // 自定义右键菜单状态
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
@@ -128,8 +126,6 @@ export default function Editor() {
     }
   }, [currentTheme])
 
-
-
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor
     monacoRef.current = monaco
@@ -155,7 +151,7 @@ export default function Editor() {
 
 
 
-    // 注册所有 LSP 提供者（hover、completion、signature help 等）
+    // 注册所有 LSP 提供者
     registerLspProviders(monaco)
 
     // 主题已在 beforeMount 中定义，这里只需设置
@@ -471,12 +467,9 @@ export default function Editor() {
     }
   }, [activeFilePath])
 
-  // 文件变化时清除状态
-  // 文件切换时的处理
+  // 文件切换时清除状态
   useEffect(() => {
     setLintErrors([])
-
-    // 清除补全状态
     completionService.cancel()
 
     // 通知 LSP 服务器当前文件已打开
@@ -485,10 +478,13 @@ export default function Editor() {
     }
   }, [activeFilePath, activeFile])
 
-  // 清理 ghost text manager
+  // 组件卸载时清理
   useEffect(() => {
     return () => {
       completionService.cancel()
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
     }
   }, [])
 
@@ -649,15 +645,6 @@ export default function Editor() {
     window.addEventListener('blur', handleBlur)
     return () => window.removeEventListener('blur', handleBlur)
   }, [openFiles, markFileSaved])
-
-  // 清理自动保存定时器
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current)
-      }
-    }
-  }, [])
 
   // 保存指定文件
   const saveFile = useCallback(async (filePath: string) => {
@@ -894,7 +881,7 @@ export default function Editor() {
               <div className="flex items-center gap-2">
                 <FileCode className="w-4 h-4 text-accent" />
                 <span className="text-sm font-medium text-text-primary">
-                  {activeDiff.filePath.split(/[\\/]/).pop()}
+                  {getFileName(activeDiff.filePath)}
                 </span>
                 <span className="text-xs text-text-muted">
                   {activeDiff.original ? 'Modified' : 'New File'}
@@ -1127,159 +1114,7 @@ export default function Editor() {
                     <div className="text-text-muted text-sm">{t('loading', language)}</div>
                   </div>
                 }
-                options={{
-                  fontSize: getEditorConfig().fontSize,
-                  fontFamily: getEditorConfig().fontFamily,
-                  fontLigatures: true,
-                  lineHeight: 1.6, // Better breathing room
-                  tabSize: getEditorConfig().tabSize,
-                  wordWrap: getEditorConfig().wordWrap,
-                  minimap: { enabled: getEditorConfig().minimap, scale: getEditorConfig().minimapScale, renderCharacters: false },
-                  scrollBeyondLastLine: false,
-                  smoothScrolling: true,
-                  cursorBlinking: 'smooth',
-                  cursorSmoothCaretAnimation: 'on',
-                  padding: { top: 24, bottom: 16 }, // More vertical padding
-                  lineNumbers: getEditorConfig().lineNumbers,
-                  renderLineHighlight: 'all',
-                  roundedSelection: false,
-                  automaticLayout: true,
-                  glyphMargin: true, // 启用断点区域
-                  
-                  // 代码补全和建议
-                  inlineSuggest: { enabled: true },
-                  suggest: {
-                    showKeywords: true,
-                    showSnippets: true,
-                    showClasses: true,
-                    showFunctions: true,
-                    showVariables: true,
-                    showModules: true,
-                    showProperties: true,
-                    showEvents: true,
-                    showOperators: true,
-                    showUnits: true,
-                    showValues: true,
-                    showConstants: true,
-                    showEnumMembers: true,
-                    showStructs: true,
-                    showTypeParameters: true,
-                    showWords: true,
-                    showColors: true,
-                    showFiles: true,
-                    showReferences: true,
-                    showFolders: true,
-                    showInterfaces: true,
-                    showIssues: true,
-                    showUsers: false,
-                    insertMode: 'insert',
-                    filterGraceful: true,
-                    snippetsPreventQuickSuggestions: false,
-                    localityBonus: true,
-                    shareSuggestSelections: true,
-                    showStatusBar: true,
-                    preview: true,
-                    previewMode: 'subwordSmart',
-                  },
-                  quickSuggestions: {
-                    other: true,
-                    comments: false,
-                    strings: true,
-                  },
-                  acceptSuggestionOnCommitCharacter: true,
-                  acceptSuggestionOnEnter: 'on',
-                  tabCompletion: 'on',
-                  wordBasedSuggestions: 'matchingDocuments',
-                  
-                  // 参数提示
-                  parameterHints: { enabled: true, cycle: true },
-                  
-                  // 代码折叠
-                  folding: true,
-                  foldingStrategy: 'auto',
-                  foldingHighlight: true,
-                  foldingImportsByDefault: true,
-                  showFoldingControls: 'mouseover',
-                  unfoldOnClickAfterEndOfLine: true,
-                  
-                  // 括号匹配和高亮
-                  matchBrackets: 'always',
-                  bracketPairColorization: { enabled: true, independentColorPoolPerBracketType: true },
-                  guides: {
-                    bracketPairs: true,
-                    bracketPairsHorizontal: 'active',
-                    highlightActiveBracketPair: true,
-                    indentation: true,
-                    highlightActiveIndentation: true,
-                  },
-                  
-                  // 渲染选项
-                  renderWhitespace: 'selection',
-                  renderControlCharacters: true,
-                  renderLineHighlightOnlyWhenFocus: false,
-                  
-                  // 选区高亮 - 失去焦点时保持选区可见
-                  selectionHighlight: true,
-                  occurrencesHighlight: 'singleFile',
-                  
-                  // 滚动和导航
-                  stickyScroll: { enabled: true, maxLineCount: 5 },
-                  scrollbar: {
-                    vertical: 'auto',
-                    horizontal: 'auto',
-                    verticalScrollbarSize: 10,
-                    horizontalScrollbarSize: 10,
-                    useShadows: false,
-                  },
-                  
-                  // 内联提示 (类型提示等)
-                  inlayHints: { enabled: 'on', fontSize: 11, padding: true },
-                  
-                  // 链接和跳转
-                  links: true,
-                  colorDecorators: true,
-                  gotoLocation: {
-                    multiple: 'goto',
-                    multipleDefinitions: 'goto',
-                    multipleTypeDefinitions: 'goto',
-                    multipleDeclarations: 'goto',
-                    multipleImplementations: 'goto',
-                    multipleReferences: 'goto',
-                  },
-                  
-                  // 查找和替换
-                  find: {
-                    addExtraSpaceOnTop: true,
-                    autoFindInSelection: 'multiline',
-                    seedSearchStringFromSelection: 'selection',
-                    loop: true,
-                  },
-                  
-                  // 多光标 - 使用 Alt+Click 添加多光标，Ctrl+Click 跳转到定义
-                  multiCursorModifier: 'alt',
-                  multiCursorMergeOverlapping: true,
-                  multiCursorPaste: 'spread',
-                  
-                  // 拖放
-                  dragAndDrop: true,
-                  dropIntoEditor: { enabled: true },
-                  
-                  // 其他高级功能
-                  linkedEditing: true,
-                  renameOnType: true,
-                  smartSelect: { selectLeadingAndTrailingWhitespace: true },
-                  copyWithSyntaxHighlighting: true,
-                  emptySelectionClipboard: true,
-                  columnSelection: false,
-                  
-                  // 光标
-                  cursorStyle: 'line',
-                  cursorWidth: 2,
-                  
-                  // 禁用内置右键菜单（使用自定义菜单）
-                  contextmenu: false,
-                  ...(activeFileInfo ? getLargeFileEditorOptions(activeFileInfo) : {}),
-                }}
+                options={getMonacoEditorOptions(activeFileInfo)}
               />
             )}
           </>

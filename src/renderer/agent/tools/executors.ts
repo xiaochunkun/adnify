@@ -7,7 +7,7 @@ import { api } from '@/renderer/services/electronAPI'
 import { logger } from '@utils/Logger'
 import type { ToolExecutionResult, ToolExecutionContext } from '@/shared/types'
 import type { PlanItem } from '../types'
-import { validatePath, isSensitivePath } from '@/renderer/utils/pathUtils'
+import { validatePath, isSensitivePath } from '@shared/utils/pathUtils'
 import { pathToLspUri, waitForDiagnostics, isLanguageSupported, getLanguageId } from '@/renderer/services/lspService'
 import {
     calculateLineChanges,

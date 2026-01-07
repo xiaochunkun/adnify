@@ -5,7 +5,7 @@
  * 某些语言 ID 与 LSP 的不同（如 tsx -> typescript）
  */
 
-import { getFileName } from '@utils/pathUtils'
+import { getFileName } from '@shared/utils/pathUtils'
 import { EXTENSION_TO_LANGUAGE } from '@shared/languages'
 
 // Monaco 特定的语言映射覆盖

@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ChevronRight, FileText, Code, Hash, Braces, Box, Loader2 } from 'lucide-react'
 import { useStore } from '@store'
 import type { LspDocumentSymbol } from '@shared/types'
-import { getFileName } from '@utils/pathUtils'
+import { getFileName } from '@shared/utils/pathUtils'
 import { logger } from '@utils/Logger'
 import { getDocumentSymbols } from '@services/lspService'
 
@@ -92,15 +92,17 @@ export function OutlineView() {
     }
   }
 
-  const renderSymbol = (symbol: LspDocumentSymbol, depth = 0) => {
+  const renderSymbol = (symbol: LspDocumentSymbol, depth = 0, parentKey = '') => {
     const hasChildren = symbol.children && symbol.children.length > 0
     const isExpanded = expandedSymbols.has(symbol.name)
     const matchesFilter = !filter || symbol.name.toLowerCase().includes(filter.toLowerCase())
 
     if (!matchesFilter && !hasChildren) return null
 
+    const uniqueKey = `${parentKey}/${symbol.name}-${symbol.kind ?? 0}-${symbol.range?.start?.line ?? 0}-${symbol.range?.start?.character ?? 0}`
+
     return (
-      <div key={`${symbol.name}-${symbol.range?.start?.line ?? depth}`}>
+      <div key={uniqueKey}>
         <div
           onClick={() => handleSymbolClick(symbol)}
           className="flex items-center gap-1.5 px-2 py-1 cursor-pointer hover:bg-white/5 group transition-colors rounded-md mx-2 my-0.5"
@@ -122,7 +124,7 @@ export function OutlineView() {
           </span>
         </div>
 
-        {hasChildren && isExpanded && <div>{symbol.children!.map((child) => renderSymbol(child, depth + 1))}</div>}
+        {hasChildren && isExpanded && <div>{symbol.children!.map((child, idx) => renderSymbol(child, depth + 1, `${uniqueKey}-${idx}`))}</div>}
       </div>
     )
   }
@@ -169,7 +171,7 @@ export function OutlineView() {
             {language === 'zh' ? '没有找到符号' : 'No symbols found'}
           </div>
         ) : (
-          symbols.map((symbol) => renderSymbol(symbol))
+          symbols.map((symbol, idx) => renderSymbol(symbol, 0, String(idx)))
         )}
       </div>
     </div>

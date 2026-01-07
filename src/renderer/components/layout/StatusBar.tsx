@@ -17,7 +17,6 @@ import {
   Bug,
 } from 'lucide-react'
 import { useStore } from '@store'
-import { t } from '@renderer/i18n'
 import type { IndexStatus } from '@shared/types'
 import { indexWorkerService, IndexProgress } from '@services/indexWorkerService'
 import BottomBarPopover from '../ui/BottomBarPopover'
@@ -46,8 +45,6 @@ export default function StatusBar() {
   
   const diagnostics = useDiagnosticsStore(state => state.diagnostics)
   const version = useDiagnosticsStore(state => state.version)
-  const totalErrorCount = useDiagnosticsStore(state => state.errorCount)
-  const totalWarningCount = useDiagnosticsStore(state => state.warningCount)
 
   const currentFileStats = useMemo(() => {
     return getFileStats(diagnostics, activeFilePath)

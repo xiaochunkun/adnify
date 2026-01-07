@@ -16,7 +16,7 @@ import { useStore, useModeStore } from '@/renderer/store'
 import { useAgent } from '@/renderer/hooks/useAgent'
 import { useAgentStore } from '@/renderer/agent'
 import { t } from '@/renderer/i18n'
-import { toFullPath } from '@/renderer/utils/pathUtils'
+import { toFullPath, getFileName } from '@shared/utils/pathUtils'
 import {
   ChatMessage as ChatMessageType,
   ChatThread,
@@ -1031,12 +1031,12 @@ export default function ChatPanel() {
                 }}
                 onAcceptFile={(filePath) => {
                   acceptChange(filePath)
-                  toast.success(`Accepted: ${filePath.split(/[\\/]/).pop()}`)
+                  toast.success(`Accepted: ${getFileName(filePath)}`)
                 }}
                 onRejectFile={async (filePath) => {
                   const success = await undoChange(filePath)
                   if (success) {
-                    toast.success(`Reverted: ${filePath.split(/[\\/]/).pop()}`)
+                    toast.success(`Reverted: ${getFileName(filePath)}`)
                   } else {
                     toast.error('Failed to revert')
                   }

@@ -15,6 +15,7 @@ import { ToolCall } from '@renderer/agent/types'
 import { JsonHighlight } from '@utils/jsonHighlight'
 import { terminalManager } from '@/renderer/services/TerminalManager'
 import { RichContentRenderer } from './RichContentRenderer'
+import { getFileName } from '@shared/utils/pathUtils'
 
 interface ToolCallCardProps {
   toolCall: ToolCall
@@ -85,7 +86,7 @@ const ToolCallCard = memo(function ToolCallCard({
     }
     if (name === 'read_file' || name === 'write_file' || name === 'create_file' || name === 'edit_file') {
       const path = args.path as string
-      return path?.split(/[\\/]/).pop() || path
+      return path ? getFileName(path) : path
     }
     if (name === 'search_files') {
       const pattern = (args.pattern || args.query) as string
@@ -93,7 +94,7 @@ const ToolCallCard = memo(function ToolCallCard({
     }
     if (name === 'list_directory') {
       const path = args.path as string
-      return path?.split(/[\\/]/).pop() || path || '.'
+      return path ? getFileName(path) : '.'
     }
     if (name === 'web_search') {
       const query = args.query as string

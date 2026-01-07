@@ -19,7 +19,7 @@ import { getEditorConfig } from '@renderer/config/editorConfig'
 import { toast } from '@components/common/ToastProvider'
 import { keybindingService } from '@services/keybindingService'
 import { Input, Button, Modal } from '@components/ui'
-import { getFileName } from '@utils/pathUtils'
+import { getFileName } from '@shared/utils/pathUtils'
 import { ConflictResolver } from '@components/git/ConflictResolver'
 
 // ==================== 类型定义 ====================

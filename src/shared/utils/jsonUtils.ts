@@ -124,9 +124,9 @@ function parsePath(path: string): string[] {
 }
 
 /**
- * 合并两个路径
+ * 合并 JSON 路径
  */
-export function joinPath(...paths: (string | undefined)[]): string {
+export function joinJsonPath(...paths: (string | undefined)[]): string {
   return paths.filter(p => p).join('.')
 }
 

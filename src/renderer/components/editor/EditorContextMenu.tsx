@@ -7,6 +7,7 @@ import { useStore } from '@store'
 import { api } from '@/renderer/services/electronAPI'
 import { t, TranslationKey } from '@renderer/i18n'
 import { getIncomingCalls, getOutgoingCalls, lspUriToPath } from '@renderer/services/lspService'
+import { getFileName } from '@shared/utils/pathUtils'
 import type { editor } from 'monaco-editor'
 
 // 支持 Call Hierarchy 的语言（只有支持函数/方法调用的语言才有意义）
@@ -54,19 +55,11 @@ export default function EditorContextMenu({ x, y, editor, onClose }: EditorConte
 
   // 点击外部关闭菜单
   useEffect(() => {
-    // 延迟添加事件监听，避免右键点击时立即触发关闭
-    const timeoutId = setTimeout(() => {
-      const handleClickOutside = (e: MouseEvent) => {
-        if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-          onClose()
-        }
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose()
       }
-      document.addEventListener('mousedown', handleClickOutside)
-      // 保存清理函数的引用
-      ;(window as any).__editorContextMenuCleanup = () => {
-        document.removeEventListener('mousedown', handleClickOutside)
-      }
-    }, 0)
+    }
     
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -77,11 +70,16 @@ export default function EditorContextMenu({ x, y, editor, onClose }: EditorConte
         }
       }
     }
+    
+    // 延迟添加 mousedown 监听，避免右键点击时立即触发关闭
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside)
+    }, 0)
     document.addEventListener('keydown', handleKeyDown)
     
     return () => {
       clearTimeout(timeoutId)
-      ;(window as any).__editorContextMenuCleanup?.()
+      document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [onClose, callHierarchyResult])
@@ -103,21 +101,12 @@ export default function EditorContextMenu({ x, y, editor, onClose }: EditorConte
   }, [x, y, callHierarchyResult])
 
   const runAction = (actionId: string) => {
-    // 检查编辑器是否仍然有效
-    try {
-      // 先聚焦编辑器，某些 action（如 quickOutline）需要编辑器处于焦点状态
-      editor.focus()
-      // 使用 setTimeout 确保焦点已设置
-      setTimeout(() => {
-        try {
-          editor.getAction(actionId)?.run()
-        } catch (e) {
-          // 编辑器可能已被销毁，忽略错误
-        }
-      }, 0)
-    } catch (e) {
-      // 编辑器可能已被销毁，忽略错误
-    }
+    // 先聚焦编辑器，某些 action（如 quickOutline）需要编辑器处于焦点状态
+    editor.focus()
+    // 使用 setTimeout 确保焦点已设置
+    setTimeout(() => {
+      editor.getAction(actionId)?.run()
+    }, 0)
     onClose()
   }
 
@@ -311,7 +300,7 @@ export default function EditorContextMenu({ x, y, editor, onClose }: EditorConte
               >
                 <span className="font-medium">{item.name}</span>
                 <span className="text-xs text-text-muted truncate">
-                  {lspUriToPath(item.uri).split(/[/\\]/).pop()}:{item.line + 1}
+                  {getFileName(lspUriToPath(item.uri))}:{item.line + 1}
                 </span>
               </button>
             ))}

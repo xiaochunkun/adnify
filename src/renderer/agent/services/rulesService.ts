@@ -7,7 +7,7 @@
 import { api } from '@/renderer/services/electronAPI'
 import { logger } from '@utils/Logger'
 import { useStore } from '@store'
-import { joinPath } from '@utils/pathUtils'
+import { joinPath } from '@shared/utils/pathUtils'
 
 export interface ProjectRules {
   content: string
