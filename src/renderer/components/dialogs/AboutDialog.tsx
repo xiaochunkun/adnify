@@ -145,14 +145,21 @@ export default function AboutDialog({ onClose }: AboutDialogProps) {
                                 <span className="text-sm font-bold">GitHub</span>
                             </a>
                             <a
-                                href="https://adnify.vercel.app"
+                                href="https://gitee.com/adnaan/adnify"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-accent/10 hover:bg-accent/20 border border-accent/20 text-accent transition-all duration-300 group"
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-surface/40 hover:bg-surface/60 border border-border-subtle text-text-primary transition-all duration-300 group"
                             >
                                 <ExternalLink className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                <span className="text-sm font-bold">{language === 'zh' ? '访问官网' : 'Website'}</span>
+                                <span className="text-sm font-bold">Gitee</span>
                             </a>
+                        </div>
+
+                        {/* Copyright Notice */}
+                        <div className="pt-4 border-t border-border-subtle text-center">
+                            <p className="text-[10px] text-text-muted opacity-50">
+                                Copyright © 2025-present adnaan. {language === 'zh' ? '商业使用需获得作者授权' : 'Commercial use requires author authorization'}
+                            </p>
                         </div>
                     </div>
                 </div>

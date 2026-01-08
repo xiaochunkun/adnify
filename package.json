@@ -3,7 +3,13 @@
   "version": "1.3.9",
   "description": "Adnify - A lightweight yet powerful AI-powered code editor",
   "productName": "Adnify",
-  "author": "adnaan",
+  "author": "adnaan <adnaan.worker@gmail.com>",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://github.com/adnaan-worker/adnify",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adnaan-worker/adnify.git"
+  },
   "main": "dist/main/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",

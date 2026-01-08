@@ -3,7 +3,7 @@
 > **Connect AI to Your Code.**
 > 一个拥有极致视觉体验、深度集成 AI Agent 的下一代代码编辑器。
 
-![License](https://img.shields.io/badge/license-Apache%20License%202.0-blue.svg) ![Electron](https://img.shields.io/badge/Electron-33.0-blueviolet) ![React](https://img.shields.io/badge/React-18-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
+![License](https://img.shields.io/badge/license-Custom%20License-blue.svg) ![Electron](https://img.shields.io/badge/Electron-33.0-blueviolet) ![React](https://img.shields.io/badge/React-18-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
 
 Adnify 不仅仅是一个编辑器，它是你的**智能编程伴侣**。它复刻并超越了传统 IDE 的体验，融合了 Cyberpunk 玻璃拟态设计风格，内置强大的 AI Agent，支持从代码生成到文件操作的全流程自动化。
 
@@ -555,4 +555,13 @@ adnify/
 
 ## 📄 License
 
-Apache License 2.0 License - 详见 [LICENSE](LICENSE) 文件
+本项目采用自定义许可协议，主要条款：
+
+- ✅ 允许个人学习、研究、非商业使用
+- ✅ 允许修改和分发（需保留版权信息）
+- ⚠️ **商业使用需要获得作者书面授权**
+- ❌ 禁止删除软件名称、作者版权、仓库地址等信息
+
+商业授权请联系：adnaan.worker@gmail.com
+
+详见 [LICENSE](LICENSE) 文件
