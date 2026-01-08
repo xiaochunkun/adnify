@@ -50,19 +50,21 @@ interface LoopDetectorInternalConfig {
 
 /**
  * 从 AgentConfig 获取循环检测配置
+ *
+ * @returns {LoopDetectorInternalConfig} 包含优化阈值的配置对象
  */
 function getLoopConfig(): LoopDetectorInternalConfig {
   const agentConfig = getAgentConfig()
   const loopConfig = agentConfig.loopDetection
-  
+
   return {
-    timeWindowMs: 5 * 60 * 1000,  // 5 分钟（固定值）
+    timeWindowMs: 5 * 60 * 1000,  // 5 分钟滑动窗口
     maxExactRepeats: loopConfig.maxExactRepeats,
     maxNoChangeEdits: loopConfig.maxSameTargetRepeats,
     maxHistory: loopConfig.maxHistory,
-    minPatternLength: 2,
-    maxPatternLength: 4,
-    readOpMultiplier: 3,
+    minPatternLength: 3,          // 从 2 提升到 3，减少正常探索中的误判
+    maxPatternLength: 5,          // 从 4 提升到 5，检测更长的模式
+    readOpMultiplier: 10,         // 从 3 提升到 10，允许更多读操作
   }
 }
 
@@ -253,7 +255,7 @@ export class LoopDetector {
 
   private checkPatternLoop(newRecord: ToolCallRecord): LoopCheckResult {
     const tempHistory = [...this.history, newRecord]
-    
+
     // 检测不同长度的模式
     for (let len = this.config.minPatternLength; len <= this.config.maxPatternLength; len++) {
       if (tempHistory.length < len * 2) continue
@@ -262,22 +264,70 @@ export class LoopDetector {
       const firstHalf = recent.slice(0, len)
       const secondHalf = recent.slice(len)
 
-      // 检查是否是相同的模式
-      const isPattern = firstHalf.every((r, i) =>
+      // 检查是否是精确的模式循环（工具名 + 参数都相同）
+      const isExactPattern = firstHalf.every((r, i) =>
         r.name === secondHalf[i].name && r.argsHash === secondHalf[i].argsHash
       )
 
-      if (isPattern) {
-        const pattern = firstHalf.map(r => r.name).join(' → ')
+      // 检查是否是路径探索（工具名相同但路径不同）
+      const isPathExploration = this.isPathExploration(firstHalf, secondHalf)
+
+      // 只有精确模式且不是路径探索才算循环
+      if (isExactPattern && !isPathExploration) {
+        const pattern = firstHalf.map(r => `${r.name}(${r.target || 'N/A'})`).join(' → ')
         return {
           isLoop: true,
-          reason: `Detected repeating pattern: ${pattern} (repeated ${2} times).`,
+          reason: `Detected repeating pattern: ${pattern} (repeated 2 times).`,
           suggestion: 'The agent is stuck in a loop. Consider breaking the pattern with a different approach.',
         }
       }
     }
 
     return { isLoop: false }
+  }
+
+  /**
+   * 检查是否是路径探索行为
+   * 如果工具名相同但操作的是不同路径（尤其是子路径），则不算循环
+   *
+   * @param firstHalf 第一组工具调用记录
+   * @param secondHalf 第二组工具调用记录
+   * @returns 是否为路径探索行为
+   */
+  private isPathExploration(firstHalf: ToolCallRecord[], secondHalf: ToolCallRecord[]): boolean {
+    // 检查是否所有操作都是相同工具名
+    const allSameTool = firstHalf.every((r, i) => r.name === secondHalf[i].name)
+    if (!allSameTool) return false
+
+    // 检查是否有路径目标
+    const hasTargets = firstHalf.every((r, i) => r.target && secondHalf[i].target)
+    if (!hasTargets) return false
+
+    // 检查路径是否不同（尤其是子路径关系）
+    for (let i = 0; i < firstHalf.length; i++) {
+      const path1 = firstHalf[i].target!
+      const path2 = secondHalf[i].target!
+
+      // 如果路径不同，且是子路径关系，说明是正常探索
+      if (path1 !== path2 && this.isSubPath(path1, path2)) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  /**
+   * 检查是否是子路径关系
+   *
+   * @param path1 第一个路径
+   * @param path2 第二个路径
+   * @returns 是否存在子路径关系
+   */
+  private isSubPath(path1: string, path2: string): boolean {
+    const normalized1 = path1.replace(/\\/g, '/').toLowerCase()
+    const normalized2 = path2.replace(/\\/g, '/').toLowerCase()
+    return normalized1.startsWith(normalized2) || normalized2.startsWith(normalized1)
   }
 
   private hashArgs(args: Record<string, unknown>): string {

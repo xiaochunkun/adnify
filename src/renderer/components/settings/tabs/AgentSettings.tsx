@@ -161,7 +161,7 @@ export function AgentSettings({
                                 <Input
                                     type="number"
                                     value={agentConfig.maxToolLoops}
-                                    onChange={(e) => setAgentConfig({ ...agentConfig, maxToolLoops: parseInt(e.target.value) || 30 })}
+                                    onChange={(e) => setAgentConfig({ ...agentConfig, maxToolLoops: parseInt(e.target.value) || 20 })}
                                     min={5}
                                     max={100}
                                     className="bg-black/20 border-border text-xs"
@@ -303,8 +303,8 @@ export function AgentSettings({
                                         <label className="text-xs font-medium text-text-secondary">{t('压缩阈值', 'Compress Threshold')}</label>
                                         <Input
                                             type="number"
-                                            value={agentConfig.contextCompressThreshold ?? 40000}
-                                            onChange={(e) => setAgentConfig({ ...agentConfig, contextCompressThreshold: parseInt(e.target.value) || 40000 })}
+                                            value={agentConfig.contextCompressThreshold ?? 60000}
+                                            onChange={(e) => setAgentConfig({ ...agentConfig, contextCompressThreshold: parseInt(e.target.value) || 60000 })}
                                             step={10000}
                                             className="bg-black/20 border-border text-xs"
                                         />
@@ -319,12 +319,12 @@ export function AgentSettings({
                                             <label className="text-[10px] text-text-muted">{t('历史记录', 'History')}</label>
                                             <Input
                                                 type="number"
-                                                value={agentConfig.loopDetection?.maxHistory ?? 15}
+                                                value={agentConfig.loopDetection?.maxHistory ?? 20}
                                                 onChange={(e) => setAgentConfig({
                                                     ...agentConfig,
                                                     loopDetection: {
                                                         ...agentConfig.loopDetection,
-                                                        maxHistory: parseInt(e.target.value) || 15
+                                                        maxHistory: parseInt(e.target.value) || 20
                                                     }
                                                 })}
                                                 min={5}
@@ -336,12 +336,12 @@ export function AgentSettings({
                                             <label className="text-[10px] text-text-muted">{t('精确重复', 'Exact Repeats')}</label>
                                             <Input
                                                 type="number"
-                                                value={agentConfig.loopDetection?.maxExactRepeats ?? 2}
+                                                value={agentConfig.loopDetection?.maxExactRepeats ?? 4}
                                                 onChange={(e) => setAgentConfig({
                                                     ...agentConfig,
                                                     loopDetection: {
                                                         ...agentConfig.loopDetection,
-                                                        maxExactRepeats: parseInt(e.target.value) || 2
+                                                        maxExactRepeats: parseInt(e.target.value) || 4
                                                     }
                                                 })}
                                                 min={1}
@@ -353,12 +353,12 @@ export function AgentSettings({
                                             <label className="text-[10px] text-text-muted">{t('同目标重复', 'Same Target')}</label>
                                             <Input
                                                 type="number"
-                                                value={agentConfig.loopDetection?.maxSameTargetRepeats ?? 3}
+                                                value={agentConfig.loopDetection?.maxSameTargetRepeats ?? 5}
                                                 onChange={(e) => setAgentConfig({
                                                     ...agentConfig,
                                                     loopDetection: {
                                                         ...agentConfig.loopDetection,
-                                                        maxSameTargetRepeats: parseInt(e.target.value) || 3
+                                                        maxSameTargetRepeats: parseInt(e.target.value) || 5
                                                     }
                                                 })}
                                                 min={1}

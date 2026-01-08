@@ -282,6 +282,14 @@ class AgentServiceClass {
 
       logger.agent.info(`[Agent] Loop iteration ${loopCount}`)
 
+      // 智能任务分解建议
+      if (this.shouldSuggestBreakdown(loopCount, llmMessages)) {
+        store.appendToAssistant(
+          this.currentAssistantId!,
+          '\n\n💡 **Tip**: This task seems complex and requires many steps. Consider breaking it into smaller, focused subtasks for better results.'
+        )
+      }
+
       // 使用 MessageBuilder 的 compressContext
       await compressContext(llmMessages, agentLoopConfig.contextCompressThreshold)
 
@@ -429,6 +437,38 @@ class AgentServiceClass {
     if (loopCount >= agentLoopConfig.maxToolLoops) {
       store.appendToAssistant(this.currentAssistantId!, '\n\n⚠️ Reached maximum tool call limit.')
     }
+  }
+
+  /**
+   * 判断是否应该建议任务分解
+   * 如果循环次数过多且大部分是读操作，说明任务可能过于复杂
+   *
+   * @param loopCount 当前循环次数
+   * @param messages 消息历史
+   * @returns 是否应该建议分解
+   */
+  private shouldSuggestBreakdown(loopCount: number, messages: OpenAIMessage[]): boolean {
+    // 只在第 10 次循环时提示一次
+    if (loopCount !== 10) return false
+
+    // 统计最近的工具调用
+    let readCount = 0
+    let totalToolCalls = 0
+
+    for (let i = messages.length - 1; i >= 0 && i >= messages.length - 20; i--) {
+      const msg = messages[i]
+      if (msg.role === 'assistant' && msg.tool_calls) {
+        for (const tc of msg.tool_calls) {
+          totalToolCalls++
+          if (READ_TOOLS.includes(tc.function.name)) {
+            readCount++
+          }
+        }
+      }
+    }
+
+    // 如果 80% 以上是读操作，说明在探索，建议分解
+    return totalToolCalls > 0 && readCount / totalToolCalls > 0.8
   }
 
   private async callLLMWithRetry(

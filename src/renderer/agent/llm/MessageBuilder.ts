@@ -286,6 +286,10 @@ export async function buildLLMMessages(
 
 /**
  * 压缩上下文（移除旧的工具结果和截断大内容）
+ * 优化：只在超过阈值时才压缩，保留更多最近的工具结果
+ *
+ * @param messages OpenAI 格式的消息列表
+ * @param maxChars 最大字符数阈值
  */
 export async function compressContext(
   messages: OpenAIMessage[],
@@ -309,18 +313,25 @@ export async function compressContext(
 
   logger.agent.info(`[MessageBuilder] Context check: ${totalChars} chars, limit ${maxChars}`)
 
-  if (totalChars <= maxChars) return
+  // 只有超过阈值才压缩
+  if (totalChars <= maxChars) {
+    logger.agent.debug('[MessageBuilder] Context within limit, no compression needed')
+    return
+  }
 
   logger.agent.info(`[MessageBuilder] Context size ${totalChars} exceeds limit ${maxChars}, compressing...`)
 
-  // 找到最近 3 轮用户消息的位置
+  const config = getAgentConfig()
+  const keepRecentTurns = config.keepRecentTurns || 4  // 使用配置的值
+
+  // 找到最近 N 轮用户消息的位置
   let userCount = 0
   let cutOffIndex = messages.length
 
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') {
       userCount++
-      if (userCount === 3) {
+      if (userCount === keepRecentTurns) {
         cutOffIndex = i
         break
       }
@@ -331,9 +342,17 @@ export async function compressContext(
   for (let i = 0; i < cutOffIndex; i++) {
     const msg = messages[i]
 
-    // 移除旧的工具输出
-    if (msg.role === 'tool' && typeof msg.content === 'string' && msg.content.length > 100) {
-      msg.content = '[Tool output removed to save context]'
+    // 移除旧的工具输出，但保留错误信息
+    if (msg.role === 'tool' && typeof msg.content === 'string') {
+      if (msg.content.length > 200) {
+        // 如果是错误信息，保留完整
+        if (msg.content.toLowerCase().includes('error') || msg.content.toLowerCase().includes('failed')) {
+          msg.content = msg.content.slice(0, 500) + (msg.content.length > 500 ? '\n...[truncated]' : '')
+        } else {
+          // 普通工具输出，只保留摘要
+          msg.content = msg.content.slice(0, 100) + '\n...[Tool output compacted to save context]'
+        }
+      }
     }
 
     // 截断旧的助手消息
@@ -342,7 +361,7 @@ export async function compressContext(
         msg.content = msg.content.slice(0, 200) + '\n...[Content truncated]...\n' + msg.content.slice(-200)
       }
     }
-    
+
     // 截断旧的用户消息中的大内容（保留最近的完整）
     if (msg.role === 'user') {
       if (typeof msg.content === 'string' && msg.content.length > 2000) {
@@ -356,7 +375,7 @@ export async function compressContext(
       }
     }
   }
-  
+
   // 重新计算压缩后的大小
   let newTotalChars = 0
   for (const msg of messages) {
@@ -370,6 +389,7 @@ export async function compressContext(
       }
     }
   }
-  
-  logger.agent.info(`[MessageBuilder] Compressed: ${totalChars} -> ${newTotalChars} chars (saved ${Math.round((1 - newTotalChars/totalChars) * 100)}%)`)
+
+  const savedPercent = Math.round((1 - newTotalChars / totalChars) * 100)
+  logger.agent.info(`[MessageBuilder] Compressed: ${totalChars} -> ${newTotalChars} chars (saved ${savedPercent}%)`)
 }
