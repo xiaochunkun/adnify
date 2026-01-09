@@ -16,6 +16,8 @@ export interface LargeFileInfo {
   isVeryLarge: boolean
   size: number
   lineCount: number
+  path?: string
+  reason?: 'size' | 'lines' | 'both'
   warning?: string
 }
 

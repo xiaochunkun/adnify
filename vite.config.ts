@@ -3,142 +3,138 @@ import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron'
 import path from 'path'
 
+// 外部依赖（不打包到 bundle）
+const EXTERNAL_DEPS = [
+  'electron',
+  'electron-store',
+  '@anthropic-ai/sdk',
+  'openai',
+  '@google/generative-ai',
+  'node-pty',
+  '@parcel/watcher',
+  '@parcel/watcher-win32-x64',
+  '@parcel/watcher-win32-arm64',
+  '@parcel/watcher-darwin-x64',
+  '@parcel/watcher-darwin-arm64',
+  '@parcel/watcher-linux-x64-glibc',
+  '@parcel/watcher-linux-x64-musl',
+  '@parcel/watcher-linux-arm64-glibc',
+  '@parcel/watcher-linux-arm64-musl',
+  'dugite',
+  '@vscode/ripgrep',
+  '@lancedb/lancedb',
+  'apache-arrow'
+]
+
+// 路径别名配置
+const aliases = {
+  '@': path.resolve(__dirname, './src'),
+  '@main': path.resolve(__dirname, './src/main'),
+  '@renderer': path.resolve(__dirname, './src/renderer'),
+  '@shared': path.resolve(__dirname, './src/shared'),
+  '@components': path.resolve(__dirname, './src/renderer/components'),
+  '@features': path.resolve(__dirname, './src/renderer/features'),
+  '@services': path.resolve(__dirname, './src/renderer/services'),
+  '@store': path.resolve(__dirname, './src/renderer/store'),
+  '@hooks': path.resolve(__dirname, './src/renderer/hooks'),
+  '@utils': path.resolve(__dirname, './src/renderer/utils'),
+  '@app-types': path.resolve(__dirname, './src/renderer/types'),
+  'vscode-nls': path.resolve(__dirname, './node_modules/monaco-editor-nls')
+}
+
 export default defineConfig({
-	plugins: [
-		react(),
-		electron([
-			{
-				entry: 'src/main/main.ts',
-				vite: {
-					resolve: {
-						alias: {
-							'@': path.resolve(__dirname, './src'),
-							'@shared': path.resolve(__dirname, './src/shared'),
-							'@main': path.resolve(__dirname, './src/main'),
-						}
-					},
-					build: {
-						outDir: 'dist/main',
-						rollupOptions: {
-							external: [
-								'electron',
-								'electron-store',
-								'@anthropic-ai/sdk',
-								'openai',
-								'@google/generative-ai',
-								'node-pty',
-								'@parcel/watcher',
-								'@parcel/watcher-win32-x64',
-								'@parcel/watcher-win32-arm64',
-								'@parcel/watcher-darwin-x64',
-								'@parcel/watcher-darwin-arm64',
-								'@parcel/watcher-linux-x64-glibc',
-								'@parcel/watcher-linux-x64-musl',
-								'@parcel/watcher-linux-arm64-glibc',
-								'@parcel/watcher-linux-arm64-musl',
-								'dugite',
-								'@vscode/ripgrep',
-								'@lancedb/lancedb',
-								'apache-arrow'
-							]
-						}
-					}
-				}
-			},
-			{
-				// Worker 文件需要单独编译到与 main.js 相同的目录
-				entry: 'src/main/indexing/indexer.worker.ts',
-				vite: {
-					resolve: {
-						alias: {
-							'@': path.resolve(__dirname, './src'),
-							'@shared': path.resolve(__dirname, './src/shared'),
-							'@main': path.resolve(__dirname, './src/main'),
-						}
-					},
-					build: {
-						outDir: 'dist/main',
-						lib: {
-							entry: 'src/main/indexing/indexer.worker.ts',
-							formats: ['cjs'],
-							fileName: () => 'indexer.worker.js'
-						},
-						rollupOptions: {
-							external: [
-								'electron',
-								'@lancedb/lancedb',
-								'apache-arrow',
-								'web-tree-sitter'
-							]
-						}
-					}
-				}
-			},
-			{
-				entry: 'src/main/preload.ts',
-				onstart(options) {
-					options.reload()
-				},
-				vite: {
-					build: {
-						outDir: 'dist/preload'
-					}
-				}
-			}
-		])
-	],
-	resolve: {
-		alias: {
-			'@': path.resolve(__dirname, './src'),
-			'@main': path.resolve(__dirname, './src/main'),
-			'@renderer': path.resolve(__dirname, './src/renderer'),
-			'@shared': path.resolve(__dirname, './src/shared'),
-			'@components': path.resolve(__dirname, './src/renderer/components'),
-			'@features': path.resolve(__dirname, './src/renderer/features'),
-			'@services': path.resolve(__dirname, './src/renderer/services'),
-			'@store': path.resolve(__dirname, './src/renderer/store'),
-			'@hooks': path.resolve(__dirname, './src/renderer/hooks'),
-			'@utils': path.resolve(__dirname, './src/renderer/utils'),
-			'@app-types': path.resolve(__dirname, './src/renderer/types'),
-			// Monaco 编辑器国际化：将 vscode-nls 指向 monaco-editor-nls
-			'vscode-nls': path.resolve(__dirname, './node_modules/monaco-editor-nls')
-		}
-	},
-	base: './',
-	build: {
-		outDir: 'dist/renderer',
-		rollupOptions: {
-			output: {
-				// 代码分割配置 - 优化首屏加载
-				manualChunks: {
-					// Monaco Editor 单独打包（最大的依赖）- 延迟加载
-					'monaco-editor': ['monaco-editor', '@monaco-editor/react'],
-					// React 相关 - 核心依赖，优先加载
-					'react-vendor': ['react', 'react-dom'],
-					// 状态管理 - 核心依赖
-					'state': ['zustand'],
-					// UI 图标 - 可延迟
-					'icons': ['lucide-react'],
-					// 终端相关 - 懒加载优化
-					'terminal': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-webgl', '@xterm/addon-web-links'],
-					// Markdown 渲染 - 懒加载优化
-					'markdown': ['react-markdown', 'react-syntax-highlighter'],
-					// 动画库 - 可延迟
-					'animation': ['framer-motion'],
-				},
-			},
-		},
-		// 增加 chunk 大小警告阈值
-		chunkSizeWarningLimit: 1500,
-		// 生产环境优化
-		minify: 'esbuild',
-		target: 'esnext',
-		// 启用 CSS 代码分割
-		cssCodeSplit: true,
-		// 启用源码映射（生产环境可关闭）
-		sourcemap: false,
-	},
-	optimizeDeps: {
-		include: ['monaco-editor']
-	}
+  plugins: [
+    react(),
+    electron([
+      {
+        entry: 'src/main/main.ts',
+        vite: {
+          resolve: { alias: aliases },
+          build: {
+            outDir: 'dist/main',
+            rollupOptions: { external: EXTERNAL_DEPS }
+          }
+        }
+      },
+      {
+        entry: 'src/main/indexing/indexer.worker.ts',
+        vite: {
+          resolve: { alias: aliases },
+          build: {
+            outDir: 'dist/main',
+            lib: {
+              entry: 'src/main/indexing/indexer.worker.ts',
+              formats: ['cjs'],
+              fileName: () => 'indexer.worker.js'
+            },
+            rollupOptions: {
+              external: ['electron', '@lancedb/lancedb', 'apache-arrow', 'web-tree-sitter']
+            }
+          }
+        }
+      },
+      {
+        entry: 'src/main/preload.ts',
+        onstart(options) { options.reload() },
+        vite: {
+          build: { outDir: 'dist/preload' }
+        }
+      }
+    ])
+  ],
+  resolve: { alias: aliases },
+  base: './',
+  build: {
+    outDir: 'dist/renderer',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Monaco Editor
+          if (id.includes('monaco-editor') || id.includes('@monaco-editor/react')) {
+            return 'monaco-editor'
+          }
+          // React 核心
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'react-vendor'
+          }
+          // 状态管理 + 图标
+          if (id.includes('node_modules/zustand') || id.includes('node_modules/lucide-react')) {
+            return 'ui-core'
+          }
+          // 终端
+          if (id.includes('@xterm/')) {
+            return 'terminal'
+          }
+          // Markdown
+          if (id.includes('react-markdown')) {
+            return 'markdown-core'
+          }
+          // Syntax Highlighter（单独分包，按需加载）
+          if (id.includes('react-syntax-highlighter')) {
+            return 'syntax-highlighter'
+          }
+          // 动画
+          if (id.includes('framer-motion')) {
+            return 'animation'
+          }
+          // Agent 模块
+          if (id.includes('/renderer/agent/')) {
+            return 'agent'
+          }
+          // Sidebar 模块
+          if (id.includes('/renderer/components/sidebar/')) {
+            return 'sidebar'
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1500,
+    minify: 'esbuild',
+    target: 'esnext',
+    cssCodeSplit: true,
+    sourcemap: false,
+  },
+  optimizeDeps: {
+    include: ['monaco-editor']
+  }
 })

@@ -1,0 +1,106 @@
+/**
+ * 编辑器标签栏组件
+ */
+import { memo } from 'react'
+import { X, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react'
+import { getFileName } from '@shared/utils/pathUtils'
+import type { OpenFile } from '@store'
+
+interface EditorTabsProps {
+  openFiles: OpenFile[]
+  activeFilePath: string | null
+  onSelectFile: (path: string) => void
+  onCloseFile: (path: string) => void
+  onContextMenu: (e: React.MouseEvent, filePath: string) => void
+  lintErrorCount: number
+  lintWarningCount: number
+  isLinting: boolean
+  onRunLint: () => void
+}
+
+export const EditorTabs = memo(function EditorTabs({
+  openFiles,
+  activeFilePath,
+  onSelectFile,
+  onCloseFile,
+  onContextMenu,
+  lintErrorCount,
+  lintWarningCount,
+  isLinting,
+  onRunLint,
+}: EditorTabsProps) {
+  return (
+    <div className="h-9 flex items-center bg-background border-b border-border overflow-x-auto custom-scrollbar select-none">
+      {openFiles.map((file) => {
+        const isActive = file.path === activeFilePath
+        const fileName = getFileName(file.path)
+
+        return (
+          <div
+            key={file.path}
+            className={`
+              group relative flex items-center gap-2 px-4 h-full min-w-[120px] max-w-[200px] cursor-pointer transition-all duration-200 border-r border-border
+              ${isActive
+                ? 'bg-transparent text-text-primary font-medium'
+                : 'bg-transparent text-text-muted hover:bg-white/5 hover:text-text-primary'}
+            `}
+            onClick={() => onSelectFile(file.path)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              onContextMenu(e, file.path)
+            }}
+          >
+            {isActive && (
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-accent shadow-[0_0_10px_rgba(var(--accent)/0.8)] z-10" />
+            )}
+
+            <span className="text-[13px] truncate flex-1">{fileName}</span>
+
+            <div
+              className="flex items-center justify-center w-5 h-5 rounded-lg hover:bg-white/10 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                onCloseFile(file.path)
+              }}
+            >
+              {file.isDirty ? (
+                <div className="w-2 h-2 rounded-full bg-accent group-hover:hidden" />
+              ) : null}
+              <X className={`w-3.5 h-3.5 ${file.isDirty ? 'hidden group-hover:block' : 'opacity-0 group-hover:opacity-100'} transition-opacity`} />
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Lint 状态 */}
+      {activeFilePath && (
+        <div className="ml-auto flex items-center gap-2 px-3 flex-shrink-0 h-full border-l border-border bg-transparent">
+          {(lintErrorCount > 0 || lintWarningCount > 0) && (
+            <div className="flex items-center gap-2 text-xs mr-2">
+              {lintErrorCount > 0 && (
+                <span className="flex items-center gap-1 text-status-error" title="Errors">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {lintErrorCount}
+                </span>
+              )}
+              {lintWarningCount > 0 && (
+                <span className="flex items-center gap-1 text-status-warning" title="Warnings">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {lintWarningCount}
+                </span>
+              )}
+            </div>
+          )}
+          <button
+            onClick={onRunLint}
+            disabled={isLinting}
+            className="p-1.5 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50 group"
+            title="Run lint check"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-text-muted group-hover:text-text-primary ${isLinting ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+})

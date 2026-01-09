@@ -1,14 +1,15 @@
 /**
- * Store slices 导出
- * 
- * 注意：chatSlice 已迁移到 AgentStore
+ * Store Slices 导出
  */
+export { createFileSlice, type FileSlice, type OpenFile, type WorkspaceConfig, type LargeFileInfo } from './fileSlice'
+export { createSettingsSlice, type SettingsSlice, type ProviderType, type LLMConfig, type LLMParameters, type AutoApproveSettings, type SecuritySettings, type AgentConfig } from './settingsSlice'
+export { createThemeSlice, type ThemeSlice, type ThemeName } from './themeSlice'
+export { createLogSlice, type LogSlice, type ToolCallLogEntry } from './logSlice'
+export { createMcpSlice, type McpSlice } from './mcpSlice'
+export { createDebugSlice, type DebugSlice, type Breakpoint } from './debugSlice'
 
-export { createFileSlice } from './fileSlice'
-export type { FileSlice, OpenFile } from './fileSlice'
-
-export { createSettingsSlice } from './settingsSlice'
-export type { SettingsSlice, ProviderType, LLMConfig, AutoApproveSettings } from './settingsSlice'
-
-export { createUISlice } from './uiSlice'
-export type { UISlice, SidePanel, DiffView } from './uiSlice'
+// 新拆分的 slices
+export { createDialogSlice, type DialogSlice } from './dialogSlice'
+export { createLayoutSlice, type LayoutSlice, type SidePanel } from './layoutSlice'
+export { createGitSlice, type GitSlice } from './gitSlice'
+export { createEditorStateSlice, type EditorStateSlice, type DiffView } from './editorStateSlice'
