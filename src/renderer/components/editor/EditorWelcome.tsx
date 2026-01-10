@@ -53,7 +53,7 @@ export function EditorWelcome() {
             iconBg="bg-purple-500/10 group-hover:bg-purple-500/20"
             title={t('commandPalette', language)}
             subtitle="Run commands"
-            shortcut={['Ctrl', 'Shift', 'P']}
+            shortcut={['Ctrl', 'Shift', 'O']}
             onClick={() => useStore.getState().setShowCommandPalette(true)}
           />
         </div>

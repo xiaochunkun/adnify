@@ -341,7 +341,7 @@ registerTemplateTools('uiux-designer', { toolGroups: ['uiux'] })
 
 ### 🎯 其他特性
 
-- **命令面板 (Ctrl+Shift+P)**: 快速执行各种命令
+- **命令面板 (Ctrl+Shift+O)**: 快速执行各种命令
 - **多窗口支持**: 同时打开多个项目
 - **多工作区支持**: 单窗口打开多个项目根目录
 - **工作区恢复**: 自动记住上次的工作状态

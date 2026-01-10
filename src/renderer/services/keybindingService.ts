@@ -33,7 +33,12 @@ class KeybindingService {
     }
 
     getBinding(commandId: string): string | undefined {
-        return this.overrides.get(commandId) || this.commands.get(commandId)?.defaultKey
+        const override = this.overrides.get(commandId)
+        // 如果 override 存在且非空，使用 override；否则使用默认值
+        if (override && override.trim()) {
+            return override
+        }
+        return this.commands.get(commandId)?.defaultKey
     }
 
     getAllCommands(): Command[] {
@@ -67,31 +72,42 @@ class KeybindingService {
 
         const parts = binding.toLowerCase().split('+')
         const key = parts.pop()
+        if (!key) return false
 
         const meta = parts.includes('meta') || parts.includes('cmd') || parts.includes('command')
         const ctrl = parts.includes('ctrl') || parts.includes('control')
         const shift = parts.includes('shift')
         const alt = parts.includes('alt') || parts.includes('option')
 
+        // 修饰键匹配
         const modifiersMatch =
             (e.metaKey === meta) &&
             (e.ctrlKey === ctrl) &&
-            (e.shiftKey === shift) &&
             (e.altKey === alt)
+        // Shift 单独检查：如果绑定不需要 Shift，但用户按了 Shift，也不匹配
+        const shiftMatch = shift || !e.shiftKey
 
-        // Handle special keys
+        // 按键匹配（忽略大小写）
         let keyMatch = false
         if (key === 'space') {
             keyMatch = e.code === 'Space' || e.key === ' '
+        } else if (key === 'escape') {
+            keyMatch = e.key === 'Escape' || e.code === 'Escape'
+        } else if (key === 'enter') {
+            keyMatch = e.key === 'Enter' || e.code === 'Enter'
+        } else if (key.startsWith('arrow')) {
+            keyMatch = e.key.toLowerCase() === key || e.code.toLowerCase() === key
+        } else if (key.startsWith('f') && /^f\d+$/.test(key)) {
+            keyMatch = e.key.toLowerCase() === key || e.code.toLowerCase() === key
+        } else if (key === '`') {
+            keyMatch = e.key === '`' || e.code === 'Backquote'
+        } else if (key === ',') {
+            keyMatch = e.key === ',' || e.code === 'Comma'
         } else {
-            keyMatch = e.key.toLowerCase() === key
+            keyMatch = e.key.toLowerCase() === key.toLowerCase()
         }
 
-        if (modifiersMatch && keyMatch) {
-            logger.system.info(`[KeybindingService] Match found for ${commandId} (${binding})`)
-        }
-
-        return modifiersMatch && keyMatch
+        return modifiersMatch && shiftMatch && keyMatch
     }
 
     async updateBinding(commandId: string, newKey: string | null) {

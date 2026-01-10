@@ -38,7 +38,7 @@ export const registerCoreCommands = () => {
         { id: 'editor.cancel', title: 'Cancel Operation', category: 'Editor', defaultKey: 'Escape' },
 
         // Workbench
-        { id: 'workbench.action.showCommands', title: 'Show Command Palette', category: 'View', defaultKey: 'Ctrl+Shift+P' },
+        { id: 'workbench.action.showCommands', title: 'Show Command Palette', category: 'View', defaultKey: 'Ctrl+Shift+O' },
         { id: 'workbench.action.quickOpen', title: 'Go to File', category: 'File', defaultKey: 'Ctrl+P' },
         { id: 'workbench.action.openSettings', title: 'Open Settings', category: 'File', defaultKey: 'Ctrl+,' },
         { id: 'workbench.action.showShortcuts', title: 'Keyboard Shortcuts', category: 'Help', defaultKey: '?' },

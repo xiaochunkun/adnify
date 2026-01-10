@@ -294,7 +294,7 @@ async function initializeModules(firstWin: BrowserWindow) {
         { role: 'togglefullscreen' },
         {
           label: 'Command Palette',
-          accelerator: 'CmdOrCtrl+Shift+P',
+          accelerator: 'CmdOrCtrl+Shift+O',
           click: () => {
             const win = getMainWindow()
             win?.webContents.send('workbench:execute-command', 'workbench.action.showCommands')

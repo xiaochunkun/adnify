@@ -162,7 +162,7 @@ export default function WelcomePage() {
         {/* Footer Hint */}
         <div className="mt-16 text-center flex-shrink-0">
           <p className="text-[11px] text-text-muted font-bold uppercase tracking-widest opacity-40">
-            Press <kbd className="mx-1.5 px-2 py-1 bg-white/5 border border-border rounded-md text-text-primary font-mono text-[10px] shadow-sm">Ctrl+Shift+P</kbd> for commands
+            Press <kbd className="mx-1.5 px-2 py-1 bg-white/5 border border-border rounded-md text-text-primary font-mono text-[10px] shadow-sm">Ctrl+Shift+O</kbd> for commands
           </p>
         </div>
       </div>

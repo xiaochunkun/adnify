@@ -11,6 +11,8 @@ import { Button, Switch } from '@components/ui'
 import { Language } from '@renderer/i18n'
 import { useStore } from '@store'
 import { downloadSettings, importSettingsFromJSON, settingsService } from '@renderer/settings'
+import { AgentService } from '@/renderer/agent/services/AgentService'
+import { memoryService } from '@/renderer/agent/services/memoryService'
 import type { RuntimeSettings } from '@shared/config/types'
 import type { ProviderModelConfig } from '@renderer/store/slices/settingsSlice'
 
@@ -104,13 +106,25 @@ export function SystemSettings({ language }: SystemSettingsProps) {
     const handleClearCache = async () => {
         setIsClearing(true)
         try {
+            // 1. 清除 localStorage 缓存
             const keysToRemove = ['adnify-editor-config', 'adnify-workspace', 'adnify-sessions', 'adnify-threads']
             keysToRemove.forEach(key => localStorage.removeItem(key))
+            
+            // 2. 清除代码库索引
             try {
                 // @ts-ignore
                 await (window.electronAPI as any).clearIndex?.()
             } catch { }
+            
+            // 3. 清除持久化编辑器配置
             await api.settings.set('editorConfig', undefined)
+            
+            // 4. 清除 Agent 文件读取缓存
+            AgentService.clearSession()
+            
+            // 5. 清除 Memory 服务缓存
+            memoryService.clearCache()
+            
             toast.success(language === 'zh' ? '缓存已清除' : 'Cache cleared')
         } catch (error) {
             logger.settings.error('Failed to clear cache:', error)

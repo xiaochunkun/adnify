@@ -28,14 +28,17 @@ export function useGlobalShortcuts(handlers: ShortcutHandlers = {}) {
   } = useStore()
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Command Palette: Ctrl+Shift+P or F1
-    if (
-      keybindingService.matches(e, 'workbench.action.showCommands') ||
-      (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'p') ||
-      e.key === 'F1'
-    ) {
+    // Command Palette: Ctrl+Shift+O or F1
+    if (e.key === 'F1' || (e.ctrlKey && e.key === 'O')) {
       e.preventDefault()
       setShowCommandPalette(true)
+      return
+    }
+
+    // Quick Open: Ctrl+P
+    if (e.ctrlKey && e.key.toLowerCase() === 'p' && !e.altKey) {
+      e.preventDefault()
+      setShowQuickOpen(true)
       return
     }
 
@@ -45,67 +48,50 @@ export function useGlobalShortcuts(handlers: ShortcutHandlers = {}) {
       return
     }
 
-    // Quick Open: Ctrl+P
-    if (keybindingService.matches(e, 'workbench.action.quickOpen')) {
-      e.preventDefault()
-      setShowQuickOpen(true)
-      return
-    }
-
     // Settings: Ctrl+,
-    if (keybindingService.matches(e, 'workbench.action.openSettings')) {
+    if (e.ctrlKey && e.key === ',') {
       e.preventDefault()
       setShowSettings(true)
       return
     }
 
     // Terminal: Ctrl+`
-    if (keybindingService.matches(e, 'view.toggleTerminal')) {
+    if (e.ctrlKey && (e.key === '`' || e.code === 'Backquote')) {
       e.preventDefault()
       setTerminalVisible(!terminalVisible)
       return
     }
 
     // Debug: Ctrl+Shift+D
-    if (keybindingService.matches(e, 'view.toggleDebug')) {
+    if (e.ctrlKey && (e.key === 'D' || (e.shiftKey && e.key.toLowerCase() === 'd'))) {
       e.preventDefault()
       setDebugVisible(!debugVisible)
       return
     }
 
     // Debug shortcuts
-    if (keybindingService.matches(e, 'debug.start') || e.key === 'F5') {
+    if (e.key === 'F5') {
       e.preventDefault()
       if (!debugVisible) setDebugVisible(true)
       window.dispatchEvent(new CustomEvent('debug:start'))
       return
     }
 
-    if (keybindingService.matches(e, 'debug.toggleBreakpoint') || e.key === 'F9') {
+    if (e.key === 'F9') {
       e.preventDefault()
       window.dispatchEvent(new CustomEvent('debug:toggleBreakpoint'))
       return
     }
 
-    // Keyboard shortcuts: Ctrl+K Ctrl+S
-    if (keybindingService.matches(e, 'workbench.action.showShortcuts')) {
-      const target = e.target as HTMLElement
-      if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
-        e.preventDefault()
-        handlers.onShowKeyboardShortcuts?.()
-      }
-      return
-    }
-
-    // Composer: Ctrl+I
-    if (keybindingService.matches(e, 'workbench.action.toggleComposer')) {
+    // Composer: Ctrl+Shift+I
+    if (e.ctrlKey && (e.key === 'I' || (e.shiftKey && e.key.toLowerCase() === 'i'))) {
       e.preventDefault()
       setShowComposer(true)
       return
     }
 
     // Close panel: Escape
-    if (keybindingService.matches(e, 'workbench.action.closePanel')) {
+    if (e.key === 'Escape') {
       if (showCommandPalette) setShowCommandPalette(false)
       if (showComposer) setShowComposer(false)
       if (showQuickOpen) setShowQuickOpen(false)
@@ -113,15 +99,8 @@ export function useGlobalShortcuts(handlers: ShortcutHandlers = {}) {
       return
     }
 
-    // About: Ctrl+Shift+A
-    if (keybindingService.matches(e, 'help.about')) {
-      e.preventDefault()
-      setShowAbout(true)
-      return
-    }
-
-    // Reveal active file in explorer
-    if (keybindingService.matches(e, 'explorer.revealActiveFile')) {
+    // Reveal active file in explorer: Ctrl+Shift+E
+    if (e.ctrlKey && (e.key === 'E' || (e.shiftKey && e.key.toLowerCase() === 'e'))) {
       e.preventDefault()
       window.dispatchEvent(new CustomEvent('explorer:reveal-active-file'))
       return
@@ -129,7 +108,7 @@ export function useGlobalShortcuts(handlers: ShortcutHandlers = {}) {
   }, [
     setShowSettings, setShowCommandPalette, setShowComposer, setShowQuickOpen, setShowAbout,
     terminalVisible, setTerminalVisible, debugVisible, setDebugVisible,
-    showCommandPalette, showComposer, showQuickOpen, showAbout, handlers
+    showCommandPalette, showComposer, showQuickOpen, showAbout
   ])
 
   useEffect(() => {

@@ -118,25 +118,25 @@ export default function KeybindingPanel() {
                 title="Press desired key combination"
                 size="sm"
             >
-                <div className="flex flex-col items-center gap-6 py-4">
+                <div 
+                    className="flex flex-col items-center gap-6 py-4 outline-none"
+                    tabIndex={0}
+                    ref={el => el?.focus()}
+                    onKeyDown={e => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        if (e.key === 'Escape') {
+                            setRecordingId(null)
+                            return
+                        }
+                        handleKeyDown(e)
+                    }}
+                >
                     <p className="text-text-muted text-sm">Press Esc to cancel</p>
 
                     <div className="px-6 py-3 bg-surface-active rounded-lg border border-accent/30 text-2xl font-mono text-accent shadow-lg shadow-accent/10 animate-pulse">
                         Recording...
                     </div>
-
-                    <input
-                        autoFocus
-                        readOnly
-                        className="w-0 h-0 opacity-0"
-                        onKeyDown={e => {
-                            if (e.key === 'Escape') {
-                                setRecordingId(null)
-                                return
-                            }
-                            handleKeyDown(e)
-                        }}
-                    />
                 </div>
             </Modal>
         </div>
