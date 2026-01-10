@@ -1,4 +1,4 @@
-import { lazy, Suspense, memo, useState, useCallback } from 'react'
+import { lazy, Suspense, useState, useCallback } from 'react'
 import { useStore } from './store'
 import { useWindowTitle, useAppInit, useGlobalShortcuts, useFileWatcher, useSidebarResize, useChatResize } from './hooks'
 import TitleBar from './components/layout/TitleBar'
@@ -9,6 +9,8 @@ import { GlobalConfirmDialog } from './components/common/ConfirmDialog'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { GlobalErrorHandler } from './components/common/GlobalErrorHandler'
 import { ThemeManager } from './components/editor/ThemeManager'
+import { EditorSkeleton, PanelSkeleton, ChatSkeleton, FullScreenLoading, SettingsSkeleton } from './components/ui/Loading'
+import { Modal } from './components/ui'
 import { startupMetrics } from '@shared/utils/startupMetrics'
 import { useEffect } from 'react'
 
@@ -36,22 +38,6 @@ const WelcomePage = lazy(() => import('./components/welcome/WelcomePage'))
 
 // 暴露 store 给插件系统
 window.__ADNIFY_STORE__ = { getState: () => useStore.getState() }
-
-// 编辑器骨架屏
-const EditorSkeleton = memo(() => (
-  <div className="h-full flex flex-col bg-background">
-    <div className="h-9 border-b border-border flex items-center px-2 gap-1">
-      <div className="h-6 w-24 bg-surface rounded animate-pulse" />
-      <div className="h-6 w-20 bg-surface/50 rounded animate-pulse" />
-    </div>
-    <div className="flex-1 p-4 space-y-2">
-      <div className="h-4 w-3/4 bg-surface/30 rounded animate-pulse" />
-      <div className="h-4 w-1/2 bg-surface/30 rounded animate-pulse" />
-      <div className="h-4 w-2/3 bg-surface/30 rounded animate-pulse" />
-    </div>
-  </div>
-))
-EditorSkeleton.displayName = 'EditorSkeleton'
 
 // Toast 初始化
 function ToastInitializer() {
@@ -119,7 +105,7 @@ function AppContent() {
 
               {activeSidePanel && (
                 <div style={{ width: sidebarWidth }} className="flex-shrink-0 relative">
-                  <Suspense fallback={<div className="h-full bg-background" />}>
+                  <Suspense fallback={<PanelSkeleton />}>
                     <Sidebar />
                   </Suspense>
                   <div
@@ -156,7 +142,7 @@ function AppContent() {
                     onMouseDown={startChatResize}
                   />
                   <ErrorBoundary>
-                    <Suspense fallback={<div className="h-full bg-background" />}>
+                    <Suspense fallback={<ChatSkeleton />}>
                       <ChatPanel />
                     </Suspense>
                   </ErrorBoundary>
@@ -168,7 +154,7 @@ function AppContent() {
           </>
         ) : (
           <div className="flex-1 overflow-hidden">
-            <Suspense fallback={null}>
+            <Suspense fallback={<FullScreenLoading />}>
               <WelcomePage />
             </Suspense>
           </div>
@@ -177,7 +163,7 @@ function AppContent() {
 
       {/* 模态框 */}
       {showSettings && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<Modal isOpen onClose={() => {}} title="" size="5xl" noPadding><SettingsSkeleton /></Modal>}>
           <SettingsModal />
         </Suspense>
       )}

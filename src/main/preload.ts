@@ -638,4 +638,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('updater:status', handler)
     return () => ipcRenderer.removeListener('updater:status', handler)
   },
+
+  // App Error (from main process)
+  onAppError: (callback: (error: { title: string; message: string; variant?: string }) => void) => {
+    const handler = (_: IpcRendererEvent, error: { title: string; message: string; variant?: string }) => callback(error)
+    ipcRenderer.on('app:error', handler)
+    return () => ipcRenderer.removeListener('app:error', handler)
+  },
 })

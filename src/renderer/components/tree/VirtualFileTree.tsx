@@ -342,7 +342,13 @@ export function VirtualFileTree({
 
   // 菜单操作
   const handleDelete = useCallback(async (node: FlattenedNode) => {
-    if (confirm(t('confirmDelete', language, { name: node.item.name }))) {
+    const { globalConfirm } = await import('@components/common/ConfirmDialog')
+    const confirmed = await globalConfirm({
+      title: language === 'zh' ? '删除' : 'Delete',
+      message: t('confirmDelete', language, { name: node.item.name }),
+      variant: 'danger',
+    })
+    if (confirmed) {
       await api.file.delete(node.item.path)
       directoryCacheService.invalidate(getDirPath(node.item.path))
       setChildrenCache((prev) => {

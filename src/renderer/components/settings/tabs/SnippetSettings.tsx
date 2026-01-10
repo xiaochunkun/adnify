@@ -99,7 +99,13 @@ export function SnippetSettings({ language }: SnippetSettingsProps) {
       toast.warning(language === 'zh' ? '默认片段不可删除' : 'Default snippets cannot be deleted')
       return
     }
-    if (!confirm(language === 'zh' ? '确定删除此片段？' : 'Delete this snippet?')) return
+    const { globalConfirm } = await import('@components/common/ConfirmDialog')
+    const confirmed = await globalConfirm({
+      title: language === 'zh' ? '删除片段' : 'Delete Snippet',
+      message: language === 'zh' ? '确定删除此片段？' : 'Delete this snippet?',
+      variant: 'danger',
+    })
+    if (!confirmed) return
     
     const success = await snippetService.delete(id)
     if (success) {

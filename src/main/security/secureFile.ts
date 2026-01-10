@@ -23,6 +23,18 @@ import {
 } from './workspaceHandlers'
 
 /**
+ * 向渲染进程发送错误通知
+ */
+function showSecurityError(mainWindow: any, title: string, message: string): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('app:error', { title, message, variant: 'danger' })
+  } else {
+    // 如果窗口不可用，回退到原生对话框
+    dialog.showErrorBox(title, message)
+  }
+}
+
+/**
  * 注册所有安全文件 IPC Handlers
  * 整合文件操作和工作区管理
  */
@@ -52,7 +64,7 @@ export function registerSecureFileHandlers(
     if (!result.canceled && result.filePaths[0]) {
       const filePath = result.filePaths[0]
       if (securityManager.isSensitivePath(filePath)) {
-        dialog.showErrorBox('安全警告', '不允许访问系统敏感路径')
+        showSecurityError(mainWindow, '安全警告', '不允许访问系统敏感路径')
         return null
       }
 
@@ -286,7 +298,7 @@ export function registerSecureFileHandlers(
     if (!result.canceled && result.filePath) {
       const savePath = result.filePath
       if (securityManager.isSensitivePath(savePath)) {
-        dialog.showErrorBox('安全警告', '不允许保存到系统敏感路径')
+        showSecurityError(mainWindow, '安全警告', '不允许保存到系统敏感路径')
         return null
       }
 

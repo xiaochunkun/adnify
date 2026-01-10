@@ -31,8 +31,14 @@ export function CustomProvidersList({ language }: CustomProvidersListProps) {
     .filter(([id]) => id.startsWith('custom-'))
     .map(([id, config]) => ({ id, config }))
 
-  const handleDelete = (id: string, name: string) => {
-    if (confirm(language === 'zh' ? `删除 ${name}？` : `Delete ${name}?`)) {
+  const handleDelete = async (id: string, name: string) => {
+    const { globalConfirm } = await import('@components/common/ConfirmDialog')
+    const confirmed = await globalConfirm({
+      title: language === 'zh' ? '删除提供商' : 'Delete Provider',
+      message: language === 'zh' ? `删除 ${name}？` : `Delete ${name}?`,
+      variant: 'danger',
+    })
+    if (confirmed) {
       removeProviderConfig(id)
     }
   }

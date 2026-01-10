@@ -24,6 +24,7 @@ import {
   registerSecureTerminalHandlers,
   registerSecureFileHandlers,
   cleanupSecureFileWatcher,
+  cleanupTerminals,
   updateWhitelist,
   getWhitelist,
 } from '../security'
@@ -104,6 +105,7 @@ export function registerAllHandlers(context: IPCContext) {
  */
 export function cleanupAllHandlers() {
   logger.ipc.info('[IPC] Cleaning up all handlers...')
+  cleanupTerminals()
   cleanupSecureFileWatcher()
   cleanupMcpHandlers()
   logger.ipc.info('[IPC] All handlers cleaned up')

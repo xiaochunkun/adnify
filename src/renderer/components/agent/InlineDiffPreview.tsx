@@ -14,6 +14,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import * as Diff from 'diff'
+import { CodeSkeleton } from '../ui/Loading'
 
 export interface DiffLine {
     type: 'add' | 'remove' | 'unchanged'
@@ -288,25 +289,8 @@ const DiffLineItem = React.memo(({ line, language }: { line: DiffLine, language:
 
 DiffLineItem.displayName = 'DiffLineItem'
 
-// 骨架屏组件 - 导出供外部（如 FileChangeCard）使用，保持视觉一致
-export const DiffSkeleton = () => (
-    <div className="min-h-[160px] p-4 w-full select-none flex flex-col gap-3">
-        {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4 animate-pulse">
-                {/* 模拟行号列 */}
-                <div className="w-8 h-3 bg-white/20 rounded-sm shrink-0" />
-                {/* 模拟代码内容 - 随机宽度 */}
-                <div 
-                    className="h-3 bg-white/20 rounded-sm" 
-                    style={{ 
-                        width: `${Math.max(30, 85 - (i * 15) % 50)}%`,
-                        opacity: 0.7 - (i * 0.1)
-                    }} 
-                />
-            </div>
-        ))}
-    </div>
-)
+// 骨架屏组件 - 使用统一的 CodeSkeleton
+export const DiffSkeleton = CodeSkeleton
 
 export default function InlineDiffPreview({
     oldContent,

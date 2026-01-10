@@ -8,7 +8,6 @@ import { Eye, Edit, Columns } from 'lucide-react'
 import { useStore } from '@store'
 import { useAgent } from '@hooks/useAgent'
 import { useLspIntegration, useFileSave, useLintCheck } from '@renderer/hooks'
-import { t } from '@renderer/i18n'
 import { toast } from '../common/ToastProvider'
 import { getFileName } from '@shared/utils/pathUtils'
 import { api } from '@renderer/services/electronAPI'
@@ -36,6 +35,7 @@ import { EditorWelcome } from './EditorWelcome'
 import { SafeDiffEditor } from './SafeDiffEditor'
 import { getFileType, MarkdownPreview, ImagePreview, UnsupportedFile, isPlanFile } from './FilePreview'
 import { PlanPreview } from '../agent/PlanPreview'
+import { CodeSkeleton } from '../ui/Loading'
 
 // Hooks
 import { useEditorActions, useAICompletion, useEditorEvents } from './hooks'
@@ -353,6 +353,7 @@ export default function Editor() {
                         didChangeDocument(activeFile.path, value)
                       }
                     }}
+                    loading={<CodeSkeleton lines={12} />}
                     options={{ fontSize: getEditorConfig().fontSize, fontFamily: getEditorConfig().fontFamily, minimap: { enabled: false }, scrollBeyondLastLine: false, padding: { top: 16 }, contextmenu: false }}
                   />
                 </div>
@@ -392,7 +393,7 @@ export default function Editor() {
                     triggerAutoSave(activeFile.path)
                   }
                 }}
-                loading={<div className="flex items-center justify-center h-full"><div className="text-text-muted text-sm">{t('loading', language)}</div></div>}
+                loading={<CodeSkeleton lines={12} />}
                 options={getMonacoEditorOptions(activeFileInfo)}
               />
             )}

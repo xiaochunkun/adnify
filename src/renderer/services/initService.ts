@@ -235,3 +235,19 @@ export function registerSettingsSync(): () => void {
     }
   })
 }
+
+/**
+ * 注册主进程错误监听器
+ * 将主进程的错误通过自定义对话框显示
+ */
+export function registerAppErrorListener(): () => void {
+  return api.app.onError(async (error) => {
+    const { globalConfirm } = await import('@components/common/ConfirmDialog')
+    await globalConfirm({
+      title: error.title,
+      message: error.message,
+      variant: (error.variant as 'danger' | 'warning' | 'info') || 'danger',
+      confirmText: 'OK',
+    })
+  })
+}

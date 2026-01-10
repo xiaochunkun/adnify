@@ -205,9 +205,15 @@ export function ProviderSettings({
   }
 
   // 删除自定义 Provider
-  const handleDeleteCustomProvider = (e: React.MouseEvent, id: string, name: string) => {
+  const handleDeleteCustomProvider = async (e: React.MouseEvent, id: string, name: string) => {
     e.stopPropagation()
-    if (confirm(language === 'zh' ? `删除 ${name}？` : `Delete ${name}?`)) {
+    const { globalConfirm } = await import('@components/common/ConfirmDialog')
+    const confirmed = await globalConfirm({
+      title: language === 'zh' ? '删除提供商' : 'Delete Provider',
+      message: language === 'zh' ? `删除 ${name}？` : `Delete ${name}?`,
+      variant: 'danger',
+    })
+    if (confirmed) {
       removeProviderConfig(id)
       if (localConfig.provider === id) {
         handleSelectBuiltinProvider('openai')

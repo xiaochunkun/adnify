@@ -414,6 +414,9 @@ export interface ElectronAPI {
   updaterOpenDownloadPage: (url?: string) => void
   onUpdaterStatus: (callback: (status: UpdateStatus) => void) => () => void
 
+  // App Error (from main process)
+  onAppError: (callback: (error: { title: string; message: string; variant?: string }) => void) => () => void
+
   // Command
   onExecuteCommand: (callback: (commandId: string) => void) => () => void
 }

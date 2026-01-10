@@ -14,6 +14,7 @@ import { ToolCall } from '@renderer/agent/types'
 import { streamingEditService } from '@renderer/agent/services/streamingEditService'
 import InlineDiffPreview, { getDiffStats } from './InlineDiffPreview'
 import { getFileName } from '@shared/utils/pathUtils'
+import { CodeSkeleton } from '../ui/Loading'
 
 interface FileChangeCardProps {
     toolCall: ToolCall
@@ -275,23 +276,9 @@ export default function FileChangeCard({
                                                 maxLines={50}
                                             />
                                         ) : (
-                                            // 现代化的骨架屏 - 模拟代码编辑器结构
-                                            // 移除杂乱的颜色，使用统一的灰阶 Pulse 效果，更专业简洁
-                                            <div className="min-h-[160px] p-4 w-full select-none flex flex-col gap-3 opacity-50">
-                                                {[...Array(5)].map((_, i) => (
-                                                    <div key={i} className="flex items-center gap-4">
-                                                        {/* 模拟行号列 */}
-                                                        <div className="w-8 h-2.5 bg-white/10 rounded-sm animate-pulse shrink-0" />
-                                                        {/* 模拟代码内容 - 随机宽度 */}
-                                                        <div 
-                                                            className="h-2.5 bg-white/10 rounded-sm animate-pulse" 
-                                                            style={{ 
-                                                                width: `${Math.max(30, 85 - (i * 15) % 50)}%`, // 产生 85%, 70%, 55%... 这样的变化
-                                                                animationDelay: `${i * 100}ms` 
-                                                            }} 
-                                                        />
-                                                    </div>
-                                                ))}
+                                            // 使用统一的代码骨架屏
+                                            <div className="min-h-[160px] opacity-50">
+                                                <CodeSkeleton lines={5} />
                                             </div>
                                         )}
                                     </div>

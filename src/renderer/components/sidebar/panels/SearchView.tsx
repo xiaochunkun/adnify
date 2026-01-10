@@ -217,7 +217,13 @@ export function SearchView() {
       ? `确定要在 ${fileCount} 个文件中替换 ${matchCount} 处匹配吗？`
       : `Replace ${matchCount} matches in ${fileCount} files?`
     
-    if (!confirm(confirmMessage)) return
+    const { globalConfirm } = await import('@components/common/ConfirmDialog')
+    const confirmed = await globalConfirm({
+      title: language === 'zh' ? '替换确认' : 'Replace Confirmation',
+      message: confirmMessage,
+      variant: 'warning',
+    })
+    if (!confirmed) return
 
     let replacedCount = 0
     for (const filePath of filePaths) {

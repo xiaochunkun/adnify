@@ -46,6 +46,22 @@ export function getWhitelist() {
   }
 }
 
+// Terminal instances storage (模块级别，便于清理)
+const terminals = new Map<string, any>() // IPty instances
+
+/**
+ * 清理所有终端进程
+ */
+export function cleanupTerminals(): void {
+  for (const [id, ptyProcess] of terminals) {
+    try {
+      ptyProcess.kill()
+    } catch (e) { /* ignore */ }
+    terminals.delete(id)
+  }
+  logger.security.info(`[Terminal] All terminals cleaned up`)
+}
+
 // 危险命令模式列表
 const DANGEROUS_PATTERNS = [
   /rm\s+-rf\s+.*\//i,  // rm -rf /
@@ -383,8 +399,6 @@ export function registerSecureTerminalHandlers(
 
   // ============ Interactive Terminal with node-pty ============
 
-  // Terminal instances storage
-  const terminals = new Map<string, any>() // IPty instances
   const MAX_TERMINALS = 10 // 最大终端数量限制
   let pty: any = null
 
@@ -735,17 +749,4 @@ export function registerSecureTerminalHandlers(
       }
     }
   })
-
-  // Cleanup function
-  const cleanupTerminals = () => {
-    for (const [id, ptyProcess] of terminals) {
-      try {
-        ptyProcess.kill()
-      } catch (e) { }
-      terminals.delete(id)
-    }
-  }
-
-  // Return cleanup function for use in app shutdown
-  return cleanupTerminals
 }

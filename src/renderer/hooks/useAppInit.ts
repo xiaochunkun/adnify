@@ -3,7 +3,7 @@
  */
 import { useEffect, useRef, useCallback } from 'react'
 import { api } from '@renderer/services/electronAPI'
-import { initializeApp, registerSettingsSync } from '@renderer/services/initService'
+import { initializeApp, registerSettingsSync, registerAppErrorListener } from '@renderer/services/initService'
 import { initWorkspaceStateSync } from '@renderer/services/workspaceStateService'
 
 interface InitResult {
@@ -44,8 +44,12 @@ export function useAppInit(options: UseAppInitOptions = {}) {
       const result = await initializeApp(updateLoaderStatus)
 
       // 注册设置同步
-      const unsubscribe = registerSettingsSync()
-      window.__settingsUnsubscribe = unsubscribe
+      const unsubscribeSettings = registerSettingsSync()
+      window.__settingsUnsubscribe = unsubscribeSettings
+
+      // 注册主进程错误监听
+      const unsubscribeError = registerAppErrorListener()
+      window.__errorUnsubscribe = unsubscribeError
 
       // 短暂延迟后完成初始化
       setTimeout(() => {
@@ -58,10 +62,15 @@ export function useAppInit(options: UseAppInitOptions = {}) {
     init()
 
     return () => {
-      const unsubscribe = window.__settingsUnsubscribe
-      if (unsubscribe) {
-        unsubscribe()
+      const unsubscribeSettings = window.__settingsUnsubscribe
+      if (unsubscribeSettings) {
+        unsubscribeSettings()
         delete window.__settingsUnsubscribe
+      }
+      const unsubscribeError = window.__errorUnsubscribe
+      if (unsubscribeError) {
+        unsubscribeError()
+        delete window.__errorUnsubscribe
       }
     }
   }, [updateLoaderStatus, removeInitialLoader, options])

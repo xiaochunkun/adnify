@@ -55,7 +55,13 @@ export default function SessionList({ onClose, onLoadSession }: SessionListProps
 
 	const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
 		e.stopPropagation()
-		if (confirm(t('confirmDeleteSession', language))) {
+		const { globalConfirm } = await import('@components/common/ConfirmDialog')
+		const confirmed = await globalConfirm({
+			title: language === 'zh' ? '删除会话' : 'Delete Session',
+			message: t('confirmDeleteSession', language),
+			variant: 'danger',
+		})
+		if (confirmed) {
 			await sessionService.deleteSession(id)
 			if (currentSessionId === id) {
 				setCurrentSessionId(null)

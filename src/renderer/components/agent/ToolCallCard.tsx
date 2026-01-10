@@ -17,6 +17,7 @@ import { terminalManager } from '@/renderer/services/TerminalManager'
 import { RichContentRenderer } from './RichContentRenderer'
 import InlineDiffPreview from './InlineDiffPreview'
 import { getFileName } from '@shared/utils/pathUtils'
+import { CodeSkeleton } from '../ui/Loading'
 
 interface ToolCallCardProps {
   toolCall: ToolCall
@@ -111,24 +112,11 @@ const ToolCallCard = memo(function ToolCallCard({
     }
   }
 
-  // 渲染 Skeleton 占位符
+  // 渲染 Skeleton 占位符 - 使用统一组件
   const renderSkeleton = () => (
-      <div className="min-h-[160px] p-4 opacity-60 select-none flex flex-col gap-4">
-          {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex gap-3 items-center">
-                  <div className="w-2 h-2 rounded-full bg-white/20 animate-pulse shrink-0" />
-                  <div className="flex-1 space-y-2">
-                      <div 
-                        className="h-2.5 bg-white/20 rounded-sm animate-pulse" 
-                        style={{ 
-                            width: `${Math.max(30, 90 - (i * 15))}%`, 
-                            animationDelay: `${i * 100}ms` 
-                        }} 
-                      />
-                  </div>
-              </div>
-          ))}
-      </div>
+    <div className="min-h-[160px] opacity-60">
+      <CodeSkeleton lines={5} />
+    </div>
   )
 
   // 渲染不同类型的预览内容

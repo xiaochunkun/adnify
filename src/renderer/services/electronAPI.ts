@@ -247,6 +247,11 @@ function createGroupedAPI() {
       onStatus: (callback: Parameters<typeof raw.onUpdaterStatus>[0]) => raw.onUpdaterStatus(callback),
     },
 
+    // 应用错误（来自主进程）
+    app: {
+      onError: (callback: Parameters<typeof raw.onAppError>[0]) => raw.onAppError(callback),
+    },
+
     // 命令执行
     onExecuteCommand: (callback: Parameters<typeof raw.onExecuteCommand>[0]) => raw.onExecuteCommand(callback),
   }
