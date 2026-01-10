@@ -126,22 +126,7 @@
     ],
     "win": {
       "icon": "resources/icon.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ]
+      "target": ["nsis", "portable"]
     },
     "nsis": {
       "oneClick": false,
@@ -160,43 +145,13 @@
     "mac": {
       "icon": "resources/icon.icns",
       "artifactName": "${productName}-${version}-${arch}-mac.${ext}",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
+      "target": ["dmg", "zip"],
       "category": "public.app-category.developer-tools"
     },
     "linux": {
       "icon": "resources/icon.png",
       "artifactName": "${productName}-${version}-${arch}-linux.${ext}",
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "tar.gz",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
+      "target": ["AppImage", "tar.gz"],
       "category": "Development"
     },
     "extraResources": [
