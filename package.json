@@ -46,6 +46,7 @@
     "electron-updater": "^6.7.3",
     "file-icons-js": "^1.1.0",
     "framer-motion": "^12.25.0",
+    "gpt-tokenizer": "^3.4.0",
     "iconv-lite": "^0.6.3",
     "jschardet": "^3.1.3",
     "lucide-react": "^0.562.0",
@@ -126,7 +127,10 @@
     ],
     "win": {
       "icon": "resources/icon.ico",
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -145,13 +149,19 @@
     "mac": {
       "icon": "resources/icon.icns",
       "artifactName": "${productName}-${version}-${arch}-mac.${ext}",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.developer-tools"
     },
     "linux": {
       "icon": "resources/icon.png",
       "artifactName": "${productName}-${version}-${arch}-linux.${ext}",
-      "target": ["AppImage", "tar.gz"],
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
       "category": "Development"
     },
     "extraResources": [

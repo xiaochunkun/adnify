@@ -1,46 +1,50 @@
 /**
  * Token 估算器
  * 
- * 提供统一的 Token 估算逻辑，避免重复实现
+ * 使用 gpt-tokenizer 进行精确的 token 计算
  */
 
+import { encode } from 'gpt-tokenizer'
 import type { OpenAIMessage } from '../llm/MessageConverter'
 
+// 消息结构开销（role, content 等字段）
+const MESSAGE_OVERHEAD = 4
+// tool_call 结构开销
+const TOOL_CALL_OVERHEAD = 10
+// 图片 token（低分辨率）
+const IMAGE_TOKENS = 85
+
 /**
- * 估算文本的 Token 数
- * 中文约 1.5 字符/token，英文约 4 字符/token
+ * 计算文本的精确 token 数
  */
-export function estimateTokens(text: string): number {
+export function countTokens(text: string): number {
   if (!text) return 0
-  const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length
-  const otherChars = text.length - chineseChars
-  return Math.ceil(chineseChars / 1.5 + otherChars / 4)
+  return encode(text).length
 }
 
 /**
- * 估算消息的 Token 数
+ * 计算单条消息的 token 数
  */
-export function estimateMessageTokens(msg: OpenAIMessage): number {
-  let tokens = 4 // 消息结构开销
+export function countMessageTokens(msg: OpenAIMessage): number {
+  let tokens = MESSAGE_OVERHEAD
 
   if (typeof msg.content === 'string') {
-    tokens += estimateTokens(msg.content)
+    tokens += countTokens(msg.content)
   } else if (Array.isArray(msg.content)) {
     for (const part of msg.content) {
       if (part.type === 'text') {
-        tokens += estimateTokens(part.text || '')
+        tokens += countTokens(part.text || '')
       } else {
-        tokens += 85 // 图片基础开销
+        tokens += IMAGE_TOKENS
       }
     }
   }
 
-  // tool_calls 开销
   if (msg.tool_calls) {
     for (const tc of msg.tool_calls) {
-      tokens += 10
-      tokens += estimateTokens(tc.function.name)
-      tokens += estimateTokens(tc.function.arguments)
+      tokens += TOOL_CALL_OVERHEAD
+      tokens += countTokens(tc.function.name)
+      tokens += countTokens(tc.function.arguments)
     }
   }
 
@@ -48,8 +52,13 @@ export function estimateMessageTokens(msg: OpenAIMessage): number {
 }
 
 /**
- * 估算消息列表的总 Token 数
+ * 计算消息列表的总 token 数
  */
-export function estimateTotalTokens(messages: OpenAIMessage[]): number {
-  return messages.reduce((sum, msg) => sum + estimateMessageTokens(msg), 0)
+export function countTotalTokens(messages: OpenAIMessage[]): number {
+  return messages.reduce((sum, msg) => sum + countMessageTokens(msg), 0)
 }
+
+// 兼容旧 API（逐步迁移后删除）
+export const estimateTokens = countTokens
+export const estimateMessageTokens = countMessageTokens
+export const estimateTotalTokens = countTotalTokens

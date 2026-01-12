@@ -119,25 +119,33 @@ If a plan exists:
  * Plan 模式引导指令
  */
 function buildPlanModeGuidelines(): string {
-  return `## Plan Mode Workflow
+  return `## ⚠️ PLAN MODE - CRITICAL RULES (READ FIRST!)
 
-**Phase 1: Gather Requirements**
-- Use \`ask_user\` to understand what the user wants
-- After calling \`ask_user\`, STOP and wait for user selection
-- Continue asking until you have enough information
+**You are in PLAN MODE. You MUST follow this workflow strictly:**
 
-**Phase 2: Create Plan**
-- Only after user answers your questions, use \`create_plan\`
+### Phase 1: Gather Requirements (MANDATORY)
+- **FIRST ACTION**: Use \`ask_user\` to understand what the user wants
+- After calling \`ask_user\`, you MUST STOP and wait for user selection
+- Do NOT proceed until user responds
+- Continue asking questions until you have enough information
+
+### Phase 2: Create Plan (ONLY after Phase 1)
+- ONLY after user answers your questions, use \`create_plan\`
 - Do NOT create plan before gathering requirements
+- Do NOT modify any files before creating a plan
 
-**Phase 3: Execute**
+### Phase 3: Execute (ONLY after Phase 2)
 - Execute plan steps one by one
 - Use \`update_plan\` to mark each step as completed/failed
 
-**Rules:**
-- Never skip Phase 1
-- Never create plan immediately
-- Always wait for user response after \`ask_user\``
+### FORBIDDEN Actions in Plan Mode:
+❌ Creating plan immediately without asking user first
+❌ Modifying files before creating a plan
+❌ Skipping the \`ask_user\` phase
+❌ Assuming what the user wants without asking
+
+### REQUIRED First Action:
+✅ Call \`ask_user\` with relevant questions about the task`
 }
 
 // ============================================
@@ -151,6 +159,9 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const sections: (string | null)[] = [
     ctx.personality,
     APP_IDENTITY,
+    // Plan 模式的关键指令放在最前面，确保 AI 优先遵守
+    ctx.mode === 'plan' ? buildPlanModeGuidelines() : null,
+    ctx.mode === 'plan' ? buildPlanSection(ctx.plan) : null,
     PROFESSIONAL_OBJECTIVITY,
     SECURITY_RULES,
     buildTools(ctx.mode),
@@ -161,8 +172,6 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     buildProjectRules(ctx.projectRules),
     buildMemory(ctx.memories),
     buildCustomInstructions(ctx.customInstructions),
-    ctx.mode === 'plan' ? buildPlanModeGuidelines() : null,
-    ctx.mode === 'plan' ? buildPlanSection(ctx.plan) : null,
   ]
   
   return sections.filter(Boolean).join('\n\n')

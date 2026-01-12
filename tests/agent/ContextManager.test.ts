@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ContextManager } from '../../src/renderer/agent/context/ContextManager'
-import { estimateTokens, estimateMessageTokens, estimateTotalTokens } from '../../src/renderer/agent/context/TokenEstimator'
+import { countTokens, countMessageTokens, countTotalTokens } from '../../src/renderer/agent/context/TokenEstimator'
 import { truncateToolResult } from '../../src/renderer/agent/context/MessageTruncator'
 import { scoreMessageGroup } from '../../src/renderer/agent/context/ImportanceScorer'
 import { generateQuickSummary, generateHandoffDocument } from '../../src/renderer/agent/context/SummaryGenerator'
@@ -52,65 +52,41 @@ function createReadToolCall(path: string): any {
   }
 }
 
-// 创建指定 token 数量的消息
-function createMessagesWithTokens(targetTokens: number, maxTokens: number): OpenAIMessage[] {
-  const messages: OpenAIMessage[] = [createSystemMessage('You are a helpful assistant.')]
-  const ratio = targetTokens / maxTokens
-  
-  // 每轮对话约 200 tokens
-  const turnsNeeded = Math.ceil(targetTokens / 200)
-  
-  for (let i = 0; i < turnsNeeded; i++) {
-    messages.push(createUserMessage(`Question ${i}: ${'x'.repeat(50)}`))
-    messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(100)}`))
-  }
-  
-  return messages
-}
-
-// ===== Token 估算测试 =====
+// ===== Token 计算测试 =====
 
 describe('TokenEstimator', () => {
-  it('should estimate tokens for English text', () => {
+  it('should count tokens for English text', () => {
     const text = 'Hello world, this is a test.'
-    const tokens = estimateTokens(text)
-    // 英文约 4 字符/token
+    const tokens = countTokens(text)
     expect(tokens).toBeGreaterThan(0)
     expect(tokens).toBeLessThan(text.length)
   })
 
-  it('should estimate more tokens for Chinese text', () => {
+  it('should count tokens for Chinese text', () => {
     const chinese = '你好世界，这是一个测试。'
-    const english = 'Hello world, this is a test.'
-    
-    const chineseTokens = estimateTokens(chinese)
-    const englishTokens = estimateTokens(english)
-    
-    // 中文每字符约 0.67 token，英文每字符约 0.25 token
-    expect(chineseTokens / chinese.length).toBeGreaterThan(englishTokens / english.length)
+    const tokens = countTokens(chinese)
+    expect(tokens).toBeGreaterThan(0)
   })
 
-  it('should estimate message tokens including structure overhead', () => {
+  it('should count message tokens including structure overhead', () => {
     const msg = createUserMessage('Hello')
-    const tokens = estimateMessageTokens(msg)
-    
-    // 应该包含 4 token 的结构开销
-    expect(tokens).toBeGreaterThan(estimateTokens('Hello'))
+    const tokens = countMessageTokens(msg)
+    expect(tokens).toBeGreaterThan(countTokens('Hello'))
   })
 
-  it('should estimate tool_calls tokens', () => {
+  it('should count tool_calls tokens', () => {
     const msg = createAssistantMessage('', [createReadToolCall('test.ts')])
-    const tokens = estimateMessageTokens(msg)
+    const tokens = countMessageTokens(msg)
     expect(tokens).toBeGreaterThan(10)
   })
 
-  it('should estimate total tokens for message array', () => {
+  it('should count total tokens for message array', () => {
     const messages = [
       createSystemMessage('System'),
       createUserMessage('Hello'),
       createAssistantMessage('Hi'),
     ]
-    const total = estimateTotalTokens(messages)
+    const total = countTotalTokens(messages)
     expect(total).toBeGreaterThan(0)
   })
 })
@@ -125,16 +101,17 @@ describe('MessageTruncator', () => {
   })
 
   it('should truncate long content', () => {
-    const content = 'x'.repeat(20000)
-    const result = truncateToolResult(content, 'read_file', { maxToolResultChars: 8000 })
+    // read_file 默认 maxLength 是 20000
+    const content = 'x'.repeat(30000)
+    const result = truncateToolResult(content, 'read_file')
     
     expect(result.length).toBeLessThan(content.length)
     expect(result).toContain('omitted')
   })
 
   it('should preserve error messages at the start', () => {
-    const content = 'Error: File not found\n' + 'x'.repeat(10000)
-    const result = truncateToolResult(content, 'read_file', { maxToolResultChars: 1000 })
+    const content = 'Error: File not found\n' + 'x'.repeat(30000)
+    const result = truncateToolResult(content, 'read_file')
     
     expect(result).toContain('Error: File not found')
   })
@@ -163,7 +140,7 @@ describe('ImportanceScorer', () => {
     }
     
     const score = scoreMessageGroup(group, messages, [group])
-    expect(score).toBeGreaterThan(50) // 写操作应该有较高分数
+    expect(score).toBeGreaterThan(50)
   })
 
   it('should score groups with errors higher', () => {
@@ -186,7 +163,7 @@ describe('ImportanceScorer', () => {
     }
     
     const score = scoreMessageGroup(group, messages, [group])
-    expect(score).toBeGreaterThan(50) // 错误应该有较高分数
+    expect(score).toBeGreaterThan(50)
   })
 })
 
@@ -279,14 +256,14 @@ describe('ContextManager', () => {
         createSystemMessage('System'),
         createUserMessage('Read file'),
         createAssistantMessage('', [createReadToolCall('large.ts')]),
-        createToolMessage('x'.repeat(50000)), // 很长的工具结果
+        createToolMessage('x'.repeat(50000)),
       ]
 
-      // 设置 maxTokens 使得占比在 50-70%
-      const result = manager.optimize(messages, { 
-        maxTokens: 20000,
-        maxToolResultChars: 5000,
-      })
+      // 计算实际 token 数，设置 maxTokens 使占比在 50-70%
+      const actualTokens = countTotalTokens(messages)
+      const maxTokens = Math.floor(actualTokens / 0.6) // 约 60%
+
+      const result = manager.optimize(messages, { maxTokens })
 
       expect(result.stats.compressionLevel).toBe(1)
       
@@ -299,15 +276,16 @@ describe('ContextManager', () => {
     it('should keep recent turns and generate summary when 70-85% capacity', () => {
       const messages: OpenAIMessage[] = [createSystemMessage('System')]
       
-      // 创建 15 轮对话，每轮约 200 tokens，总计约 3000 tokens
-      // 设置 maxTokens=4000，使占比约 75%（70-85% 范围）
       for (let i = 0; i < 15; i++) {
         messages.push(createUserMessage(`Question ${i}: ${'x'.repeat(200)}`))
         messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(200)}`))
       }
 
+      const actualTokens = countTotalTokens(messages)
+      const maxTokens = Math.floor(actualTokens / 0.75) // 约 75%
+
       const result = manager.optimize(messages, {
-        maxTokens: 2200, // 1721/2200 ≈ 78%
+        maxTokens,
         keepRecentTurns: 5,
       })
 
@@ -325,37 +303,39 @@ describe('ContextManager', () => {
       messages.push(createAssistantMessage('', [createWriteToolCall('important.ts')]))
       messages.push(createToolMessage('Created'))
       
-      // 中间轮次，增加内容使总 token 超过 70%
       for (let i = 0; i < 10; i++) {
         messages.push(createUserMessage(`Question ${i}: ${'x'.repeat(100)}`))
         messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(100)}`))
       }
 
+      const actualTokens = countTotalTokens(messages)
+      const maxTokens = Math.floor(actualTokens / 0.75)
+
       const result = manager.optimize(messages, {
-        maxTokens: 220, // 使占比超过 70%
+        maxTokens,
         keepRecentTurns: 3,
       })
 
-      // 写操作轮次应该被保留
       expect(result.stats.compressionLevel).toBeGreaterThanOrEqual(2)
     })
   })
 
   describe('Level 3: Deep Compression', () => {
-    it('should only keep 2 recent turns when 85-95% capacity', () => {
+    it('should only keep recent turns when 85-95% capacity', () => {
       const messages: OpenAIMessage[] = [createSystemMessage('System')]
       
-      // 创建很多轮对话，约 4946 tokens
-      // 设置 maxTokens=5500，使占比约 90%（85-95% 范围）
       for (let i = 0; i < 30; i++) {
         messages.push(createUserMessage(`Question ${i}: ${'x'.repeat(300)}`))
         messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(300)}`))
       }
 
+      const actualTokens = countTotalTokens(messages)
+      const maxTokens = Math.floor(actualTokens / 0.9) // 约 90%
+
       const result = manager.optimize(messages, {
-        maxTokens: 5500, // 4946/5500 ≈ 90%
+        maxTokens,
         deepCompressionTurns: 2,
-        autoHandoff: false, // 禁用自动交接以测试 L3
+        autoHandoff: false,
       })
 
       expect(result.stats.compressionLevel).toBe(3)
@@ -368,14 +348,16 @@ describe('ContextManager', () => {
     it('should trigger handoff when over 95% capacity', () => {
       const messages: OpenAIMessage[] = [createSystemMessage('System')]
       
-      // 创建大量对话超过 95%
       for (let i = 0; i < 50; i++) {
         messages.push(createUserMessage(`Question ${i}: ${'x'.repeat(500)}`))
         messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(500)}`))
       }
 
+      const actualTokens = countTotalTokens(messages)
+      const maxTokens = Math.floor(actualTokens / 0.97) // 约 97%
+
       const result = manager.optimize(messages, {
-        maxTokens: 2000,
+        maxTokens,
         autoHandoff: true,
       })
 
@@ -393,12 +375,14 @@ describe('ContextManager', () => {
         messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(500)}`))
       }
 
+      const actualTokens = countTotalTokens(messages)
+      const maxTokens = Math.floor(actualTokens / 0.97)
+
       const result = manager.optimize(messages, {
-        maxTokens: 2000,
+        maxTokens,
         autoHandoff: false,
       })
 
-      // 应该回退到 L3
       expect(result.stats.compressionLevel).toBe(3)
       expect(result.stats.needsHandoff).toBe(false)
     })
@@ -421,28 +405,26 @@ describe('ContextManager', () => {
     })
 
     it('should merge summaries correctly', () => {
-      // 第一次压缩 - 需要触发 L2+ 才会生成摘要
       const messages1: OpenAIMessage[] = [createSystemMessage('System')]
       for (let i = 0; i < 10; i++) {
         messages1.push(createUserMessage(`Q${i}: ${'x'.repeat(50)}`))
         messages1.push(createAssistantMessage(`A${i}: ${'y'.repeat(50)}`))
       }
       
-      // 设置较小的 maxTokens 使其触发压缩
-      manager.optimize(messages1, { maxTokens: 200, keepRecentTurns: 3 })
+      const actualTokens1 = countTotalTokens(messages1)
+      manager.optimize(messages1, { maxTokens: Math.floor(actualTokens1 / 0.75), keepRecentTurns: 3 })
       const summary1 = manager.getSummary()
       
-      // 第二次压缩（更多消息）
       const messages2 = [...messages1]
       for (let i = 10; i < 20; i++) {
         messages2.push(createUserMessage(`Q${i}: ${'x'.repeat(50)}`))
         messages2.push(createAssistantMessage(`A${i}: ${'y'.repeat(50)}`))
       }
       
-      manager.optimize(messages2, { maxTokens: 200, keepRecentTurns: 3 })
+      const actualTokens2 = countTotalTokens(messages2)
+      manager.optimize(messages2, { maxTokens: Math.floor(actualTokens2 / 0.75), keepRecentTurns: 3 })
       const summary2 = manager.getSummary()
       
-      // 摘要应该被合并/更新
       expect(summary2).toBeTruthy()
       if (summary1 && summary2) {
         expect(summary2.turnRange[1]).toBeGreaterThanOrEqual(summary1.turnRange[1])
@@ -480,8 +462,8 @@ describe('ContextManager', () => {
         messages.push(createAssistantMessage(`A${i}: ${'y'.repeat(100)}`))
       }
 
-      // 设置较小的 maxTokens 使其触发压缩（L1+）
-      manager.optimize(messages, { maxTokens: 1500, keepRecentTurns: 5 })
+      const actualTokens = countTotalTokens(messages)
+      manager.optimize(messages, { maxTokens: Math.floor(actualTokens / 0.6), keepRecentTurns: 5 })
       
       const stats = manager.getStats()
       

@@ -639,31 +639,39 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
         return { success: true, result: resultMsg }
     },
 
-    async ask_user(args) {
+    async ask_user(args, ctx) {
         const question = args.question as string
         const options = args.options as Array<{ id: string; label: string; description?: string }>
         const multiSelect = (args.multiSelect as boolean) || false
-
-        // 将选项信息存储到当前助手消息的 interactive 字段
-        // UI 会根据这个字段渲染选项卡片
-        const store = useAgentStore.getState()
-        const thread = store.getCurrentThread()
-        if (thread) {
-            const lastAssistantMsg = [...thread.messages].reverse().find(m => m.role === 'assistant')
-            if (lastAssistantMsg) {
-                store.updateMessage(lastAssistantMsg.id, {
-                    interactive: {
-                        type: 'interactive',
-                        question,
-                        options,
-                        multiSelect,
-                    },
-                } as any)
+        const targetMessageId = ctx.currentAssistantId
+        
+        if (targetMessageId) {
+            const state = useAgentStore.getState()
+            const threadId = state.currentThreadId
+            
+            if (threadId) {
+                const thread = state.threads[threadId]
+                if (thread) {
+                    const msgIndex = thread.messages.findIndex(m => m.id === targetMessageId)
+                    if (msgIndex !== -1) {
+                        const newMessages = [...thread.messages]
+                        newMessages[msgIndex] = {
+                            ...newMessages[msgIndex],
+                            interactive: { type: 'interactive', question, options, multiSelect },
+                            isStreaming: false,
+                        } as any
+                        
+                        useAgentStore.setState({
+                            threads: {
+                                ...state.threads,
+                                [threadId]: { ...thread, messages: newMessages, lastModified: Date.now() },
+                            },
+                        } as any)
+                    }
+                }
             }
         }
 
-        // 返回提示信息，告诉 AI 等待用户选择
-        // agent 循环会在这里结束，等用户点击选项后发送新消息
         return {
             success: true,
             result: `Waiting for user to select from options. Question: "${question}"`,

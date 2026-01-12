@@ -3,7 +3,7 @@
  * 从 JSON 数据渲染计划视图
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import {
     Play,
     RotateCcw,
@@ -14,11 +14,13 @@ import {
     ChevronDown,
     ChevronRight,
     Sparkles,
+    Square,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '../ui'
 import { useAgent } from '@/renderer/hooks/useAgent'
 import { useStore } from '@/renderer/store'
+import { useAgentStore } from '@/renderer/agent'
 import type { PlanFileData, PlanItemStatus } from '@/renderer/agent/types'
 
 interface PlanPreviewProps {
@@ -81,7 +83,11 @@ function StatusBadge({ status }: { status: PlanFileData['status'] }) {
 export function PlanPreview({ content, fontSize = 14 }: PlanPreviewProps) {
     const { sendMessage } = useAgent()
     const { language } = useStore()
+    const isStreaming = useAgentStore(state => state.streamState.isStreaming)
     const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+    const [isExecutingAll, setIsExecutingAll] = useState(false)
+    const shouldContinueRef = useRef(false)
+    const prevStreamingRef = useRef(isStreaming)
 
     // 解析 JSON
     const planData = useMemo((): PlanFileData | null => {
@@ -91,6 +97,40 @@ export function PlanPreview({ content, fontSize = 14 }: PlanPreviewProps) {
             return null
         }
     }, [content])
+
+    // 获取下一个待执行的步骤
+    const getNextPendingStep = useCallback(() => {
+        if (!planData) return null
+        return planData.items.find(item => 
+            item.status === 'pending' || item.status === 'in_progress'
+        )
+    }, [planData])
+
+    // 当流式结束且正在执行全部时，执行下一步
+    useEffect(() => {
+        // 检测从 streaming -> not streaming 的转换
+        const wasStreaming = prevStreamingRef.current
+        prevStreamingRef.current = isStreaming
+        
+        if (wasStreaming && !isStreaming && isExecutingAll && shouldContinueRef.current) {
+            const nextStep = getNextPendingStep()
+            if (nextStep) {
+                // 延迟执行，等待状态更新
+                const timer = setTimeout(() => {
+                    if (!shouldContinueRef.current) return
+                    const prompt = language === 'zh'
+                        ? `请执行任务步骤：${nextStep.title}`
+                        : `Please execute task step: ${nextStep.title}`
+                    sendMessage(prompt)
+                }, 800)
+                return () => clearTimeout(timer)
+            } else {
+                // 没有更多步骤，停止执行
+                setIsExecutingAll(false)
+                shouldContinueRef.current = false
+            }
+        }
+    }, [isStreaming, isExecutingAll, getNextPendingStep, language, sendMessage])
 
     if (!planData) {
         return (
@@ -117,10 +157,22 @@ export function PlanPreview({ content, fontSize = 14 }: PlanPreviewProps) {
     }
 
     const handleExecuteAll = () => {
+        const nextStep = getNextPendingStep()
+        if (!nextStep) return
+        
+        setIsExecutingAll(true)
+        shouldContinueRef.current = true
+        
+        // 执行第一个步骤
         const prompt = language === 'zh'
-            ? '请继续执行任务模板中的所有待完成步骤'
-            : 'Please continue executing all pending steps in the task template'
+            ? `请执行任务步骤：${nextStep.title}`
+            : `Please execute task step: ${nextStep.title}`
         sendMessage(prompt)
+    }
+
+    const handleStopExecution = () => {
+        setIsExecutingAll(false)
+        shouldContinueRef.current = false
     }
 
     const completedCount = planData.items.filter(i => i.status === 'completed').length
@@ -148,13 +200,23 @@ export function PlanPreview({ content, fontSize = 14 }: PlanPreviewProps) {
                             </div>
                         </div>
                         <Button
-                            variant="primary"
+                            variant={isExecutingAll ? "secondary" : "primary"}
                             size="sm"
-                            onClick={handleExecuteAll}
+                            onClick={isExecutingAll ? handleStopExecution : handleExecuteAll}
+                            disabled={isStreaming && !isExecutingAll}
                             className="flex items-center gap-1.5"
                         >
-                            <Play className="w-3.5 h-3.5" />
-                            {language === 'zh' ? '执行全部' : 'Execute All'}
+                            {isExecutingAll ? (
+                                <>
+                                    <Square className="w-3.5 h-3.5" />
+                                    {language === 'zh' ? '停止' : 'Stop'}
+                                </>
+                            ) : (
+                                <>
+                                    <Play className="w-3.5 h-3.5" />
+                                    {language === 'zh' ? '执行全部' : 'Execute All'}
+                                </>
+                            )}
                         </Button>
                     </div>
 

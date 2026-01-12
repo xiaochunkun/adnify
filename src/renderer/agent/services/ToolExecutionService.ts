@@ -101,7 +101,7 @@ export class ToolExecutionService {
     }
 
     // 执行工具（带重试）
-    const result = await this.executeWithRetry(name, args, workspacePath)
+    const result = await this.executeWithRetry(name, args, workspacePath, currentAssistantId)
 
     // 结束性能监控
     performanceMonitor.end(timerName, result.success)
@@ -166,7 +166,8 @@ export class ToolExecutionService {
   private async executeWithRetry(
     name: string,
     args: Record<string, unknown>,
-    workspacePath: string | null
+    workspacePath: string | null,
+    currentAssistantId: string | null
   ): Promise<ToolExecutionResult> {
     const config = getAgentConfig()
 
@@ -174,7 +175,7 @@ export class ToolExecutionService {
       return await withRetry(
         async () => {
           const result = await withTimeout(
-            toolManager.execute(name, args, { workspacePath }),
+            toolManager.execute(name, args, { workspacePath, currentAssistantId }),
             config.toolTimeoutMs,
             new Error(`Tool execution timed out after ${config.toolTimeoutMs / 1000}s`)
           )

@@ -538,18 +538,15 @@ const ChatMessage = React.memo(({
                 <OptionCard
                   content={message.interactive}
                   onSelect={(selectedIds) => {
-                    // 将选择结果作为用户消息发送
                     const selectedLabels = message.interactive!.options
                       .filter(opt => selectedIds.includes(opt.id))
                       .map(opt => opt.label)
                     const response = selectedLabels.join(', ')
                     
-                    // 更新消息的 selectedIds 防止重复选择
                     window.dispatchEvent(new CustomEvent('chat-update-interactive', {
                       detail: { messageId: message.id, selectedIds }
                     }))
                     
-                    // 通过 window 事件通知 ChatPanel 发送消息
                     window.dispatchEvent(new CustomEvent('chat-send-message', { 
                       detail: { content: response, messageId: message.id }
                     }))
