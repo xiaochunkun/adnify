@@ -134,6 +134,7 @@ class UpdateService {
     })
 
     autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
+      logger.system.info(`[Updater] Update downloaded: ${info.version}, files:`, info.files)
       this.updateStatus({
         status: 'downloaded',
         version: info.version,
@@ -294,7 +295,18 @@ class UpdateService {
       throw new Error('Update not downloaded')
     }
 
-    autoUpdater.quitAndInstall(false, true)
+    // 设置退出时自动安装
+    autoUpdater.autoInstallOnAppQuit = true
+    
+    logger.system.info('[Updater] Initiating quit and install...')
+    
+    // 延迟一点执行，确保所有窗口都已关闭
+    setTimeout(() => {
+      // isSilent: true - 静默安装，避免 UAC 弹窗干扰
+      // isForceRunAfter: true - 安装后强制重启应用
+      logger.system.info('[Updater] Calling autoUpdater.quitAndInstall(true, true)')
+      autoUpdater.quitAndInstall(true, true)
+    }, 100)
   }
 
   /**
