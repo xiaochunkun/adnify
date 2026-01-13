@@ -60,19 +60,36 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     read_file: {
         name: 'read_file',
         displayName: 'Read File',
-        description: 'Read file contents with line numbers. ALWAYS read files before editing.',
+        description: `Read file contents with line numbers. You MUST read a file before editing it.
+
+### Output Format
+Lines are numbered: "LINE_NUMBER: CONTENT"
+
+### CRITICAL
+- ALWAYS read a file before using edit_file on it
+- If edit_file fails, read the file again before retrying
+- Use line numbers from output when using replace_file_content`,
         detailedDescription: `Read file contents from the filesystem with line numbers (1-indexed).
-- Returns content in "line_number | content" format for easy reference
-- Default: reads entire file; use start_line/end_line for large files
-- Supports text files, code files, and configuration files
-- For images/PDFs, use appropriate viewer tools instead`,
+- Returns content in "line_number: content" format
+- Default: reads entire file
+- Use start_line/end_line for large files (>500 lines)
+
+**When to Use:**
+- Before editing any file (MANDATORY)
+- Understanding code structure
+- Getting exact content for edit_file old_string
+
+**When NOT to Use:**
+- Reading multiple files → use read_multiple_files
+- Searching for patterns → use search_files`,
         examples: [
             'read_file path="src/main.ts" → Read entire file',
-            'read_file path="src/main.ts" start_line=10 end_line=50 → Read lines 10-50',
+            'read_file path="src/main.ts" start_line=100 end_line=150 → Read specific section',
         ],
         criticalRules: [
-            'ALWAYS read a file before editing it to understand context and get exact content',
-            'Use line numbers from read output when using replace_file_content',
+            'ALWAYS read a file before editing it',
+            'If edit_file fails, read the file again - content may have changed',
+            'Use line numbers from output for replace_file_content',
         ],
         category: 'read',
         approvalType: 'none',
@@ -157,20 +174,34 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     search_files: {
         name: 'search_files',
         displayName: 'Search Files',
-        description: 'Search for text/regex pattern across files in a directory.',
+        description: `Fast text/regex search across files. Use for exact text or pattern matching.
+
+### When to Use
+- Finding exact text or symbols (function names, variables, imports)
+- Regex pattern matching
+- Finding all usages of a specific string
+
+### When NOT to Use
+- Conceptual queries ("how does auth work?") → use codebase_search
+- Searching in a single known file → use search_in_file`,
         detailedDescription: `Fast content search using ripgrep-style matching.
 - Searches file contents for pattern matches
 - Supports regex patterns with is_regex=true
 - Filter by file type with file_pattern (e.g., "*.ts")
-- Returns matching lines with context`,
+- Returns matching lines with file path and line number
+
+**Pattern Syntax (ripgrep):**
+- Escape special chars: \\( \\) \\[ \\] \\{ \\} \\+ \\* \\? \\^ \\$ \\| \\. \\\\
+- Word boundary: \\bword\\b
+- Any whitespace: \\s+`,
         examples: [
             'search_files path="src" pattern="TODO" → Find all TODOs',
-            'search_files path="." pattern="function\\s+\\w+" is_regex=true → Find function declarations',
+            'search_files path="." pattern="function\\s+handle" is_regex=true → Find function declarations',
             'search_files path="src" pattern="import" file_pattern="*.tsx" → Search only TSX files',
         ],
         criticalRules: [
             'Use this instead of bash grep/find commands',
-            'For searching within a single file, use search_in_file instead',
+            'For semantic/conceptual queries, use codebase_search instead',
         ],
         category: 'search',
         approvalType: 'none',
@@ -188,7 +219,7 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     search_in_file: {
         name: 'search_in_file',
         displayName: 'Search in File',
-        description: 'Search for pattern within a specific file.',
+        description: 'Search for pattern within a specific file. Returns matching lines with line numbers.',
         detailedDescription: `Search within a single file for pattern matches.
 - Returns all matching lines with line numbers
 - Useful for finding specific code in a known file
@@ -208,17 +239,35 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     codebase_search: {
         name: 'codebase_search',
         displayName: 'Semantic Search',
-        description: 'Semantic search across codebase using AI embeddings. Best for conceptual queries.',
-        detailedDescription: `AI-powered semantic search for finding related code.
+        description: `Semantic search using AI. Use for conceptual queries like "how does X work?"
+
+### When to Use
+- Conceptual questions: "where is authentication handled?"
+- Understanding code flow: "how does payment processing work?"
+- Finding related code by meaning
+
+### When NOT to Use
+- Exact text/symbol search → use search_files
+- Single word lookups → use search_files`,
+        detailedDescription: `AI-powered semantic search for finding related code by meaning.
 - Understands natural language queries
 - Finds conceptually related code, not just text matches
-- Best for: "where is authentication handled?", "find error handling code"`,
+- Ask complete questions for best results
+
+**Good queries:**
+- "Where is user authentication handled?"
+- "How does the payment flow work?"
+- "Find error handling for API requests"
+
+**Bad queries:**
+- "AuthService" (too short, use search_files)
+- "function" (too generic)`,
         examples: [
             'codebase_search query="user authentication logic"',
-            'codebase_search query="database connection setup"',
+            'codebase_search query="where are database connections managed?"',
         ],
         criticalRules: [
-            'Use for conceptual/semantic queries, not exact text matches',
+            'Use complete questions for best results',
             'For exact text search, use search_files instead',
         ],
         category: 'search',
@@ -227,7 +276,7 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
         requiresWorkspace: true,
         enabled: true,
         parameters: {
-            query: { type: 'string', description: 'Natural language search query', required: true },
+            query: { type: 'string', description: 'Natural language search query - ask a complete question', required: true },
             top_k: { type: 'number', description: 'Number of results (default: 10)', default: 10 },
         },
     },
@@ -236,26 +285,61 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     edit_file: {
         name: 'edit_file',
         displayName: 'Edit File',
-        description: 'Edit file by replacing text. Uses smart matching with multiple fallback strategies.',
-        detailedDescription: `Smart string replacement in files with multiple matching strategies.
-- Tries exact match first, then falls back to fuzzy strategies
-- Strategies: exact → line-trimmed → block-anchor → whitespace-normalized → indentation-flexible
-- ALWAYS read the file first to understand context
-- For new files, use write_file instead`,
+        description: `Edit file by replacing old_string with new_string. MUST read file first.
+
+### CRITICAL REQUIREMENTS
+1. old_string must UNIQUELY identify the location (include 3-5 lines of context)
+2. old_string must match EXACTLY including whitespace and indentation
+3. If multiple matches exist, the edit will FAIL - include more context
+
+### When to Use
+- Modifying existing code in a file
+- Adding/removing/changing specific code sections
+
+### When NOT to Use
+- Creating new files → use write_file
+- Replacing by line numbers → use replace_file_content
+- File doesn't exist → use write_file`,
+        detailedDescription: `Smart string replacement with multiple fallback matching strategies.
+
+**Matching Strategies (tried in order):**
+1. Exact match
+2. Line-trimmed (ignores leading/trailing whitespace per line)
+3. Block-anchor (matches by first/last line + similarity)
+4. Whitespace-normalized
+5. Indentation-flexible
+
+**Example - Good:**
+\`\`\`
+old_string: "function calculate(x) {
+  const result = x * 2;
+  return result;
+}"
+new_string: "function calculate(x: number): number {
+  const result = x * 2;
+  return result;
+}"
+\`\`\`
+Reason: Includes full function for unique identification.
+
+**Example - Bad:**
+\`\`\`
+old_string: "return result;"
+new_string: "return result * 2;"
+\`\`\`
+Reason: Too short, may match multiple locations.`,
         examples: [
-            `edit_file path="src/utils.ts" old_string="function add(a, b) {\\n  return a + b;\\n}" new_string="function add(a: number, b: number): number {\\n  return a + b;\\n}"`,
-            `edit_file path="config.json" old_string='"debug": false' new_string='"debug": true' replace_all=true`,
+            'edit_file path="src/utils.ts" old_string="function add(a, b) {\\n  return a + b;\\n}" new_string="function add(a: number, b: number): number {\\n  return a + b;\\n}"',
         ],
         criticalRules: [
-            'ALWAYS read_file BEFORE edit_file to understand context',
-            'Include enough context (3-5 lines) to ensure unique match',
-            'If multiple matches exist and replace_all is false, the edit will FAIL',
+            'ALWAYS use read_file BEFORE edit_file to get exact file content',
+            'Include 3-5 lines of surrounding context to ensure unique match',
+            'If edit fails, read the file again - content may have changed',
             'For new files, use write_file instead',
-            'For line-based edits, use replace_file_content instead',
         ],
         commonErrors: [
-            { error: 'old_string not found', solution: 'Read the file again - smart matching will try multiple strategies' },
-            { error: 'Multiple matches found', solution: 'Include more context OR use replace_all=true if you want to replace all' },
+            { error: 'old_string not found', solution: 'Read the file again with read_file, copy exact content including whitespace' },
+            { error: 'Multiple matches found', solution: 'Include more surrounding context to make old_string unique' },
         ],
         category: 'write',
         approvalType: 'none',
@@ -263,8 +347,8 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
         requiresWorkspace: true,
         enabled: true,
         parameters: {
-            path: { type: 'string', description: 'File path', required: true },
-            old_string: { type: 'string', description: 'Text to find (smart matching with fallback strategies)', required: true },
+            path: { type: 'string', description: 'File path to edit', required: true },
+            old_string: { type: 'string', description: 'Exact text to find (include 3-5 lines of context for uniqueness)', required: true },
             new_string: { type: 'string', description: 'New text to replace with', required: true },
             replace_all: { type: 'boolean', description: 'Replace all occurrences (default: false)', default: false },
         },
@@ -379,22 +463,35 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
     run_command: {
         name: 'run_command',
         displayName: 'Run Command',
-        description: 'Execute shell command. Requires approval. Do NOT use for file reading.',
+        description: `Execute shell command. Requires user approval.
+
+### When to Use
+- npm/yarn/pnpm commands (install, build, test)
+- Git operations (status, diff, log)
+- Build scripts and test runners
+- System commands
+
+### NEVER Use For
+- Reading files → use read_file (NOT cat/head/tail)
+- Searching files → use search_files (NOT grep/find)
+- Editing files → use edit_file (NOT sed/awk)`,
         detailedDescription: `Execute shell commands in the workspace.
 - Requires user approval for safety
-- Use for: npm/yarn commands, git operations, build scripts, tests
-- Do NOT use for: reading files (use read_file), searching (use search_files)`,
+- Use cwd parameter instead of cd commands
+- For long-running commands, set is_background=true`,
         examples: [
             'run_command command="npm install"',
             'run_command command="npm run build"',
             'run_command command="git status"',
+            'run_command command="npm test" cwd="packages/core"',
         ],
         criticalRules: [
-            'NEVER use cat/head/tail to read files - use read_file instead',
-            'NEVER use grep/find to search - use search_files instead',
-            'NEVER run destructive git commands (push --force, reset --hard) without explicit request',
+            'NEVER use cat/head/tail to read files - use read_file',
+            'NEVER use grep/find to search - use search_files',
+            'NEVER use sed/awk to edit - use edit_file',
+            'NEVER run destructive git commands without explicit request',
             'NEVER commit or push unless explicitly asked',
-            'Avoid cd commands - use cwd parameter instead',
+            'Use cwd parameter instead of cd commands',
         ],
         category: 'terminal',
         approvalType: 'terminal',
@@ -403,8 +500,9 @@ export const TOOL_CONFIGS: Record<string, ToolConfig> = {
         enabled: true,
         parameters: {
             command: { type: 'string', description: 'Shell command to execute', required: true },
-            cwd: { type: 'string', description: 'Working directory (optional, defaults to workspace)' },
+            cwd: { type: 'string', description: 'Working directory (use instead of cd)' },
             timeout: { type: 'number', description: 'Timeout in seconds (default: 30)', default: 30 },
+            is_background: { type: 'boolean', description: 'Run in background for long-running commands', default: false },
         },
     },
 
