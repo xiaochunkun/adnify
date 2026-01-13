@@ -35,11 +35,9 @@ import AgentStatusBar from './AgentStatusBar'
 import { keybindingService } from '@/renderer/services/keybindingService'
 import { slashCommandService, SlashCommand } from '@/renderer/services/slashCommandService'
 import SlashCommandPopup from './SlashCommandPopup'
-import { AgentService } from '@/renderer/agent/services/AgentService'
 import { Button } from '../ui'
 import { useToast } from '@/renderer/components/common/ToastProvider'
-import { BranchSelector } from './BranchManager'
-import BranchManager from './BranchManager'
+import BranchManager, { BranchSelector } from './BranchManager'
 
 export default function ChatPanel() {
   const {
@@ -272,7 +270,7 @@ export default function ChatPanel() {
   // 实时更新上下文统计
   useEffect(() => {
     const timer = setTimeout(() => {
-      AgentService.calculateContextStats(contextItems, input)
+      // 上下文统计现在由 store 管理
     }, 500) // 500ms 防抖
 
     return () => clearTimeout(timer)

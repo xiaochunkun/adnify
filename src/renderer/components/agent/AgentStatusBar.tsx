@@ -149,6 +149,7 @@ export default function AgentStatusBar({
               )}
             </div>
 
+            {/* Stop 按钮 - 仅流式时显示 */}
             {isStreaming && (
               <button
                 onClick={onStop}

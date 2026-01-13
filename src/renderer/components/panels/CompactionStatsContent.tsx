@@ -4,7 +4,7 @@
  */
 
 import { Layers, RefreshCw, Hash, Zap, FileText, ArrowRight, AlertTriangle } from 'lucide-react'
-import { useAgentStore, selectCompressionStats, selectContextSummary, contextManager } from '@/renderer/agent'
+import { useAgentStore, selectCompressionStats, selectContextSummary } from '@/renderer/agent'
 import { Button } from '../ui'
 import { useCallback, useMemo } from 'react'
 import type { CompressionLevel } from '@/renderer/agent/context/types'
@@ -58,14 +58,13 @@ export default function CompactionStatsContent({
   }
 
   const handleClear = useCallback(() => {
-    contextManager.clear()
     setCompressionStats(null)
     setHandoffRequired(false)
     setHandoffDocument(null)
   }, [setCompressionStats, setHandoffRequired, setHandoffDocument])
 
   const contextSummary = useAgentStore(selectContextSummary)
-  const summary = useMemo(() => contextSummary || contextManager.getSummary(), [compressionStats, contextSummary])
+  const summary = useMemo(() => contextSummary, [contextSummary])
 
   return (
     <div className="flex flex-col h-full bg-background/50 backdrop-blur-xl select-none">
@@ -216,7 +215,7 @@ export default function CompactionStatsContent({
                     {language === 'zh' ? '最近进展' : 'Recent Progress'}
                   </div>
                   <ul className="space-y-1.5">
-                    {summary.completedSteps.slice(-2).map((step, i) => (
+                    {summary.completedSteps.slice(-2).map((step: string, i: number) => (
                       <li key={i} className="flex gap-2 text-xs text-text-secondary/80">
                         <span className="w-1 h-1 rounded-full bg-green-400/40 mt-1.5 shrink-0" />
                         <span className="line-clamp-1">{step}</span>

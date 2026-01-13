@@ -14,7 +14,7 @@ import {
 } from '@/renderer/utils/searchReplace'
 import { smartReplace, normalizeLineEndings } from '@/renderer/utils/smartReplace'
 import { getAgentConfig } from '../utils/AgentConfig'
-import { AgentService } from '../services/AgentService'
+import { Agent } from '../core'
 import { useAgentStore } from '../store/AgentStore'
 import { lintService } from '../services/lintService'
 import { useStore } from '@/renderer/store'
@@ -118,7 +118,7 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
         const content = await api.file.read(path)
         if (content === null) return { success: false, result: '', error: `File not found: ${path}` }
 
-        AgentService.markFileAsRead(path, content)
+        Agent.markFileAsRead(path, content)
 
         const lines = content.split('\n')
         const startLine = typeof args.start_line === 'number' ? Math.max(1, args.start_line) : 1
@@ -178,7 +178,7 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
                     const validPath = resolvePath(p, ctx.workspacePath, true)
                     const content = await api.file.read(validPath)
                     if (content !== null) {
-                        AgentService.markFileAsRead(validPath, content)
+                        Agent.markFileAsRead(validPath, content)
                         return `\n--- File: ${p} ---\n${content}\n`
                     }
                     return `\n--- File: ${p} ---\n[File not found]\n`
@@ -212,7 +212,7 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
             const { findSimilarContent, analyzeEditError, generateFixSuggestion } = await import('../utils/EditRetryStrategy')
             
             const errorType = analyzeEditError(result.error || '')
-            const hasCache = AgentService.hasValidFileCache(path)
+            const hasCache = Agent.hasValidFileCache(path)
             
             // 查找相似内容
             const similar = findSimilarContent(normalizedContent, normalizedOld)
@@ -246,7 +246,7 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
         if (!writeSuccess) return { success: false, result: '', error: 'Failed to write file' }
 
         // 更新文件缓存
-        AgentService.markFileAsRead(path, newContent)
+        Agent.markFileAsRead(path, newContent)
         
         // 通知 LSP 并等待诊断
         await notifyLspAfterWrite(path)
@@ -290,14 +290,14 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
         if (originalContent === null) return { success: false, result: '', error: `File not found: ${path}` }
 
         // 对于行号替换，建议先读取文件以确保行号准确
-        if (!AgentService.hasValidFileCache(path)) {
+        if (!Agent.hasValidFileCache(path)) {
             logger.agent.warn(`[replace_file_content] File ${path} not in cache, line numbers may be inaccurate`)
         }
 
         const content = args.content as string
         if (originalContent === '') {
             const success = await api.file.write(path, content)
-            if (success) AgentService.markFileAsRead(path, content)
+            if (success) Agent.markFileAsRead(path, content)
             return success
                 ? { success: true, result: 'File written (was empty)', meta: { filePath: path, oldContent: '', newContent: content, linesAdded: content.split('\n').length, linesRemoved: 0 } }
                 : { success: false, result: '', error: 'Failed to write file' }
@@ -323,7 +323,7 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
         if (!success) return { success: false, result: '', error: 'Failed to write file' }
         
         // 更新文件缓存
-        AgentService.markFileAsRead(path, newContent)
+        Agent.markFileAsRead(path, newContent)
         
         // 通知 LSP 并等待诊断
         await notifyLspAfterWrite(path)
@@ -639,46 +639,19 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
         return { success: true, result: resultMsg }
     },
 
-    async ask_user(args, ctx) {
+    async ask_user(args, _ctx) {
         const question = args.question as string
         const options = args.options as Array<{ id: string; label: string; description?: string }>
         const multiSelect = (args.multiSelect as boolean) || false
-        const targetMessageId = ctx.currentAssistantId
-        
-        if (targetMessageId) {
-            const state = useAgentStore.getState()
-            const threadId = state.currentThreadId
-            
-            if (threadId) {
-                const thread = state.threads[threadId]
-                if (thread) {
-                    const msgIndex = thread.messages.findIndex(m => m.id === targetMessageId)
-                    if (msgIndex !== -1) {
-                        const newMessages = [...thread.messages]
-                        const message = newMessages[msgIndex]
-                        if (message.role === 'assistant') {
-                            newMessages[msgIndex] = {
-                                ...message,
-                                interactive: { type: 'interactive', question, options, multiSelect },
-                                isStreaming: false,
-                            }
-                            
-                            useAgentStore.setState({
-                                threads: {
-                                    ...state.threads,
-                                    [threadId]: { ...thread, messages: newMessages, lastModified: Date.now() },
-                                },
-                            })
-                        }
-                    }
-                }
-            }
-        }
 
+        // 返回 interactive 数据，由 loop.ts 负责设置到 store
         return {
             success: true,
             result: `Waiting for user to select from options. Question: "${question}"`,
-            meta: { waitingForUser: true },
+            meta: {
+                waitingForUser: true,
+                interactive: { type: 'interactive' as const, question, options, multiSelect },
+            },
         }
     },
 
@@ -893,8 +866,11 @@ function formatRecommendation(
 
 /**
  * 初始化工具注册表
+ * 注意：每次调用都会更新 globalExecutors，支持热重载
  */
 export async function initializeTools(): Promise<void> {
     const { toolRegistry } = await import('./registry')
+    // 每次都调用 registerAll 以更新 globalExecutors（支持热重载）
+    // registerAll 内部会更新 globalExecutors 引用
     toolRegistry.registerAll(toolExecutors)
 }

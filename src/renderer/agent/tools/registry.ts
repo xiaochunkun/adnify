@@ -27,7 +27,8 @@ interface RegisteredTool {
   name: string
   definition: ToolDefinition
   schema: z.ZodSchema
-  executor: ToolExecutor
+  /** 执行器引用（支持热重载） */
+  getExecutor: () => ToolExecutor
   category: ToolCategory
   approvalType: ToolApprovalType
   parallel: boolean
@@ -36,14 +37,20 @@ interface RegisteredTool {
 
 // ===== 注册表 =====
 
+/** 全局执行器映射（支持热重载） */
+let globalExecutors: Record<string, ToolExecutor> = {}
+
 class ToolRegistry {
   private tools = new Map<string, RegisteredTool>()
   private initialized = false
 
   /**
    * 注册工具
+   * @param name 工具名称
+   * @param _executor 执行器（仅用于类型检查，实际从 globalExecutors 获取）
+   * @param options 选项
    */
-  register(name: string, executor: ToolExecutor, options?: { override?: boolean }): boolean {
+  register(name: string, _executor: ToolExecutor, options?: { override?: boolean }): boolean {
     if (this.tools.has(name) && !options?.override) return false
 
     const definition = TOOL_DEFINITIONS[name]
@@ -55,11 +62,13 @@ class ToolRegistry {
       return false
     }
 
+    // 使用 getter 函数，每次执行时从 globalExecutors 获取最新的执行器
+    // 这样热重载时不需要重新注册
     this.tools.set(name, {
       name,
       definition,
       schema,
-      executor,
+      getExecutor: () => globalExecutors[name],
       category: config?.category || 'read',
       approvalType: config?.approvalType || 'none',
       parallel: config?.parallel ?? false,
@@ -71,8 +80,12 @@ class ToolRegistry {
 
   /**
    * 批量注册工具
+   * 注意：执行器存储在 globalExecutors 中，支持热重载
    */
   registerAll(executors: Record<string, ToolExecutor>): void {
+    // 更新全局执行器映射（热重载时会更新引用）
+    globalExecutors = executors
+    
     for (const [name, executor] of Object.entries(executors)) {
       this.register(name, executor, { override: true })
     }
@@ -134,8 +147,14 @@ class ToolRegistry {
       return { success: false, result: '', error: `Validation failed: ${validation.error}` }
     }
 
+    // 通过 getter 获取最新的执行器（支持热重载）
+    const executor = tool.getExecutor()
+    if (!executor) {
+      return { success: false, result: '', error: `Executor not found for tool: ${name}` }
+    }
+
     try {
-      return await tool.executor(validation.data as Record<string, unknown>, context)
+      return await executor(validation.data as Record<string, unknown>, context)
     } catch (error: any) {
       return { success: false, result: '', error: `Execution error: ${error.message}` }
     }

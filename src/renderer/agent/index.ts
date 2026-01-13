@@ -29,11 +29,11 @@ export {
 } from './store/AgentStore'
 export type { ContextStats } from './store/AgentStore'
 
-// 核心服务
-export { AgentService } from './services/AgentService'
-export type { LLMCallConfig } from './services/AgentService'
+// 核心模块（新架构）
+export { Agent, EventBus, approvalService } from './core'
+export type { LLMConfig, CompressionStats, AgentEvent, EventType } from './core'
 
-// 工具系统（只导出不与 types 冲突的）
+// 工具系统
 export {
     toolRegistry,
     TOOL_DEFINITIONS,
@@ -51,20 +51,22 @@ export { memoryService } from './services/memoryService'
 export type { MemoryItem } from './services/memoryService'
 export { composerService } from './services/composerService'
 
-// 新增服务
-export { executeToolCallsIntelligently, getExecutionStats } from './services/ParallelToolExecutor'
-export { toolExecutionService } from './services/ToolExecutionService'
-
 // 上下文管理
-export { contextManager, COMPRESSION_LEVELS } from './context'
-export type { CompressionStats, CompressionLevel } from './context'
+export {
+    pruneMessages,
+    getCompressionLevel,
+    COMPRESSION_LEVEL_NAMES,
+    buildHandoffContext,
+    buildWelcomeMessage,
+} from './context'
+export type { CompressionLevel, StructuredSummary, HandoffDocument } from './context'
 
 // LLM 相关
 export { buildContextContent, buildUserContent, calculateContextStats } from './llm/ContextBuilder'
 export { buildLLMMessages } from './llm/MessageBuilder'
 
 // 工具函数
-export { parseXMLToolCalls, parsePartialArgs, generateToolCallId } from './utils/XMLToolParser'
+export { parseXMLToolCalls, generateToolCallId } from './utils/XMLToolParser'
 export { MentionParser, SPECIAL_MENTIONS } from './utils/MentionParser'
 export type { MentionCandidate, MentionParseResult } from './utils/MentionParser'
 

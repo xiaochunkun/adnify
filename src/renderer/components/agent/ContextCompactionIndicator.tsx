@@ -3,9 +3,9 @@
  * 升级版：磨砂玻璃面板，胶囊设计
  */
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback } from 'react'
 import { Minimize2, ChevronDown, Trash2, Layers } from 'lucide-react'
-import { useAgentStore, selectCompressionStats, contextManager, COMPRESSION_LEVELS } from '@/renderer/agent'
+import { useAgentStore, selectCompressionStats, selectContextSummary, COMPRESSION_LEVEL_NAMES } from '@/renderer/agent'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { CompressionLevel } from '@/renderer/agent/context/types'
 
@@ -25,18 +25,19 @@ export default function ContextCompactionIndicator({
   language = 'en',
 }: ContextCompactionIndicatorProps) {
   const setContextSummary = useAgentStore(state => state.setContextSummary)
+  const setCompressionStats = useAgentStore(state => state.setCompressionStats)
   const compressionStats = useAgentStore(selectCompressionStats)
+  const summary = useAgentStore(selectContextSummary)
   
   const [isExpanded, setIsExpanded] = useState(false)
 
-  const summary = useMemo(() => contextManager.getSummary(), [compressionStats])
   const currentLevel = compressionStats?.level ?? 0
-  const levelConfig = COMPRESSION_LEVELS[currentLevel]
+  const levelName = compressionStats?.levelName ?? COMPRESSION_LEVEL_NAMES[currentLevel]
 
   const handleClearSummary = useCallback(() => {
-    contextManager.clear()
     setContextSummary(null)
-  }, [setContextSummary])
+    setCompressionStats(null)
+  }, [setContextSummary, setCompressionStats])
 
   if (!compressionStats || currentLevel === 0) {
     return null
@@ -73,7 +74,7 @@ export default function ContextCompactionIndicator({
                   <h4 className="text-sm font-bold text-text-primary tracking-tight">
                     Level {currentLevel}
                   </h4>
-                  <span className="text-[10px] text-text-muted">{levelConfig.description}</span>
+                  <span className="text-[10px] text-text-muted">{levelName}</span>
                 </div>
               </div>
               <button
@@ -121,7 +122,7 @@ export default function ContextCompactionIndicator({
                   <>
                     <div className="text-[10px] text-text-muted uppercase mt-2 mb-1">Completed</div>
                     <ul className="text-xs text-text-secondary list-disc list-inside">
-                      {summary.completedSteps.slice(-3).map((step, i) => (
+                      {summary.completedSteps.slice(-3).map((step: string, i: number) => (
                         <li key={i} className="truncate">{step}</li>
                       ))}
                     </ul>

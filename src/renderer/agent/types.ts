@@ -106,6 +106,8 @@ export interface ToolResultMessage {
     timestamp: number
     type: ToolResultType
     rawParams?: Record<string, unknown>
+    /** 压缩时间戳（如果已被压缩） */
+    compactedAt?: number
 }
 
 /** Checkpoint 消息 */

@@ -1,478 +1,214 @@
 /**
  * 上下文压缩系统测试
  * 
- * 测试 5 级压缩策略：
- * L0: Full Context (< 50%)
- * L1: Smart Truncation (50-70%)
- * L2: Sliding Window + Summary (70-85%)
- * L3: Deep Compression (85-95%)
- * L4: Session Handoff (> 95%)
+ * 测试新架构的压缩功能：
+ * - Token 估算
+ * - 压缩级别判断
+ * - 消息 Prune
+ * - 摘要生成
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
-import { ContextManager } from '../../src/renderer/agent/context/ContextManager'
-import { countTokens, countMessageTokens, countTotalTokens } from '../../src/renderer/agent/context/TokenEstimator'
-import { truncateToolResult } from '../../src/renderer/agent/context/MessageTruncator'
-import { scoreMessageGroup } from '../../src/renderer/agent/context/ImportanceScorer'
-import { generateQuickSummary, generateHandoffDocument } from '../../src/renderer/agent/context/SummaryGenerator'
-import type { OpenAIMessage } from '../../src/renderer/agent/llm/MessageConverter'
-import type { MessageGroup } from '../../src/renderer/agent/context/types'
+import { describe, it, expect } from 'vitest'
+import {
+  estimateTokens,
+  estimateTotalTokens,
+  getCompressionLevel,
+  pruneMessages,
+  getMessageContent,
+  COMPRESSION_LEVEL_NAMES,
+  PRUNE_MINIMUM,
+  PRUNE_PROTECT,
+} from '../../src/renderer/agent/context/compaction'
+import type { ChatMessage, UserMessage, AssistantMessage, ToolResultMessage } from '../../src/renderer/agent/types'
 
 // ===== 辅助函数 =====
 
-function createUserMessage(content: string): OpenAIMessage {
-  return { role: 'user', content }
-}
-
-function createAssistantMessage(content: string, toolCalls?: any[]): OpenAIMessage {
-  return { role: 'assistant', content, tool_calls: toolCalls }
-}
-
-function createToolMessage(content: string, toolCallId = 'tc-1'): OpenAIMessage {
-  return { role: 'tool', content, tool_call_id: toolCallId } as any
-}
-
-function createSystemMessage(content: string): OpenAIMessage {
-  return { role: 'system', content }
-}
-
-function createWriteToolCall(path: string): any {
+function createUserMessage(content: string, id = `user-${Date.now()}`): UserMessage {
   return {
-    id: `tc-${Math.random().toString(36).slice(2)}`,
-    type: 'function',
-    function: { name: 'write_file', arguments: JSON.stringify({ path, content: 'test' }) }
+    id,
+    role: 'user',
+    content,
+    timestamp: Date.now(),
   }
 }
 
-function createReadToolCall(path: string): any {
+function createAssistantMessage(content: string, id = `assistant-${Date.now()}`): AssistantMessage {
   return {
-    id: `tc-${Math.random().toString(36).slice(2)}`,
-    type: 'function',
-    function: { name: 'read_file', arguments: JSON.stringify({ path }) }
+    id,
+    role: 'assistant',
+    content,
+    timestamp: Date.now(),
+    parts: [{ type: 'text', content }],
   }
 }
 
-// ===== Token 计算测试 =====
+function createToolResultMessage(
+  content: string,
+  name = 'read_file',
+  id = `tool-${Date.now()}`
+): ToolResultMessage {
+  return {
+    id,
+    role: 'tool',
+    toolCallId: `tc-${id}`,
+    name,
+    content,
+    timestamp: Date.now(),
+    type: 'success',
+  }
+}
 
-describe('TokenEstimator', () => {
-  it('should count tokens for English text', () => {
+// ===== Token 估算测试 =====
+
+describe('Token Estimation', () => {
+  it('should estimate tokens for English text', () => {
     const text = 'Hello world, this is a test.'
-    const tokens = countTokens(text)
+    const tokens = estimateTokens(text)
     expect(tokens).toBeGreaterThan(0)
     expect(tokens).toBeLessThan(text.length)
   })
 
-  it('should count tokens for Chinese text', () => {
+  it('should estimate tokens for Chinese text', () => {
     const chinese = '你好世界，这是一个测试。'
-    const tokens = countTokens(chinese)
+    const tokens = estimateTokens(chinese)
     expect(tokens).toBeGreaterThan(0)
   })
 
-  it('should count message tokens including structure overhead', () => {
-    const msg = createUserMessage('Hello')
-    const tokens = countMessageTokens(msg)
-    expect(tokens).toBeGreaterThan(countTokens('Hello'))
+  it('should handle empty string', () => {
+    expect(estimateTokens('')).toBe(0)
   })
 
-  it('should count tool_calls tokens', () => {
-    const msg = createAssistantMessage('', [createReadToolCall('test.ts')])
-    const tokens = countMessageTokens(msg)
-    expect(tokens).toBeGreaterThan(10)
-  })
-
-  it('should count total tokens for message array', () => {
-    const messages = [
-      createSystemMessage('System'),
+  it('should estimate total tokens for message array', () => {
+    const messages: ChatMessage[] = [
       createUserMessage('Hello'),
-      createAssistantMessage('Hi'),
+      createAssistantMessage('Hi there!'),
     ]
-    const total = countTotalTokens(messages)
+    const total = estimateTotalTokens(messages)
     expect(total).toBeGreaterThan(0)
   })
 })
 
-// ===== 消息截断测试 =====
+// ===== 压缩级别测试 =====
 
-describe('MessageTruncator', () => {
-  it('should not truncate short content', () => {
-    const content = 'Short content'
-    const result = truncateToolResult(content, 'read_file')
-    expect(result).toBe(content)
+describe('Compression Level', () => {
+  it('should return level 0 for low usage', () => {
+    expect(getCompressionLevel(0.3)).toBe(0)
+    expect(getCompressionLevel(0.49)).toBe(0)
   })
 
-  it('should truncate long content', () => {
-    // read_file 默认 maxLength 是 20000
-    const content = 'x'.repeat(30000)
-    const result = truncateToolResult(content, 'read_file')
-    
-    expect(result.length).toBeLessThan(content.length)
-    expect(result).toContain('omitted')
+  it('should return level 1 for 50-70% usage', () => {
+    expect(getCompressionLevel(0.5)).toBe(1)
+    expect(getCompressionLevel(0.69)).toBe(1)
   })
 
-  it('should preserve error messages at the start', () => {
-    const content = 'Error: File not found\n' + 'x'.repeat(30000)
-    const result = truncateToolResult(content, 'read_file')
-    
-    expect(result).toContain('Error: File not found')
+  it('should return level 2 for 70-85% usage', () => {
+    expect(getCompressionLevel(0.7)).toBe(2)
+    expect(getCompressionLevel(0.84)).toBe(2)
+  })
+
+  it('should return level 3 for 85-95% usage', () => {
+    expect(getCompressionLevel(0.85)).toBe(3)
+    expect(getCompressionLevel(0.94)).toBe(3)
+  })
+
+  it('should return level 4 for >95% usage', () => {
+    expect(getCompressionLevel(0.95)).toBe(4)
+    expect(getCompressionLevel(1.0)).toBe(4)
+  })
+
+  it('should have correct level names', () => {
+    expect(COMPRESSION_LEVEL_NAMES[0]).toBe('Full Context')
+    expect(COMPRESSION_LEVEL_NAMES[4]).toBe('Session Handoff')
   })
 })
 
-// ===== 重要性评分测试 =====
+// ===== Prune 测试 =====
 
-describe('ImportanceScorer', () => {
-  it('should score groups with write operations higher', () => {
-    const messages: OpenAIMessage[] = [
-      createUserMessage('Write a file'),
-      createAssistantMessage('', [createWriteToolCall('test.ts')]),
-      createToolMessage('File written'),
+describe('Message Pruning', () => {
+  it('should not prune when below threshold', () => {
+    const messages: ChatMessage[] = [
+      createUserMessage('Hello'),
+      createAssistantMessage('Hi'),
+      createToolResultMessage('Short result'),
     ]
     
-    const group: MessageGroup = {
-      turnIndex: 0,
-      userIndex: 0,
-      assistantIndex: 1,
-      toolIndices: [2],
-      tokens: 100,
-      importance: 0,
-      hasWriteOps: true,
-      hasErrors: false,
-      files: ['test.ts'],
+    const result = pruneMessages(messages)
+    expect(result.prunedCount).toBe(0)
+    expect(result.messagesToCompact).toHaveLength(0)
+  })
+
+  it('should return message IDs to prune when above threshold', () => {
+    const messages: ChatMessage[] = []
+    
+    // 创建多轮对话，每轮有大量工具输出
+    for (let i = 0; i < 10; i++) {
+      messages.push(createUserMessage(`Question ${i}`, `user-${i}`))
+      messages.push(createAssistantMessage(`Answer ${i}`, `assistant-${i}`))
+      messages.push(createToolResultMessage('x'.repeat(20000), 'read_file', `tool-${i}`))
     }
     
-    const score = scoreMessageGroup(group, messages, [group])
-    expect(score).toBeGreaterThan(50)
+    const result = pruneMessages(messages)
+    
+    // 应该返回需要压缩的消息 ID 列表
+    expect(result.total).toBeGreaterThan(0)
+    expect(result.messagesToCompact).toBeInstanceOf(Array)
   })
 
-  it('should score groups with errors higher', () => {
-    const messages: OpenAIMessage[] = [
-      createUserMessage('Read a file'),
-      createAssistantMessage('', [createReadToolCall('test.ts')]),
-      createToolMessage('Error: File not found'),
+  it('should not include protected tools in prune list', () => {
+    const messages: ChatMessage[] = [
+      createUserMessage('Hello'),
+      createAssistantMessage('Hi'),
+      createToolResultMessage('x'.repeat(50000), 'ask_user', 'tool-1'),
+      createUserMessage('Another'),
+      createAssistantMessage('Response'),
     ]
     
-    const group: MessageGroup = {
-      turnIndex: 0,
-      userIndex: 0,
-      assistantIndex: 1,
-      toolIndices: [2],
-      tokens: 100,
-      importance: 0,
-      hasWriteOps: false,
-      hasErrors: true,
-      files: [],
-    }
+    const result = pruneMessages(messages)
     
-    const score = scoreMessageGroup(group, messages, [group])
-    expect(score).toBeGreaterThan(50)
+    // ask_user 是受保护的工具，不应在 prune 列表中
+    expect(result.messagesToCompact).not.toContain('tool-1')
+  })
+
+  it('should return correct prune stats', () => {
+    const messages: ChatMessage[] = [
+      createUserMessage('Q1'),
+      createAssistantMessage('A1'),
+      createToolResultMessage('x'.repeat(100), 'read_file'),
+    ]
+    
+    const result = pruneMessages(messages)
+    
+    expect(result).toHaveProperty('pruned')
+    expect(result).toHaveProperty('total')
+    expect(result).toHaveProperty('prunedCount')
+    expect(result).toHaveProperty('messagesToCompact')
   })
 })
 
-// ===== 摘要生成测试 =====
+// ===== 消息内容获取测试 =====
 
-describe('SummaryGenerator', () => {
-  it('should generate quick summary from messages', () => {
-    const messages: OpenAIMessage[] = [
-      createUserMessage('Create a React component'),
-      createAssistantMessage('I will create the component', [createWriteToolCall('Button.tsx')]),
-      createToolMessage('File created'),
-    ]
-    
-    const groups: MessageGroup[] = [{
-      turnIndex: 0,
-      userIndex: 0,
-      assistantIndex: 1,
-      toolIndices: [2],
-      tokens: 100,
-      importance: 50,
-      hasWriteOps: true,
-      hasErrors: false,
-      files: ['Button.tsx'],
-    }]
-    
-    const summary = generateQuickSummary(messages, groups, [0, 0])
-    
-    expect(summary.objective).toBeTruthy()
-    expect(summary.turnRange).toEqual([0, 0])
-    expect(summary.generatedAt).toBeGreaterThan(0)
+describe('Message Content', () => {
+  it('should return content for normal message', () => {
+    const msg = createToolResultMessage('Test content')
+    expect(getMessageContent(msg)).toBe('Test content')
   })
 
-  it('should generate handoff document', () => {
-    const messages: OpenAIMessage[] = [
-      createUserMessage('Build a todo app'),
-      createAssistantMessage('Starting the project'),
-    ]
+  it('should return placeholder for compacted message', () => {
+    const msg = createToolResultMessage('Test content')
+    msg.compactedAt = Date.now()
     
-    const groups: MessageGroup[] = [{
-      turnIndex: 0,
-      userIndex: 0,
-      assistantIndex: 1,
-      toolIndices: [],
-      tokens: 50,
-      importance: 30,
-      hasWriteOps: false,
-      hasErrors: false,
-      files: [],
-    }]
-    
-    const summary = generateQuickSummary(messages, groups, [0, 0])
-    const handoff = generateHandoffDocument('session-1', messages, groups, summary, '/workspace')
-    
-    expect(handoff.fromSessionId).toBe('session-1')
-    expect(handoff.summary).toBe(summary)
-    expect(handoff.lastUserRequest).toContain('todo app')
+    expect(getMessageContent(msg)).toBe('[Old tool result content cleared]')
   })
 })
 
-// ===== ContextManager 核心测试 =====
+// ===== 常量测试 =====
 
-describe('ContextManager', () => {
-  let manager: ContextManager
-
-  beforeEach(() => {
-    manager = new ContextManager()
-    manager.clear()
+describe('Constants', () => {
+  it('should have correct PRUNE_MINIMUM', () => {
+    expect(PRUNE_MINIMUM).toBe(20000)
   })
 
-  describe('Level 0: Full Context', () => {
-    it('should keep all messages when under 50% capacity', () => {
-      const messages: OpenAIMessage[] = [
-        createSystemMessage('System prompt'),
-        createUserMessage('Hello'),
-        createAssistantMessage('Hi there!'),
-      ]
-
-      const result = manager.optimize(messages, { maxTokens: 100000 })
-
-      expect(result.stats.compressionLevel).toBe(0)
-      expect(result.messages.length).toBe(3)
-      expect(result.stats.compactedTurns).toBe(0)
-      expect(result.stats.needsHandoff).toBe(false)
-    })
-  })
-
-  describe('Level 1: Smart Truncation', () => {
-    it('should truncate tool results when 50-70% capacity', () => {
-      const messages: OpenAIMessage[] = [
-        createSystemMessage('System'),
-        createUserMessage('Read file'),
-        createAssistantMessage('', [createReadToolCall('large.ts')]),
-        createToolMessage('x'.repeat(50000)),
-      ]
-
-      // 计算实际 token 数，设置 maxTokens 使占比在 50-70%
-      const actualTokens = countTotalTokens(messages)
-      const maxTokens = Math.floor(actualTokens / 0.6) // 约 60%
-
-      const result = manager.optimize(messages, { maxTokens })
-
-      expect(result.stats.compressionLevel).toBe(1)
-      
-      const toolMsg = result.messages.find(m => m.role === 'tool')
-      expect(toolMsg?.content.length).toBeLessThan(50000)
-    })
-  })
-
-  describe('Level 2: Sliding Window + Summary', () => {
-    it('should keep recent turns and generate summary when 70-85% capacity', () => {
-      const messages: OpenAIMessage[] = [createSystemMessage('System')]
-      
-      for (let i = 0; i < 15; i++) {
-        messages.push(createUserMessage(`Question ${i}: ${'x'.repeat(200)}`))
-        messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(200)}`))
-      }
-
-      const actualTokens = countTotalTokens(messages)
-      const maxTokens = Math.floor(actualTokens / 0.75) // 约 75%
-
-      const result = manager.optimize(messages, {
-        maxTokens,
-        keepRecentTurns: 5,
-      })
-
-      expect(result.stats.compressionLevel).toBe(2)
-      expect(result.stats.keptTurns).toBeLessThanOrEqual(8)
-      expect(result.stats.compactedTurns).toBeGreaterThan(0)
-      expect(result.summary).toBeTruthy()
-    })
-
-    it('should preserve high-importance old turns', () => {
-      const messages: OpenAIMessage[] = [createSystemMessage('System')]
-      
-      // 第一轮：写操作（高重要性）
-      messages.push(createUserMessage('Create file'))
-      messages.push(createAssistantMessage('', [createWriteToolCall('important.ts')]))
-      messages.push(createToolMessage('Created'))
-      
-      for (let i = 0; i < 10; i++) {
-        messages.push(createUserMessage(`Question ${i}: ${'x'.repeat(100)}`))
-        messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(100)}`))
-      }
-
-      const actualTokens = countTotalTokens(messages)
-      const maxTokens = Math.floor(actualTokens / 0.75)
-
-      const result = manager.optimize(messages, {
-        maxTokens,
-        keepRecentTurns: 3,
-      })
-
-      expect(result.stats.compressionLevel).toBeGreaterThanOrEqual(2)
-    })
-  })
-
-  describe('Level 3: Deep Compression', () => {
-    it('should only keep recent turns when 85-95% capacity', () => {
-      const messages: OpenAIMessage[] = [createSystemMessage('System')]
-      
-      for (let i = 0; i < 30; i++) {
-        messages.push(createUserMessage(`Question ${i}: ${'x'.repeat(300)}`))
-        messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(300)}`))
-      }
-
-      const actualTokens = countTotalTokens(messages)
-      const maxTokens = Math.floor(actualTokens / 0.9) // 约 90%
-
-      const result = manager.optimize(messages, {
-        maxTokens,
-        deepCompressionTurns: 2,
-        autoHandoff: false,
-      })
-
-      expect(result.stats.compressionLevel).toBe(3)
-      expect(result.stats.keptTurns).toBe(2)
-      expect(result.summary).toBeTruthy()
-    })
-  })
-
-  describe('Level 4: Session Handoff', () => {
-    it('should trigger handoff when over 95% capacity', () => {
-      const messages: OpenAIMessage[] = [createSystemMessage('System')]
-      
-      for (let i = 0; i < 50; i++) {
-        messages.push(createUserMessage(`Question ${i}: ${'x'.repeat(500)}`))
-        messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(500)}`))
-      }
-
-      const actualTokens = countTotalTokens(messages)
-      const maxTokens = Math.floor(actualTokens / 0.97) // 约 97%
-
-      const result = manager.optimize(messages, {
-        maxTokens,
-        autoHandoff: true,
-      })
-
-      expect(result.stats.compressionLevel).toBe(4)
-      expect(result.stats.needsHandoff).toBe(true)
-      expect(result.handoff).toBeTruthy()
-      expect(result.handoff?.summary).toBeTruthy()
-    })
-
-    it('should fallback to L3 when autoHandoff is false', () => {
-      const messages: OpenAIMessage[] = [createSystemMessage('System')]
-      
-      for (let i = 0; i < 50; i++) {
-        messages.push(createUserMessage(`Question ${i}: ${'x'.repeat(500)}`))
-        messages.push(createAssistantMessage(`Answer ${i}: ${'y'.repeat(500)}`))
-      }
-
-      const actualTokens = countTotalTokens(messages)
-      const maxTokens = Math.floor(actualTokens / 0.97)
-
-      const result = manager.optimize(messages, {
-        maxTokens,
-        autoHandoff: false,
-      })
-
-      expect(result.stats.compressionLevel).toBe(3)
-      expect(result.stats.needsHandoff).toBe(false)
-    })
-  })
-
-  describe('Edge Cases', () => {
-    it('should handle empty messages', () => {
-      const result = manager.optimize([], { maxTokens: 100000 })
-      
-      expect(result.messages.length).toBe(0)
-      expect(result.stats.compressionLevel).toBe(0)
-    })
-
-    it('should handle only system message', () => {
-      const messages = [createSystemMessage('System')]
-      const result = manager.optimize(messages, { maxTokens: 100000 })
-      
-      expect(result.messages.length).toBe(1)
-      expect(result.stats.keptTurns).toBe(0)
-    })
-
-    it('should merge summaries correctly', () => {
-      const messages1: OpenAIMessage[] = [createSystemMessage('System')]
-      for (let i = 0; i < 10; i++) {
-        messages1.push(createUserMessage(`Q${i}: ${'x'.repeat(50)}`))
-        messages1.push(createAssistantMessage(`A${i}: ${'y'.repeat(50)}`))
-      }
-      
-      const actualTokens1 = countTotalTokens(messages1)
-      manager.optimize(messages1, { maxTokens: Math.floor(actualTokens1 / 0.75), keepRecentTurns: 3 })
-      const summary1 = manager.getSummary()
-      
-      const messages2 = [...messages1]
-      for (let i = 10; i < 20; i++) {
-        messages2.push(createUserMessage(`Q${i}: ${'x'.repeat(50)}`))
-        messages2.push(createAssistantMessage(`A${i}: ${'y'.repeat(50)}`))
-      }
-      
-      const actualTokens2 = countTotalTokens(messages2)
-      manager.optimize(messages2, { maxTokens: Math.floor(actualTokens2 / 0.75), keepRecentTurns: 3 })
-      const summary2 = manager.getSummary()
-      
-      expect(summary2).toBeTruthy()
-      if (summary1 && summary2) {
-        expect(summary2.turnRange[1]).toBeGreaterThanOrEqual(summary1.turnRange[1])
-      }
-    })
-
-    it('should clear state correctly', () => {
-      manager.setSummary({ 
-        objective: 'test',
-        completedSteps: [],
-        pendingSteps: [],
-        decisions: [],
-        fileChanges: [],
-        errorsAndFixes: [],
-        userInstructions: [],
-        generatedAt: Date.now(),
-        turnRange: [0, 0],
-      })
-      
-      expect(manager.getSummary()).toBeTruthy()
-      
-      manager.clear()
-      
-      expect(manager.getSummary()).toBeNull()
-      expect(manager.getHandoff()).toBeNull()
-      expect(manager.getCurrentLevel()).toBe(0)
-    })
-  })
-
-  describe('Stats Tracking', () => {
-    it('should track compression stats', () => {
-      const messages: OpenAIMessage[] = [createSystemMessage('System')]
-      for (let i = 0; i < 20; i++) {
-        messages.push(createUserMessage(`Q${i}: ${'x'.repeat(100)}`))
-        messages.push(createAssistantMessage(`A${i}: ${'y'.repeat(100)}`))
-      }
-
-      const actualTokens = countTotalTokens(messages)
-      manager.optimize(messages, { maxTokens: Math.floor(actualTokens / 0.6), keepRecentTurns: 5 })
-      
-      const stats = manager.getStats()
-      
-      expect(stats).toBeTruthy()
-      expect(stats?.level).toBeGreaterThan(0)
-      expect(stats?.originalTokens).toBeGreaterThan(0)
-      expect(stats?.finalTokens).toBeLessThanOrEqual(stats?.originalTokens || 0)
-      expect(stats?.savedPercent).toBeGreaterThanOrEqual(0)
-      expect(stats?.lastOptimizedAt).toBeGreaterThan(0)
-    })
+  it('should have correct PRUNE_PROTECT', () => {
+    expect(PRUNE_PROTECT).toBe(40000)
   })
 })

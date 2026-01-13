@@ -16,7 +16,7 @@ import {
   selectPendingChanges,
   selectMessageCheckpoints,
 } from '@/renderer/agent/store/AgentStore'
-import { AgentService } from '@/renderer/agent/services/AgentService'
+import { Agent, getAgentConfig } from '@/renderer/agent'
 import { MessageContent, ChatThread, ToolCall } from '@/renderer/agent/types'
 import { buildAgentSystemPrompt } from '@/renderer/agent/prompts/prompts'
 
@@ -118,7 +118,10 @@ export function useAgent() {
       promptTemplateId,
     })
 
-    await AgentService.sendMessage(
+    // 获取 agent 配置中的 contextLimit
+    const agentConfig = getAgentConfig()
+
+    await Agent.send(
       content,
       {
         provider: llmConfig.provider,
@@ -131,6 +134,8 @@ export function useAgent() {
         topP: llmConfig.parameters?.topP,
         adapterConfig: llmConfig.adapterConfig,
         advanced: llmConfig.advanced,
+        // 传递上下文限制（用于压缩判断）
+        contextLimit: agentConfig.maxContextTokens,
       },
       workspacePath,
       systemPrompt,
@@ -140,17 +145,17 @@ export function useAgent() {
 
   // 中止
   const abort = useCallback(() => {
-    AgentService.abort()
+    Agent.abort()
   }, [])
 
   // 批准当前工具
   const approveCurrentTool = useCallback(() => {
-    AgentService.approve()
+    Agent.approve()
   }, [])
 
   // 拒绝当前工具
   const rejectCurrentTool = useCallback(() => {
-    AgentService.reject()
+    Agent.reject()
   }, [])
 
 

@@ -11,7 +11,7 @@ import { Button, Switch } from '@components/ui'
 import { Language } from '@renderer/i18n'
 import { useStore } from '@store'
 import { downloadSettings, importSettingsFromJSON, settingsService } from '@renderer/settings'
-import { AgentService } from '@/renderer/agent/services/AgentService'
+import { Agent } from '@/renderer/agent'
 import { memoryService } from '@/renderer/agent/services/memoryService'
 import type { RuntimeSettings } from '@shared/config/types'
 import type { ProviderModelConfig } from '@renderer/store/slices/settingsSlice'
@@ -120,7 +120,7 @@ export function SystemSettings({ language }: SystemSettingsProps) {
             await api.settings.set('editorConfig', undefined)
             
             // 4. 清除 Agent 文件读取缓存
-            AgentService.clearSession()
+            Agent.clearSession()
             
             // 5. 清除 Memory 服务缓存
             memoryService.clearCache()

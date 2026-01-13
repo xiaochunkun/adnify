@@ -23,7 +23,7 @@ import {
     type Branch,
 } from './slices'
 import type { ChatMessage, ContextItem } from '../types'
-import type { CompressionStats } from '../context'
+import type { CompressionStats } from '../core/types'
 import type { HandoffDocument } from '../context/types'
 import { buildHandoffContext } from '../context/HandoffManager'
 
@@ -86,7 +86,8 @@ export type AgentStore = ThreadSlice & MessageSlice & CheckpointSlice & PlanSlic
 
 class StreamingBuffer {
     private buffer: Map<string, string> = new Map()
-    private timerId: ReturnType<typeof setTimeout> | null = null
+    private rafId: number | null = null
+    private timeoutId: ReturnType<typeof setTimeout> | null = null
     private flushCallback: ((messageId: string, content: string) => void) | null = null
     private lastFlushTime = 0
     private readonly FLUSH_INTERVAL = 16 // 约 60fps，更流畅的更新
@@ -102,23 +103,21 @@ class StreamingBuffer {
     }
 
     private scheduleFlush(): void {
-        if (this.timerId) return
+        if (this.rafId || this.timeoutId) return
         
-        // 使用 requestAnimationFrame 获得更流畅的更新
-        // 同时保持最小间隔避免过度渲染
         const now = performance.now()
         const elapsed = now - this.lastFlushTime
         
         if (elapsed >= this.FLUSH_INTERVAL) {
-            // 已经过了足够时间，立即用 rAF 刷新
-            this.timerId = requestAnimationFrame(() => {
-                this.timerId = null
+            // 已经过了足够时间，用 rAF 刷新
+            this.rafId = requestAnimationFrame(() => {
+                this.rafId = null
                 this.flush()
-            }) as unknown as ReturnType<typeof setTimeout>
+            })
         } else {
             // 还需要等待，用 setTimeout
-            this.timerId = setTimeout(() => {
-                this.timerId = null
+            this.timeoutId = setTimeout(() => {
+                this.timeoutId = null
                 this.flush()
             }, this.FLUSH_INTERVAL - elapsed)
         }
@@ -139,20 +138,25 @@ class StreamingBuffer {
     }
 
     flushNow(): void {
-        if (this.timerId) {
-            // 尝试取消两种类型的定时器
-            clearTimeout(this.timerId)
-            cancelAnimationFrame(this.timerId as unknown as number)
-            this.timerId = null
+        if (this.timeoutId) {
+            clearTimeout(this.timeoutId)
+            this.timeoutId = null
+        }
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId)
+            this.rafId = null
         }
         this.flush()
     }
 
     clear(): void {
-        if (this.timerId) {
-            clearTimeout(this.timerId)
-            cancelAnimationFrame(this.timerId as unknown as number)
-            this.timerId = null
+        if (this.timeoutId) {
+            clearTimeout(this.timeoutId)
+            this.timeoutId = null
+        }
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId)
+            this.rafId = null
         }
         this.buffer.clear()
     }
@@ -213,13 +217,6 @@ export const useAgentStore = create<AgentStore>()(
                         // 保留 contextSummary 用于底部栏显示
                         contextSummary: handoff.summary,
                     } as any)
-                    
-                    // 重置 contextManager 并设置 handoff 摘要
-                    import('../context').then(({ contextManager }) => {
-                        contextManager.clear()
-                        contextManager.setSummary(handoff.summary)
-                        contextManager.setSessionId(newThreadId)
-                    })
                     
                     // 存储 handoff 上下文到线程元数据
                     const threads = (get() as any).threads
@@ -386,19 +383,16 @@ export async function initializeAgentStore(): Promise<void> {
         logger.agent.info('[AgentStore] Tools initialized')
         
         // 监听线程切换，重置压缩状态
-        const { contextManager } = await import('../context')
         let lastThreadId = useAgentStore.getState().currentThreadId
         
         useAgentStore.subscribe((state) => {
             if (state.currentThreadId !== lastThreadId) {
                 lastThreadId = state.currentThreadId
-                // 重置压缩状态
-                contextManager.clear()
                 // 重置 handoff 状态
                 useAgentStore.getState().setHandoffRequired(false)
                 useAgentStore.getState().setHandoffDocument(null)
                 useAgentStore.getState().setCompressionStats(null)
-                logger.agent.info('[AgentStore] Thread changed, context manager reset')
+                logger.agent.info('[AgentStore] Thread changed, compression state reset')
             }
         })
     } catch (error) {

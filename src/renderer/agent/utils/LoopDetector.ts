@@ -361,5 +361,4 @@ export class LoopDetector {
   }
 }
 
-// 导出默认实例
-export const loopDetector = new LoopDetector()
+

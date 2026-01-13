@@ -17,8 +17,9 @@ import type {
     FileSnapshot,
     AssistantPart,
     ReasoningPart,
+    InteractiveContent,
 } from '../../types'
-import { contextManager } from '../../context'
+// 注意：不再使用 contextManager，压缩逻辑在 loop.ts 中处理
 import type { ThreadSlice } from './threadSlice'
 
 // ===== 类型定义 =====
@@ -43,6 +44,9 @@ export interface MessageActions {
     addReasoningPart: (messageId: string) => string
     updateReasoningPart: (messageId: string, partId: string, content: string, isStreaming?: boolean) => void
     finalizeReasoningPart: (messageId: string, partId: string) => void
+
+    // 交互式内容操作
+    setInteractive: (messageId: string, interactive: InteractiveContent) => void
 
     // 上下文操作
     addContextItem: (item: ContextItem) => void
@@ -310,8 +314,7 @@ export const createMessageSlice: StateCreator<
         const threadId = get().currentThreadId
         if (!threadId) return
 
-        // 重置 ContextManager 状态（清除摘要、handoff 等）
-        contextManager.clear()
+        // 压缩状态会在 store 中重置
 
         set(state => {
             const thread = state.threads[threadId]
@@ -344,7 +347,6 @@ export const createMessageSlice: StateCreator<
         if (!threadId) return
 
         // 重置 handoff 状态（回退消息后可能不再需要 handoff）
-        contextManager.clear()
 
         set(state => {
             const thread = state.threads[threadId]
@@ -545,6 +547,36 @@ export const createMessageSlice: StateCreator<
                 threads: {
                     ...state.threads,
                     [threadId]: { ...thread, messages },
+                },
+            }
+        })
+    },
+
+    // 设置交互式内容（用于 ask_user 工具）
+    setInteractive: (messageId, interactive) => {
+        const threadId = get().currentThreadId
+        if (!threadId) return
+
+        set(state => {
+            const thread = state.threads[threadId]
+            if (!thread) return state
+
+            const messages = thread.messages.map(msg => {
+                if (msg.id === messageId && msg.role === 'assistant') {
+                    return { ...msg, interactive, isStreaming: false }
+                }
+                return msg
+            })
+
+            return {
+                threads: {
+                    ...state.threads,
+                    [threadId]: {
+                        ...thread,
+                        messages,
+                        state: { ...thread.state, isStreaming: false },
+                        lastModified: Date.now(),
+                    },
                 },
             }
         })

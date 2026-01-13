@@ -2,28 +2,35 @@
  * 上下文管理模块
  */
 
-export { contextManager, ContextManager } from './ContextManager'
-export type { CompressionStats } from './ContextManager'
+// 压缩模块
+export {
+  pruneMessages,
+  getCompressionLevel,
+  estimateTokens,
+  estimateTotalTokens,
+  getMessageContent,
+  markAssistantCompacted,
+  COMPRESSION_LEVEL_NAMES,
+  PRUNE_MINIMUM,
+  PRUNE_PROTECT,
+  type CompactionResult,
+  type CompressionLevel,
+  type CompressionStats,
+} from './compaction'
 
-export { countTokens, countMessageTokens, countTotalTokens } from './TokenEstimator'
-// 兼容旧 API
-export { estimateTokens, estimateMessageTokens, estimateTotalTokens } from './TokenEstimator'
+// 摘要服务
+export {
+  generateSummary,
+  generateHandoffDocument,
+  type SummaryResult,
+} from './summaryService'
 
-export { truncateToolResult, truncateMessage } from './MessageTruncator'
-export { scoreMessageGroup, extractDecisionPoints, extractFileChanges } from './ImportanceScorer'
-export { generateQuickSummary, generateHandoffDocument, handoffToSystemPrompt, buildSummaryPrompt } from './SummaryGenerator'
+// Handoff 管理
 export { buildHandoffContext, buildWelcomeMessage } from './HandoffManager'
 
+// 类型
 export type {
-  CompressionLevel,
-  LevelConfig,
-  DecisionPoint,
-  FileChangeRecord,
   StructuredSummary,
   HandoffDocument,
-  ContextStats,
-  OptimizedContext,
-  MessageGroup,
+  FileChangeRecord,
 } from './types'
-
-export { COMPRESSION_LEVELS } from './types'

@@ -3,7 +3,7 @@
  * 将内部消息格式转换为 LLM API 格式（OpenAI 兼容）
  */
 
-import { ChatMessage, isUserMessage, isAssistantMessage, isToolResultMessage, MessageContent } from '../types'
+import { ChatMessage, isUserMessage, isAssistantMessage, isToolResultMessage, MessageContent, ToolResultMessage } from '../types'
 
 // ===== OpenAI 格式消息 =====
 
@@ -81,9 +81,13 @@ export function buildOpenAIMessages(
         for (const tc of validToolCalls) {
           const toolResult = toolResultMap.get(tc.id)!
           if (isToolResultMessage(toolResult)) {
+            // 处理压缩的工具结果
+            const content = (toolResult as ToolResultMessage).compactedAt
+              ? '[Old tool result content cleared]'
+              : toolResult.content
             result.push({
               role: 'tool',
-              content: toolResult.content,
+              content,
               tool_call_id: tc.id,
               name: toolResult.name,
             })

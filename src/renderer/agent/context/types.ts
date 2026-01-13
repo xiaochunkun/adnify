@@ -4,14 +4,17 @@
 
 import type { OpenAIMessage } from '../llm/MessageConverter'
 
-/** 压缩级别 0-4 */
-export type CompressionLevel = 0 | 1 | 2 | 3 | 4
+// 从 compaction.ts 导入 CompressionLevel，避免重复定义
+export type { CompressionLevel } from './compaction'
 
 /** 压缩级别配置 */
 export interface LevelConfig {
   threshold: number  // 触发阈值（占上限的比例）
   description: string
 }
+
+// 导入 CompressionLevel 用于类型
+import type { CompressionLevel } from './compaction'
 
 /** 压缩级别配置表 */
 export const COMPRESSION_LEVELS: Record<CompressionLevel, LevelConfig> = {

@@ -81,7 +81,7 @@ function StatusBadge({ status }: { status: PlanFileData['status'] }) {
 }
 
 export function PlanPreview({ content, fontSize = 14 }: PlanPreviewProps) {
-    const { sendMessage } = useAgent()
+    const { sendMessage, abort } = useAgent()
     const { language } = useStore()
     const streamPhase = useAgentStore(state => state.streamState.phase)
     const isStreaming = streamPhase !== 'idle'
@@ -174,6 +174,8 @@ export function PlanPreview({ content, fontSize = 14 }: PlanPreviewProps) {
     const handleStopExecution = () => {
         setIsExecutingAll(false)
         shouldContinueRef.current = false
+        // 同时中止当前正在运行的 LLM 调用
+        abort()
     }
 
     const completedCount = planData.items.filter(i => i.status === 'completed').length
