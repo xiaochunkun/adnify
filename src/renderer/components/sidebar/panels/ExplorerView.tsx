@@ -42,7 +42,7 @@ export function ExplorerView() {
     }
   }, [activeFilePath])
 
-  // 更新 Git 状态
+  // 更新 Git 状态（带重试逻辑）
   const updateGitStatus = useCallback(async () => {
     if (!workspacePath) {
       setGitStatus(null)
@@ -51,7 +51,22 @@ export function ExplorerView() {
     }
 
     gitService.setWorkspace(workspacePath)
-    const isRepo = await gitService.isGitRepo()
+    
+    // 重试逻辑：有时工作区刚设置时 git 命令可能失败
+    let retries = 3
+    let isRepo = false
+    
+    while (retries > 0) {
+      isRepo = await gitService.isGitRepo()
+      if (isRepo) break
+      
+      // 如果失败，等待一小段时间后重试
+      retries--
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, 200))
+      }
+    }
+    
     setIsGitRepo(isRepo)
 
     if (isRepo) {

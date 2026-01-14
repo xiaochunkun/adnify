@@ -123,9 +123,26 @@ class GitService {
      */
     async getStatus(rootPath?: string): Promise<GitStatus | null> {
         try {
-            // 获取分支信息
+            // 获取分支信息 - 使用多种方式确保获取到分支名
+            let branch = 'HEAD'
+            
+            // 方法1: git branch --show-current (Git 2.22+)
             const branchResult = await this.exec(['branch', '--show-current'], rootPath)
-            const branch = branchResult.stdout.trim() || 'HEAD'
+            if (branchResult.exitCode === 0 && branchResult.stdout.trim()) {
+                branch = branchResult.stdout.trim()
+            } else {
+                // 方法2: git rev-parse --abbrev-ref HEAD (兼容旧版本)
+                const revParseResult = await this.exec(['rev-parse', '--abbrev-ref', 'HEAD'], rootPath)
+                if (revParseResult.exitCode === 0 && revParseResult.stdout.trim()) {
+                    branch = revParseResult.stdout.trim()
+                } else {
+                    // 方法3: git symbolic-ref --short HEAD (最后尝试)
+                    const symbolicResult = await this.exec(['symbolic-ref', '--short', 'HEAD'], rootPath)
+                    if (symbolicResult.exitCode === 0 && symbolicResult.stdout.trim()) {
+                        branch = symbolicResult.stdout.trim()
+                    }
+                }
+            }
 
             // 获取 ahead/behind
             let ahead = 0, behind = 0

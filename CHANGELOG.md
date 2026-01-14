@@ -4,6 +4,68 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/)，版本号遵循 [Semantic Versioning](https://semver.org/)。
 
+## 贡献者 | Contributors
+
+感谢所有为 Adnify 做出贡献的开发者！
+
+<!-- ALL-CONTRIBUTORS-LIST:START -->
+<a href="https://github.com/adnaan-worker"><img src="https://github.com/adnaan-worker.png" width="50" height="50" style="border-radius:50%" alt="adnaan"/></a>
+<a href="https://github.com/kerwin2046"><img src="https://github.com/kerwin2046.png" width="50" height="50" style="border-radius:50%" alt="kerwin"/></a>
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+---
+
+## [1.5.6] - 2026-01-14
+
+### 新增
+- 🛠️ Agent 工具执行优化：新增审批工作流和快照管理
+- 🎯 动态工具过滤：根据工作模式和角色模板过滤可用工具
+- 📝 Agent 指南增强：完善工具使用文档
+
+### 重构
+- 🏗️ Agent 架构重组：新增核心循环和上下文压缩
+- 🧠 上下文压缩增强：统一管理器和改进的统计信息
+- 📋 Prompt 系统重组：整合类型定义
+- 🔧 ToolCallCard 组件简化：增强配置
+
+### 修复
+- 🐛 修复提示词预览和 MiniMax 2.1 think 标签显示问题
+- 🔧 修复 Git 分支获取失败时显示 HEAD 的问题
+
+### 优化
+- 🛡️ 类型安全：替换 any 类型为具体类型 (by @kerwin)
+- 📝 日志统一：替换 console 调用为统一 Logger (by @kerwin)
+
+## [1.5.5] - 2026-01-13
+
+### 新增
+- 📖 Agent 指南增强：完善工具使用文档
+
+### 修复
+- 🔧 Monaco 类型修复和配置覆盖说明 (by @kerwin)
+
+## [1.5.4] - 2026-01-12
+
+### 新增
+- 🤖 Agent 指南增强：改进文件处理
+- 🔄 Google Generative AI SDK 升级：增强消息处理
+- 🎨 GPT Tokenizer：增强上下文管理
+- 📥 API 导入向导：提供商配置解析器
+- 🎯 ask_user 工具：计划模式工作流指南
+
+### 重构
+- 🛡️ TypeScript 优化：移除不安全的 any，添加类型守卫 (by @kerwin)
+- ⚡ App 组件性能优化 (by @kerwin)
+
+### 修复
+- 🔧 更新安装增强：日志和延迟执行
+- 📦 CI 发布：处理多架构更新元数据文件
+
+## [1.5.2] - 2026-01-12
+
+### 新增
+- 📚 社区指南：添加贡献模板
+
 ## [1.5.1] - 2026-01-10
 
 ### 修复
