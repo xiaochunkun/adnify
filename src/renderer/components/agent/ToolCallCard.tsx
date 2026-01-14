@@ -305,7 +305,7 @@ const ToolCallCard = memo(function ToolCallCard({
                     <span
                         className={`text-sm font-medium whitespace-nowrap ${isStreaming || isRunning ? 'text-accent' : 'text-text-secondary'}`}
                     >
-                        {TOOL_LABELS[toolCall.name] || toolCall.name}
+                        {TOOL_LABELS[toolCall.name] || toolCall.name || '...'}
                     </span>
                     {description && (
                         <>
@@ -368,11 +368,26 @@ const ToolCallCard = memo(function ToolCallCard({
     )
 },
 (prevProps, nextProps) => {
-    const prevStreaming = (prevProps.toolCall.arguments as Record<string, unknown>)?._streaming
-    const nextStreaming = (nextProps.toolCall.arguments as Record<string, unknown>)?._streaming
+    // 名称变化时必须重新渲染
+    if (prevProps.toolCall.name !== nextProps.toolCall.name) {
+        return false
+    }
+    
+    const prevArgs = prevProps.toolCall.arguments as Record<string, unknown>
+    const nextArgs = nextProps.toolCall.arguments as Record<string, unknown>
+    const prevStreaming = prevArgs?._streaming
+    const nextStreaming = nextArgs?._streaming
+    
+    // 流式传输中，检查关键参数是否变化
     if (prevStreaming || nextStreaming) {
+        // 检查 path 等关键字段是否变化
+        if (prevArgs?.path !== nextArgs?.path) return false
+        if (prevArgs?.command !== nextArgs?.command) return false
+        if (prevArgs?.query !== nextArgs?.query) return false
+        if (prevArgs?.pattern !== nextArgs?.pattern) return false
         return prevProps.toolCall.id === nextProps.toolCall.id && prevStreaming === nextStreaming
     }
+    
     return (
         prevProps.toolCall.id === nextProps.toolCall.id &&
         prevProps.toolCall.status === nextProps.toolCall.status &&

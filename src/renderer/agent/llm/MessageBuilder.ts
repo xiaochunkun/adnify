@@ -2,11 +2,14 @@
  * 消息构建服务
  * 
  * 职责：构建发送给 LLM 的消息列表
- * 使用 ContextManager 进行上下文优化
+ * 
+ * 注意：prune 操作在 loop.ts 的 checkAndHandleCompression 中执行（L2+），
+ * 这里只负责过滤已压缩的消息和限制历史消息数量。
  */
 
 import { logger } from '@utils/Logger'
 import { useAgentStore } from '../store/AgentStore'
+import { getAgentConfig } from '../utils/AgentConfig'
 import { buildOpenAIMessages, validateOpenAIMessages, OpenAIMessage } from './MessageConverter'
 import { MessageContent, ChatMessage, AssistantMessage } from '../types'
 
@@ -17,18 +20,16 @@ export { buildContextContent, buildUserContent, calculateContextStats } from './
  * 过滤已压缩的消息（参考 OpenCode 的 filterCompacted）
  * 
  * 策略：
- * 1. 如果遇到带有 contextSummary 的 assistant 消息，表示这是压缩后的摘要
+ * 1. 从后往前找第一个带有 compactedAt 的 assistant 消息
  * 2. 该消息之前的历史不会被发送给 LLM（实现滑动窗口）
  */
 function filterCompactedMessages(messages: ChatMessage[]): ChatMessage[] {
-  // 从后往前找第一个带有 summary 标记的 assistant 消息
   let cutoffIndex = -1
   
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]
     if (msg.role === 'assistant') {
       const assistantMsg = msg as AssistantMessage & { compactedAt?: number }
-      // 如果这个 assistant 消息被标记为压缩过，则从这里开始保留
       if (assistantMsg.compactedAt) {
         cutoffIndex = i
         break
@@ -36,9 +37,8 @@ function filterCompactedMessages(messages: ChatMessage[]): ChatMessage[] {
     }
   }
   
-  // 如果找到了压缩点，只返回该点之后的消息
   if (cutoffIndex >= 0) {
-    logger.agent.info(`[MessageBuilder] Filtering compacted messages, keeping from index ${cutoffIndex}`)
+    logger.agent.info(`[MessageBuilder] Sliding window: keeping messages from index ${cutoffIndex} (${messages.length - cutoffIndex} of ${messages.length})`)
     return messages.slice(cutoffIndex)
   }
   
@@ -47,7 +47,6 @@ function filterCompactedMessages(messages: ChatMessage[]): ChatMessage[] {
 
 /**
  * 构建发送给 LLM 的消息列表
- * 注意：不在这里进行上下文优化，优化在 runAgentLoop 中进行
  */
 export async function buildLLMMessages(
   currentMessage: MessageContent,
@@ -57,6 +56,7 @@ export async function buildLLMMessages(
   const store = useAgentStore.getState()
   const historyMessages = store.getMessages()
   const currentThread = store.getCurrentThread()
+  const config = getAgentConfig()
 
   const { buildUserContent } = await import('./ContextBuilder')
 
@@ -81,13 +81,21 @@ export async function buildLLMMessages(
     logger.agent.info(`[MessageBuilder] Filtered ${filteredMessages.length - compactedFiltered.length} compacted messages`)
   }
 
-  // 排除最后一条用户消息（会在后面重新添加带上下文的版本）
-  const lastMsg = compactedFiltered[compactedFiltered.length - 1]
-  const messagesToConvert = lastMsg?.role === 'user' 
-    ? compactedFiltered.slice(0, -1) 
-    : compactedFiltered
+  // 限制历史消息数量（使用 maxHistoryMessages 配置）
+  let limitedMessages = compactedFiltered
+  if (compactedFiltered.length > config.maxHistoryMessages) {
+    // 保留最近的消息
+    limitedMessages = compactedFiltered.slice(-config.maxHistoryMessages)
+    logger.agent.info(`[MessageBuilder] Limited history from ${compactedFiltered.length} to ${config.maxHistoryMessages} messages`)
+  }
 
-  // 转换为 OpenAI 格式（不进行优化，优化在 runAgentLoop 中进行）
+  // 排除最后一条用户消息（会在后面重新添加带上下文的版本）
+  const lastMsg = limitedMessages[limitedMessages.length - 1]
+  const messagesToConvert = lastMsg?.role === 'user' 
+    ? limitedMessages.slice(0, -1) 
+    : limitedMessages
+
+  // 转换为 OpenAI 格式
   const openaiMessages = buildOpenAIMessages(messagesToConvert as any, enhancedSystemPrompt)
 
   // 添加当前用户消息

@@ -30,6 +30,7 @@ export async function buildContextContent(
 
   const parts: string[] = []
   let totalChars = 0
+  let fileCount = 0
   const config = getAgentConfig()
   const workspacePath = useStore.getState().workspacePath
 
@@ -37,6 +38,15 @@ export async function buildContextContent(
     if (totalChars >= config.maxTotalContextChars) {
       parts.push('\n[Additional context truncated]')
       break
+    }
+    
+    // 限制文件数量
+    if (item.type === 'File') {
+      if (fileCount >= config.maxContextFiles) {
+        parts.push('\n[Additional files truncated]')
+        continue
+      }
+      fileCount++
     }
 
     const result = await processContextItem(item, userQuery, workspacePath, config)
@@ -129,6 +139,7 @@ async function processCodebaseContext(
   try {
     const cleanQuery = userQuery.replace(/@codebase\s*/i, '').trim() || userQuery
     const cacheKey = `${workspacePath}:${cleanQuery}`
+    const config = getAgentConfig()
     
     const results = await searchResultCache.getOrSet(
       cacheKey,
@@ -139,8 +150,10 @@ async function processCodebaseContext(
     ) as Array<{ relativePath: string; score: number; language: string; content: string }>
 
     if (results && results.length > 0) {
+      // 使用 maxSemanticResults 限制结果数量
+      const limitedResults = results.slice(0, config.maxSemanticResults)
       return `\n### Codebase Search Results for "${cleanQuery}":\n` +
-        results.map(r =>
+        limitedResults.map(r =>
           `#### ${r.relativePath} (Score: ${r.score.toFixed(2)})\n\`\`\`${r.language}\n${r.content}\n\`\`\``
         ).join('\n\n') + '\n'
     }
@@ -202,13 +215,19 @@ async function processGitContext(workspacePath: string | null): Promise<string |
  */
 async function processTerminalContext(workspacePath: string | null): Promise<string | null> {
   try {
+    const config = getAgentConfig()
     const terminalOutput = await toolRegistry.execute('get_terminal_output', {
       terminal_id: 'default',
       lines: 50
     }, { workspacePath })
 
     if (terminalOutput.success && terminalOutput.result) {
-      return `\n### Recent Terminal Output:\n\`\`\`\n${terminalOutput.result}\n\`\`\`\n`
+      // 使用 maxTerminalChars 限制终端输出长度
+      let output = terminalOutput.result
+      if (output.length > config.maxTerminalChars) {
+        output = output.slice(-config.maxTerminalChars) + '\n...(terminal output truncated)'
+      }
+      return `\n### Recent Terminal Output:\n\`\`\`\n${output}\n\`\`\`\n`
     }
     return '\n[No terminal output available]\n'
   } catch (e) {

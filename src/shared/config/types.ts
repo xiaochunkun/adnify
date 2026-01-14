@@ -92,6 +92,9 @@ export interface AgentConfig {
   maxImportantOldTurns: number
   enableLLMSummary: boolean
   autoHandoff: boolean
+  // Prune 配置
+  pruneMinimumTokens?: number
+  pruneProtectTokens?: number
   // 循环检测
   loopDetection: LoopDetectionConfig
   // 目录忽略

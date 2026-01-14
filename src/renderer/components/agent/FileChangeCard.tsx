@@ -35,9 +35,8 @@ export default function FileChangeCard({
 
     const args = toolCall.arguments as Record<string, unknown>
     const meta = args._meta as Record<string, unknown> | undefined
-    const filePath = (args.path || meta?.filePath) as string || 'unknown'
-    const fileName = getFileName(filePath)
-
+    const filePath = (args.path || meta?.filePath) as string || ''
+    const fileName = filePath ? getFileName(filePath) : '...'
     const isStreaming = args._streaming === true
     const isRunning = toolCall.status === 'running' || toolCall.status === 'pending'
     const isSuccess = toolCall.status === 'success'

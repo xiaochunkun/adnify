@@ -5,6 +5,7 @@
  * - 工具审批流程
  * - 智能并行执行
  * - 文件快照保存（用于撤销）
+ * - 工具结果截断（防止单轮对话过长）
  * - 发布事件到 EventBus
  */
 
@@ -16,6 +17,8 @@ import { getToolApprovalType, isFileEditTool } from '@/shared/config/tools'
 import { pathStartsWith, joinPath } from '@shared/utils/pathUtils'
 import { useStore } from '@store'
 import { EventBus } from './EventBus'
+import { truncateToolResult } from '@/renderer/utils/partialJson'
+import { getAgentConfig } from '../utils/AgentConfig'
 import type { ToolCall } from '@/shared/types'
 import type { ToolExecutionContext, ToolExecutionResult } from './types'
 
@@ -167,9 +170,17 @@ async function executeSingle(
     )
 
     const duration = Date.now() - startTime
-    const content = result.success
+    const rawContent = result.success
       ? (result.result || 'Success')
       : `Error: ${result.error || 'Unknown error'}`
+
+    // 截断过长的工具结果（防止单轮对话过长）
+    const config = getAgentConfig()
+    const content = truncateToolResult(rawContent, toolCall.name, config.maxToolResultChars)
+    
+    if (content.length < rawContent.length) {
+      logger.agent.info(`[Tools] Truncated ${toolCall.name} result: ${rawContent.length} -> ${content.length} chars`)
+    }
 
     // 记录响应日志
     mainStore.addToolCallLog({
@@ -181,16 +192,21 @@ async function executeSingle(
       error: result.success ? undefined : result.error,
     })
 
-    // 更新状态
+    const meta = result.meta || {}
+    
+    // 更新状态，并将 meta 数据合并到 arguments._meta
     if (currentAssistantId) {
+      const updatedArguments = Object.keys(meta).length > 0
+        ? { ...toolCall.arguments, _meta: meta }
+        : toolCall.arguments
+      
       store.updateToolCall(currentAssistantId, toolCall.id, {
         status: result.success ? 'success' : 'error',
         result: content,
+        arguments: updatedArguments,
       })
       store.addToolResult(toolCall.id, toolCall.name, content, result.success ? 'success' : 'tool_error')
     }
-
-    const meta = result.meta || {}
     EventBus.emit({
       type: result.success ? 'tool:completed' : 'tool:error',
       id: toolCall.id,
@@ -234,6 +250,10 @@ export async function executeTools(
   const results: ToolExecutionResult[] = []
   let userRejected = false
 
+  if (toolCalls.length === 0) {
+    return { results, userRejected }
+  }
+
   // 分析依赖
   const deps = analyzeToolDependencies(toolCalls)
   const completed = new Set<string>()
@@ -243,8 +263,10 @@ export async function executeTools(
   const needsApprovalTools = toolCalls.filter(tc => needsApproval(tc.name))
   
   if (needsApprovalTools.length > 0) {
-    // 设置待审批状态
-    store.setStreamPhase('tool_pending')
+    // 设置第一个需要审批的工具为当前工具
+    const firstPendingTool = needsApprovalTools[0]
+    store.setStreamPhase('tool_pending', firstPendingTool)
+    
     for (const tc of needsApprovalTools) {
       if (context.currentAssistantId) {
         store.updateToolCall(context.currentAssistantId, tc.id, { status: 'awaiting' })
@@ -252,7 +274,6 @@ export async function executeTools(
       EventBus.emit({ type: 'tool:pending', id: tc.id, name: tc.name, args: tc.arguments })
     }
 
-    // 等待审批
     const approved = await approvalService.waitForApproval()
     
     if (!approved || abortSignal?.aborted) {
@@ -271,12 +292,12 @@ export async function executeTools(
 
   store.setStreamPhase('tool_running')
 
-  // 在执行前保存文件快照（用于撤销）
+  // 在执行前保存文件快照
   await saveFileSnapshots(toolCalls, context)
 
   // 执行工具（考虑依赖关系）
   while (pending.size > 0 && !abortSignal?.aborted) {
-    // 找出可以执行的工具（依赖已完成）
+    // 找出可以执行的工具
     const ready = toolCalls.filter(tc => 
       pending.has(tc.id) && 
       Array.from(deps.get(tc.id) || []).every(dep => completed.has(dep))
@@ -297,6 +318,11 @@ export async function executeTools(
       completed.add(result.toolCall.id)
       pending.delete(result.toolCall.id)
     }
+  }
+
+  // 确保状态更新
+  if (!abortSignal?.aborted) {
+    store.setStreamPhase('streaming')
   }
 
   return { results, userRejected }

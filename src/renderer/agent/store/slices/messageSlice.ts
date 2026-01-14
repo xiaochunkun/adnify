@@ -141,12 +141,21 @@ export const createMessageSlice: StateCreator<
         return message.id
     },
 
-    // 追加到助手消息（通过 StreamingBuffer 调用）
+    /**
+     * 追加内容到助手消息
+     * 
+     * 注意：此方法在 AgentStore.ts 中被重写，使用 StreamingBuffer 进行节流优化。
+     * StreamingBuffer 会批量收集内容，然后调用 _doAppendToAssistant 执行实际更新。
+     * 
+     * @see AgentStore.ts - StreamingBuffer 实现
+     * @see _doAppendToAssistant - 实际执行内容追加的方法
+     */
     appendToAssistant: (_messageId, _content) => {
-        // 由 StreamingBuffer 处理，实际调用 _doAppendToAssistant
+        // 占位实现 - 在 AgentStore.ts 中被 StreamingBuffer 重写
+        // 直接调用此方法不会有任何效果
     },
 
-    // 内部方法：实际执行内容追加
+    // 内部方法：实际执行内容追加（由 StreamingBuffer 调用）
     _doAppendToAssistant: (messageId: string, content: string) => {
         const threadId = get().currentThreadId
         if (!threadId) return
@@ -413,7 +422,7 @@ export const createMessageSlice: StateCreator<
         })
     },
 
-    // 更新工具调用
+    // 更新工具调用（如果不存在则添加）
     updateToolCall: (messageId, toolCallId, updates) => {
         const threadId = get().currentThreadId
         if (!threadId) return
@@ -425,19 +434,38 @@ export const createMessageSlice: StateCreator<
             const messages = thread.messages.map(msg => {
                 if (msg.id === messageId && msg.role === 'assistant') {
                     const assistantMsg = msg as AssistantMessage
+                    
+                    // 检查工具调用是否已存在
+                    const existingToolCall = assistantMsg.toolCalls?.find(tc => tc.id === toolCallId)
+                    
+                    if (existingToolCall) {
+                        // 更新已存在的工具调用
+                        const newParts = assistantMsg.parts.map(part => {
+                            if (part.type === 'tool_call' && part.toolCall.id === toolCallId) {
+                                return { ...part, toolCall: { ...part.toolCall, ...updates } }
+                            }
+                            return part
+                        })
 
-                    const newParts = assistantMsg.parts.map(part => {
-                        if (part.type === 'tool_call' && part.toolCall.id === toolCallId) {
-                            return { ...part, toolCall: { ...part.toolCall, ...updates } }
+                        const newToolCalls = assistantMsg.toolCalls?.map(tc =>
+                            tc.id === toolCallId ? { ...tc, ...updates } : tc
+                        )
+
+                        return { ...assistantMsg, parts: newParts, toolCalls: newToolCalls }
+                    } else {
+                        // 工具调用不存在，添加新的
+                        const newToolCall: ToolCall = {
+                            id: toolCallId,
+                            name: (updates.name as string) || '',
+                            arguments: (updates.arguments as Record<string, unknown>) || {},
+                            status: (updates.status as ToolCall['status']) || 'pending',
+                            ...updates,
                         }
-                        return part
-                    })
+                        const newParts: AssistantPart[] = [...assistantMsg.parts, { type: 'tool_call', toolCall: newToolCall }]
+                        const newToolCalls = [...(assistantMsg.toolCalls || []), newToolCall]
 
-                    const newToolCalls = assistantMsg.toolCalls?.map(tc =>
-                        tc.id === toolCallId ? { ...tc, ...updates } : tc
-                    )
-
-                    return { ...assistantMsg, parts: newParts, toolCalls: newToolCalls }
+                        return { ...assistantMsg, parts: newParts, toolCalls: newToolCalls }
+                    }
                 }
                 return msg
             })

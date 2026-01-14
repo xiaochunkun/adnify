@@ -16,8 +16,8 @@ import {
   pruneMessages,
   getMessageContent,
   COMPRESSION_LEVEL_NAMES,
-  PRUNE_MINIMUM,
-  PRUNE_PROTECT,
+  getPruneMinimum,
+  getPruneProtect,
 } from '../../src/renderer/agent/context/compaction'
 import type { ChatMessage, UserMessage, AssistantMessage, ToolResultMessage } from '../../src/renderer/agent/types'
 
@@ -204,11 +204,11 @@ describe('Message Content', () => {
 // ===== 常量测试 =====
 
 describe('Constants', () => {
-  it('should have correct PRUNE_MINIMUM', () => {
-    expect(PRUNE_MINIMUM).toBe(20000)
+  it('should have correct default prune minimum', () => {
+    expect(getPruneMinimum()).toBe(20000)
   })
 
-  it('should have correct PRUNE_PROTECT', () => {
-    expect(PRUNE_PROTECT).toBe(40000)
+  it('should have correct default prune protect', () => {
+    expect(getPruneProtect()).toBe(40000)
   })
 })

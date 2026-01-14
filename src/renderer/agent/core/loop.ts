@@ -27,6 +27,7 @@ import {
   pruneMessages, 
   getCompressionLevel, 
   COMPRESSION_LEVEL_NAMES,
+  estimateTokens,
   generateSummary,
   generateHandoffDocument,
 } from '../context'
@@ -155,7 +156,6 @@ async function autoFix(
 interface CompressionCheckResult {
   level: 0 | 1 | 2 | 3 | 4
   needsHandoff: boolean
-  prunedTokens: number
 }
 
 async function checkAndHandleCompression(
@@ -164,7 +164,8 @@ async function checkAndHandleCompression(
   store: ReturnType<typeof useAgentStore.getState>,
   context: ExecutionContext,
   assistantId: string,
-  enableLLMSummary: boolean
+  enableLLMSummary: boolean,
+  autoHandoff: boolean
 ): Promise<CompressionCheckResult> {
   const totalUsed = usage.input + usage.output
   const ratio = totalUsed / contextLimit
@@ -172,15 +173,53 @@ async function checkAndHandleCompression(
 
   const thread = store.getCurrentThread()
   const userTurns = thread?.messages.filter(m => m.role === 'user').length || 0
-  const prunedTokens = 0
 
-  // L2+: 标记当前 assistant 消息为压缩点（用于滑动窗口）
-  if (level >= 2 && thread) {
-    // 标记当前 assistant 消息，之后的消息构建会从这里开始
-    store.updateMessage(assistantId, { compactedAt: Date.now() } as any)
+  logger.agent.info(`[Compression] Level ${level} (${COMPRESSION_LEVEL_NAMES[level]}), ratio: ${(ratio * 100).toFixed(1)}%, tokens: ${totalUsed}/${contextLimit}`)
+
+  // 记录本次新增节省的 token 数
+  let newSavedTokens = 0
+  
+  // 计算已经压缩的 token 数（之前 prune 过的）
+  let alreadySavedTokens = 0
+  if (thread) {
+    for (const msg of thread.messages) {
+      if (msg.role === 'tool') {
+        const toolMsg = msg as import('../types').ToolResultMessage
+        if (toolMsg.compactedAt) {
+          // 已压缩的工具结果，估算其原始大小
+          const content = typeof toolMsg.content === 'string' ? toolMsg.content : ''
+          // 如果内容是占位符，估算原始大小（假设平均 2000 token）
+          if (content === '[Old tool result content cleared]' || content.length < 100) {
+            alreadySavedTokens += 2000
+          } else {
+            alreadySavedTokens += estimateTokens(content)
+          }
+        }
+      }
+    }
   }
 
-  // L3: 生成 LLM 摘要（如果启用）
+  // L2+: 执行 prune 并标记当前 assistant 消息为压缩点
+  if (level >= 2 && thread) {
+    // 标记压缩点
+    store.updateMessage(assistantId, { compactedAt: Date.now() } as any)
+    
+    // 执行 prune
+    const pruneResult = pruneMessages(thread.messages)
+    if (pruneResult.prunedCount > 0) {
+      for (const msgId of pruneResult.messagesToCompact) {
+        store.updateMessage(msgId, { compactedAt: Date.now() } as any)
+      }
+      newSavedTokens = pruneResult.pruned
+      logger.agent.info(`[Compression] Pruned ${pruneResult.prunedCount} tool results, saved ~${pruneResult.pruned} tokens`)
+      EventBus.emit({ type: 'context:prune', prunedCount: pruneResult.prunedCount, savedTokens: pruneResult.pruned })
+    }
+  }
+  
+  // 总节省 = 已压缩 + 本次新增
+  const totalSavedTokens = alreadySavedTokens + newSavedTokens
+
+  // L3: 生成 LLM 摘要
   if (level >= 3 && enableLLMSummary && thread) {
     try {
       const summaryResult = await generateSummary(thread.messages, { type: 'detailed' })
@@ -201,9 +240,9 @@ async function checkAndHandleCompression(
     }
   }
 
-  // L4: 生成 Handoff 文档
+  // L4: 生成 Handoff 文档（仅当 autoHandoff 启用时）
   if (level >= 4) {
-    if (thread && context.workspacePath) {
+    if (autoHandoff && thread && context.workspacePath) {
       try {
         const handoff = await generateHandoffDocument(thread.id, thread.messages, context.workspacePath)
         store.setHandoffDocument(handoff)
@@ -221,16 +260,29 @@ async function checkAndHandleCompression(
     store.setHandoffRequired(true)
   }
 
-  // 更新压缩统计（实时更新，不管是否需要 prune）
-  const keptTurns = Math.min(userTurns, level === 0 ? userTurns : level === 1 ? 10 : level === 2 ? 6 : level === 3 ? 3 : 2)
+  // 更新压缩统计（使用配置中的轮次设置）
+  const agentConfig = getAgentConfig()
+  const keptTurns = Math.min(
+    userTurns, 
+    level === 0 ? userTurns 
+      : level === 1 ? agentConfig.keepRecentTurns * 2  // L1: 保留更多
+      : level === 2 ? agentConfig.keepRecentTurns      // L2: 使用 keepRecentTurns
+      : level === 3 ? agentConfig.deepCompressionTurns // L3: 使用 deepCompressionTurns
+      : agentConfig.deepCompressionTurns               // L4: 最少保留
+  )
   const compactedTurns = Math.max(0, userTurns - keptTurns)
-  const finalTokens = totalUsed - prunedTokens
-  const savedPercent = prunedTokens > 0 ? Math.round((prunedTokens / totalUsed) * 100) : 0
+
+  // 计算原始 token 数（当前使用 + 已节省的）
+  const originalTokens = totalUsed + totalSavedTokens
+  // 当前 token 数就是 LLM 返回的真实使用量
+  const finalTokens = totalUsed
+  // 节省百分比
+  const savedPercent = totalSavedTokens > 0 ? Math.round((totalSavedTokens / originalTokens) * 100) : 0
 
   store.setCompressionStats({
     level,
     levelName: COMPRESSION_LEVEL_NAMES[level],
-    originalTokens: totalUsed,
+    originalTokens,
     finalTokens,
     savedPercent,
     keptTurns,
@@ -239,9 +291,13 @@ async function checkAndHandleCompression(
     lastOptimizedAt: Date.now(),
   })
 
+  if (totalSavedTokens > 0) {
+    logger.agent.info(`[Compression] Stats: original=${originalTokens}, final=${finalTokens}, saved=${savedPercent}%`)
+  }
+
   EventBus.emit({ type: 'context:level', level, tokens: totalUsed, ratio })
 
-  return { level, needsHandoff: level >= 4, prunedTokens }
+  return { level, needsHandoff: level >= 4 }
 }
 
 // ===== 主循环 =====
@@ -260,6 +316,7 @@ export async function runLoop(
   const maxIterations = mainStore.agentConfig.maxToolLoops || agentConfig.maxToolLoops
   const enableAutoFix = mainStore.agentConfig.enableAutoFix
   const enableLLMSummary = mainStore.agentConfig.enableLLMSummary
+  const autoHandoff = mainStore.agentConfig.autoHandoff ?? agentConfig.autoHandoff
 
   // 获取模型上下文限制（默认 128k）
   const contextLimit = config.contextLimit || 128_000
@@ -310,7 +367,8 @@ export async function runLoop(
         store,
         context,
         assistantId,
-        enableLLMSummary
+        enableLLMSummary,
+        autoHandoff
       )
 
       // L4 需要中断循环
@@ -443,16 +501,5 @@ export async function runLoop(
     EventBus.emit({ type: 'loop:end', reason: 'max_iterations' })
   }
 
-  // 循环结束后执行 prune（参考 OpenCode）
-  const thread = store.getCurrentThread()
-  if (thread) {
-    const result = pruneMessages(thread.messages)
-    if (result.prunedCount > 0) {
-      // 通过 store action 更新消息状态
-      for (const msgId of result.messagesToCompact) {
-        store.updateMessage(msgId, { compactedAt: Date.now() } as any)
-      }
-      EventBus.emit({ type: 'context:prune', prunedCount: result.prunedCount, savedTokens: result.pruned })
-    }
-  }
+  // 循环结束，finalize 由 Agent.ts 的 cleanup 处理
 }

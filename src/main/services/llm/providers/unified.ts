@@ -232,15 +232,22 @@ export class UnifiedProvider extends BaseProvider {
               toolCallDelta: { id: tc.id, name: tc.function?.name },
             })
           } else if (currentToolCall) {
-            // 累加参数
-            if (tc.function?.name) currentToolCall.name = tc.function.name
+            // 累加参数和更新名称
+            if (tc.function?.name) {
+              currentToolCall.name = tc.function.name
+            }
             if (tc.function?.arguments) {
               currentToolCall.argsString += tc.function.arguments
-              onStream({
-                type: 'tool_call_delta',
-                toolCallDelta: { id: currentToolCall.id, args: tc.function.arguments },
-              })
             }
+            // 发送 delta，包含 name（如果有）
+            onStream({
+              type: 'tool_call_delta',
+              toolCallDelta: { 
+                id: currentToolCall.id, 
+                name: tc.function?.name,
+                args: tc.function?.arguments,
+              },
+            })
           }
         }
       }
@@ -289,6 +296,7 @@ export class UnifiedProvider extends BaseProvider {
           } catch { /* ignore */ }
           const toolCall: LLMToolCall = { id: tc.id, name: tc.function.name, arguments: args }
           toolCalls.push(toolCall)
+          onStream({ type: 'tool_call_end', toolCall })
           onToolCall(toolCall)
         }
       }
@@ -395,30 +403,69 @@ export class UnifiedProvider extends BaseProvider {
 
     let fullContent = ''
     const toolCalls: LLMToolCall[] = []
+    // 跟踪正在流式传输的工具调用
+    const streamingToolCalls = new Map<number, { id: string; name: string; argsString: string }>()
 
     streamResponse.on('text', (text) => {
       fullContent += text
       onStream({ type: 'text', content: text })
     })
 
-    // thinking 块支持
+    // 监听所有流式事件
     streamResponse.on('streamEvent', (event) => {
+      // thinking 块支持
       if (event.type === 'content_block_delta' && event.delta.type === 'thinking_delta') {
         onStream({ type: 'reasoning', content: (event.delta as { thinking?: string }).thinking || '' })
+      }
+      
+      // 工具调用开始
+      if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+        const block = event.content_block as { id: string; name: string }
+        streamingToolCalls.set(event.index, { id: block.id, name: block.name, argsString: '' })
+        onStream({ type: 'tool_call_start', toolCallDelta: { id: block.id, name: block.name } })
+      }
+      
+      // 工具调用参数增量
+      if (event.type === 'content_block_delta' && event.delta.type === 'input_json_delta') {
+        const delta = event.delta as { partial_json?: string }
+        const tc = streamingToolCalls.get(event.index)
+        if (tc && delta.partial_json) {
+          tc.argsString += delta.partial_json
+          onStream({ type: 'tool_call_delta', toolCallDelta: { id: tc.id, args: delta.partial_json } })
+        }
+      }
+      
+      // 工具调用结束
+      if (event.type === 'content_block_stop') {
+        const tc = streamingToolCalls.get(event.index)
+        if (tc) {
+          let args: Record<string, unknown> = {}
+          try {
+            args = JSON.parse(tc.argsString || '{}')
+          } catch { /* ignore */ }
+          const toolCall: LLMToolCall = { id: tc.id, name: tc.name, arguments: args }
+          toolCalls.push(toolCall)
+          onStream({ type: 'tool_call_end', toolCall })
+          onToolCall(toolCall)
+          streamingToolCalls.delete(event.index)
+        }
       }
     })
 
     const finalMessage = await streamResponse.finalMessage()
 
-    for (const block of finalMessage.content) {
-      if (block.type === 'tool_use') {
-        const toolCall: LLMToolCall = {
-          id: block.id,
-          name: block.name,
-          arguments: block.input as Record<string, unknown>,
+    // 如果流式事件没有捕获到工具调用，从 finalMessage 中获取
+    if (toolCalls.length === 0) {
+      for (const block of finalMessage.content) {
+        if (block.type === 'tool_use') {
+          const toolCall: LLMToolCall = {
+            id: block.id,
+            name: block.name,
+            arguments: block.input as Record<string, unknown>,
+          }
+          toolCalls.push(toolCall)
+          onToolCall(toolCall)
         }
-        toolCalls.push(toolCall)
-        onToolCall(toolCall)
       }
     }
 
@@ -457,6 +504,7 @@ export class UnifiedProvider extends BaseProvider {
           arguments: block.input as Record<string, unknown>,
         }
         toolCalls.push(toolCall)
+        onStream({ type: 'tool_call_end', toolCall })
         onToolCall(toolCall)
       }
     }
@@ -552,6 +600,8 @@ export class UnifiedProvider extends BaseProvider {
                 arguments: fc.args || {},
               }
               toolCalls.push(toolCall)
+              // 发送完整的工具调用事件
+              onStream({ type: 'tool_call_end', toolCall })
               onToolCall(toolCall)
             }
           }
@@ -586,6 +636,7 @@ export class UnifiedProvider extends BaseProvider {
               arguments: fc.args || {},
             }
             toolCalls.push(toolCall)
+            onStream({ type: 'tool_call_end', toolCall })
             onToolCall(toolCall)
           }
         }
@@ -1011,6 +1062,7 @@ export class UnifiedProvider extends BaseProvider {
                 onStream({ type: 'reasoning', content: chunk.content || '' })
                 break
               case 'tool_call_start':
+                this.log('info', 'tool_call_start', { id: chunk.toolCall?.id, name: chunk.toolCall?.name })
                 onStream({ type: 'tool_call_start', toolCallDelta: { id: chunk.toolCall?.id, name: chunk.toolCall?.name } })
                 break
               case 'tool_call_delta':
@@ -1023,6 +1075,7 @@ export class UnifiedProvider extends BaseProvider {
                     name: chunk.toolCall.name || '',
                     arguments: chunk.toolCall.arguments as Record<string, unknown> || {},
                   }
+                  this.log('info', 'tool_call_end', { id: tc.id, name: tc.name })
                   toolCalls.push(tc)
                   onStream({ type: 'tool_call_end', toolCall: tc })
                   onToolCall(tc)

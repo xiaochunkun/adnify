@@ -42,7 +42,6 @@ export {
 export { getToolApprovalType, getToolDisplayName } from '@/shared/config/tools'
 
 // 其他服务
-export { checkpointService } from './services/checkpointService'
 export { lintService } from './services/lintService'
 export { streamingEditService } from './services/streamingEditService'
 export { sessionService } from './services/sessionService'

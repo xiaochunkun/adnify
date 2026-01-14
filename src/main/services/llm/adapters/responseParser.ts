@@ -146,7 +146,7 @@ export class ResponseParser {
         this.toolCallBuffers.set(index, existing)
         results.push({
           type: 'tool_call_start',
-          toolCall: { index, id, name },
+          toolCall: { index, id, name: name || '' },
         })
       }
 

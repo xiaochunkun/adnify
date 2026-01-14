@@ -1,13 +1,11 @@
 /**
  * 智能循环检测器
  * 
- * 改进的循环检测策略，参考 Cursor/Windsurf 的实现：
+ * 检测策略：
  * 1. 基于内容变化检测，而不是简单的操作次数
- * 2. 检测真正的循环模式（A→B→A→B），而不是正常的多次编辑
+ * 2. 检测真正的循环模式（A→B→A→B）
  * 3. 支持时间窗口衰减
  * 4. 区分读操作和写操作
- * 
- * 配置从 AgentConfig 获取，支持用户自定义
  */
 
 import type { LLMToolCall } from '@/shared/types'
@@ -16,9 +14,9 @@ import { getAgentConfig } from './AgentConfig'
 /** 工具调用记录 */
 interface ToolCallRecord {
   name: string
-  target: string | null  // 文件路径、命令等
+  target: string | null
   argsHash: string
-  contentHash?: string   // 文件内容哈希（用于检测内容是否真正变化）
+  contentHash?: string
   timestamp: number
   success: boolean
 }
@@ -30,41 +28,32 @@ export interface LoopCheckResult {
   suggestion?: string
 }
 
-/** 循环检测配置（内部使用） */
+/** 循环检测配置 */
 interface LoopDetectorInternalConfig {
-  // 时间窗口（毫秒），超过此时间的记录会被忽略
   timeWindowMs: number
-  // 相同参数的精确重复次数阈值
   maxExactRepeats: number
-  // 内容无变化的编辑次数阈值
   maxNoChangeEdits: number
-  // 最大历史记录数
   maxHistory: number
-  // 模式循环检测的最小长度
   minPatternLength: number
-  // 模式循环检测的最大长度
   maxPatternLength: number
-  // 读操作的宽松阈值倍数
   readOpMultiplier: number
 }
 
 /**
  * 从 AgentConfig 获取循环检测配置
- *
- * @returns {LoopDetectorInternalConfig} 包含优化阈值的配置对象
  */
 function getLoopConfig(): LoopDetectorInternalConfig {
   const agentConfig = getAgentConfig()
   const loopConfig = agentConfig.loopDetection
 
   return {
-    timeWindowMs: 5 * 60 * 1000,  // 5 分钟滑动窗口
-    maxExactRepeats: loopConfig.maxExactRepeats,
-    maxNoChangeEdits: loopConfig.maxSameTargetRepeats,
+    timeWindowMs: 3 * 60 * 1000,  // 3 分钟滑动窗口
+    maxExactRepeats: Math.min(loopConfig.maxExactRepeats, 3),  // 最多 3 次精确重复
+    maxNoChangeEdits: Math.min(loopConfig.maxSameTargetRepeats, 4),  // 最多 4 次无变化编辑
     maxHistory: loopConfig.maxHistory,
-    minPatternLength: 3,          // 从 2 提升到 3，减少正常探索中的误判
-    maxPatternLength: 5,          // 从 4 提升到 5，检测更长的模式
-    readOpMultiplier: 10,         // 从 3 提升到 10，允许更多读操作
+    minPatternLength: 2,  // 检测 A→B→A→B 模式
+    maxPatternLength: 4,
+    readOpMultiplier: 8,  // 读操作允许更多次（24 次精确重复）
   }
 }
 
@@ -226,8 +215,9 @@ export class LoopDetector {
     }
 
     // 检测同一工具的过度调用（即使参数不同）
+    // 读操作允许更多（复杂任务可能需要读取很多文件）
     const sameToolCalls = this.history.filter(h => h.name === record.name)
-    const maxSameToolCalls = isReadOp ? 20 : 10  // 读操作允许更多，写操作限制更严
+    const maxSameToolCalls = isReadOp ? 50 : 15
     if (sameToolCalls.length >= maxSameToolCalls) {
       return {
         isLoop: true,
@@ -299,27 +289,17 @@ export class LoopDetector {
 
   /**
    * 检查是否是路径探索行为
-   * 如果工具名相同但操作的是不同路径（尤其是子路径），则不算循环
-   *
-   * @param firstHalf 第一组工具调用记录
-   * @param secondHalf 第二组工具调用记录
-   * @returns 是否为路径探索行为
    */
   private isPathExploration(firstHalf: ToolCallRecord[], secondHalf: ToolCallRecord[]): boolean {
-    // 检查是否所有操作都是相同工具名
     const allSameTool = firstHalf.every((r, i) => r.name === secondHalf[i].name)
     if (!allSameTool) return false
 
-    // 检查是否有路径目标
     const hasTargets = firstHalf.every((r, i) => r.target && secondHalf[i].target)
     if (!hasTargets) return false
 
-    // 检查路径是否不同（尤其是子路径关系）
     for (let i = 0; i < firstHalf.length; i++) {
       const path1 = firstHalf[i].target!
       const path2 = secondHalf[i].target!
-
-      // 如果路径不同，且是子路径关系，说明是正常探索
       if (path1 !== path2 && this.isSubPath(path1, path2)) {
         return true
       }
@@ -330,10 +310,6 @@ export class LoopDetector {
 
   /**
    * 检查是否是子路径关系
-   *
-   * @param path1 第一个路径
-   * @param path2 第二个路径
-   * @returns 是否存在子路径关系
    */
   private isSubPath(path1: string, path2: string): boolean {
     const normalized1 = path1.replace(/\\/g, '/').toLowerCase()
@@ -360,5 +336,3 @@ export class LoopDetector {
     return hash.toString(36)
   }
 }
-
-

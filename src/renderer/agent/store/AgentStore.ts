@@ -87,46 +87,46 @@ export type AgentStore = ThreadSlice & MessageSlice & CheckpointSlice & PlanSlic
 class StreamingBuffer {
     private buffer: Map<string, string> = new Map()
     private rafId: number | null = null
-    private timeoutId: ReturnType<typeof setTimeout> | null = null
     private flushCallback: ((messageId: string, content: string) => void) | null = null
     private lastFlushTime = 0
-    private readonly FLUSH_INTERVAL = 16 // 约 60fps，更流畅的更新
+    private readonly FLUSH_INTERVAL = 16 // 约 60fps
 
     setFlushCallback(callback: (messageId: string, content: string) => void) {
         this.flushCallback = callback
     }
 
     append(messageId: string, content: string): void {
+        if (!content) return
         const existing = this.buffer.get(messageId) || ''
         this.buffer.set(messageId, existing + content)
         this.scheduleFlush()
     }
 
     private scheduleFlush(): void {
-        if (this.rafId || this.timeoutId) return
+        if (this.rafId !== null) return
         
         const now = performance.now()
         const elapsed = now - this.lastFlushTime
         
         if (elapsed >= this.FLUSH_INTERVAL) {
-            // 已经过了足够时间，用 rAF 刷新
             this.rafId = requestAnimationFrame(() => {
                 this.rafId = null
                 this.flush()
             })
         } else {
-            // 还需要等待，用 setTimeout
-            this.timeoutId = setTimeout(() => {
-                this.timeoutId = null
-                this.flush()
-            }, this.FLUSH_INTERVAL - elapsed)
+            // 使用 rAF 延迟执行
+            this.rafId = requestAnimationFrame(() => {
+                this.rafId = null
+                this.scheduleFlush()
+            })
         }
     }
 
     private flush(): void {
-        if (!this.flushCallback) return
+        if (!this.flushCallback || this.buffer.size === 0) return
         this.lastFlushTime = performance.now()
         
+        // 取出并清空 buffer
         const updates = new Map(this.buffer)
         this.buffer.clear()
         
@@ -138,11 +138,7 @@ class StreamingBuffer {
     }
 
     flushNow(): void {
-        if (this.timeoutId) {
-            clearTimeout(this.timeoutId)
-            this.timeoutId = null
-        }
-        if (this.rafId) {
+        if (this.rafId !== null) {
             cancelAnimationFrame(this.rafId)
             this.rafId = null
         }
@@ -150,11 +146,7 @@ class StreamingBuffer {
     }
 
     clear(): void {
-        if (this.timeoutId) {
-            clearTimeout(this.timeoutId)
-            this.timeoutId = null
-        }
-        if (this.rafId) {
+        if (this.rafId !== null) {
             cancelAnimationFrame(this.rafId)
             this.rafId = null
         }

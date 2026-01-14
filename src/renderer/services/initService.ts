@@ -13,7 +13,6 @@ import { themeManager } from '../config/themeConfig'
 import { keybindingService } from './keybindingService'
 import { registerCoreCommands } from '../config/commands'
 import { adnifyDir } from './adnifyDirService'
-import { checkpointService } from '@renderer/agent/services/checkpointService'
 import { initDiagnosticsListener } from './diagnosticsStore'
 import { restoreWorkspaceState } from './workspaceStateService'
 import { mcpService } from './mcpService'
@@ -116,16 +115,6 @@ async function restoreWorkspace(): Promise<boolean> {
  * 使用 requestIdleCallback 延迟执行
  */
 function scheduleBackgroundInit(): void {
-  // Checkpoint 服务初始化
-  scheduleIdleTask(async () => {
-    try {
-      await checkpointService.init()
-      logger.system.debug('[Init] Checkpoint service initialized')
-    } catch (e) {
-      logger.system.warn('[Init] Checkpoint service init failed:', e)
-    }
-  })
-
   // Agent Store 持久化恢复
   scheduleIdleTask(async () => {
     try {

@@ -157,6 +157,10 @@ export const AGENT_DEFAULTS = {
   maxImportantOldTurns: 3,
   enableLLMSummary: true,
   autoHandoff: true,
+  
+  // Prune 配置（工具结果清理）
+  pruneMinimumTokens: 20000,      // 开始 prune 的最小 token 阈值
+  pruneProtectTokens: 40000,      // 保护最近多少 token 的工具调用不被 prune
 
   // 循环检测
   loopDetection: {

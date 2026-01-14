@@ -123,7 +123,13 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
         const lines = content.split('\n')
         const startLine = typeof args.start_line === 'number' ? Math.max(1, args.start_line) : 1
         const endLine = typeof args.end_line === 'number' ? Math.min(lines.length, args.end_line) : lines.length
-        const numberedContent = lines.slice(startLine - 1, endLine).map((line, i) => `${startLine + i}: ${line}`).join('\n')
+        let numberedContent = lines.slice(startLine - 1, endLine).map((line, i) => `${startLine + i}: ${line}`).join('\n')
+
+        // 使用 maxSingleFileChars 限制单个文件的输出大小
+        const config = getAgentConfig()
+        if (numberedContent.length > config.maxSingleFileChars) {
+            numberedContent = numberedContent.slice(0, config.maxSingleFileChars) + '\n...(file content truncated, use start_line/end_line to read specific sections)'
+        }
 
         return { success: true, result: numberedContent, meta: { filePath: path } }
     },

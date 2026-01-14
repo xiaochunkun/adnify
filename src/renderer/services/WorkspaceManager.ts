@@ -15,7 +15,6 @@ import { logger } from '@utils/Logger'
 import { useStore } from '@store'
 import { useAgentStore } from '@renderer/agent/store/AgentStore'
 import { adnifyDir } from './adnifyDirService'
-import { checkpointService } from '@renderer/agent/services/checkpointService'
 import { mcpService } from './mcpService'
 import { gitService } from '@renderer/agent/services/gitService'
 import { resetLspState } from './lspService'
@@ -311,10 +310,7 @@ class WorkspaceManager {
       logger.agent.info('[WorkspaceManager] Agent store rehydrated')
     }
     
-    // 6. 初始化 checkpoint 服务
-    await checkpointService.init()
-    
-    // 7. 初始化 MCP 服务
+    // 6. 初始化 MCP 服务
     await mcpService.initialize(workspace.roots)
   }
 }

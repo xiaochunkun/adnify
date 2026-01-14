@@ -48,6 +48,10 @@ export function getAgentConfig(): AgentRuntimeConfig {
         maxImportantOldTurns: agentConfig.maxImportantOldTurns ?? DEFAULT_AGENT_CONFIG.maxImportantOldTurns,
         enableLLMSummary: agentConfig.enableLLMSummary ?? DEFAULT_AGENT_CONFIG.enableLLMSummary,
         autoHandoff: agentConfig.autoHandoff ?? DEFAULT_AGENT_CONFIG.autoHandoff,
+        
+        // Prune 配置
+        pruneMinimumTokens: agentConfig.pruneMinimumTokens ?? DEFAULT_AGENT_CONFIG.pruneMinimumTokens,
+        pruneProtectTokens: agentConfig.pruneProtectTokens ?? DEFAULT_AGENT_CONFIG.pruneProtectTokens,
 
         // 循环检测配置
         loopDetection: {
