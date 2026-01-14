@@ -9,6 +9,7 @@ import { t, TranslationKey } from '@renderer/i18n'
 import { getIncomingCalls, getOutgoingCalls, lspUriToPath } from '@renderer/services/lspService'
 import { getFileName } from '@shared/utils/pathUtils'
 import type { editor } from 'monaco-editor'
+import { logger } from '@shared/utils/Logger'
 
 // 支持 Call Hierarchy 的语言（只有支持函数/方法调用的语言才有意义）
 const CALL_HIERARCHY_SUPPORTED_LANGUAGES = [
@@ -160,7 +161,7 @@ export default function EditorContextMenu({ x, y, editor, onClose }: EditorConte
         }
       }
     } catch (e) {
-      console.error('Paste failed:', e)
+      logger.ui.error('Paste failed:', e)
     }
     onClose()
   }
@@ -195,7 +196,7 @@ export default function EditorContextMenu({ x, y, editor, onClose }: EditorConte
         setCallHierarchyResult({ type: 'callers', items: [] })
       }
     } catch (err) {
-      console.error('[Call Hierarchy] Failed to get incoming calls:', err)
+      logger.lsp.error('[Call Hierarchy] Failed to get incoming calls:', err)
       setCallHierarchyResult({ type: 'callers', items: [] })
     } finally {
       setLoading(false)
@@ -226,7 +227,7 @@ export default function EditorContextMenu({ x, y, editor, onClose }: EditorConte
         setCallHierarchyResult({ type: 'callees', items: [] })
       }
     } catch (err) {
-      console.error('[Call Hierarchy] Failed to get outgoing calls:', err)
+      logger.lsp.error('[Call Hierarchy] Failed to get outgoing calls:', err)
       setCallHierarchyResult({ type: 'callees', items: [] })
     } finally {
       setLoading(false)

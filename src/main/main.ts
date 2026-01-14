@@ -5,6 +5,7 @@
 
 import { app, BrowserWindow, Menu, shell } from 'electron'
 import * as path from 'path'
+import { logger } from '@shared/utils/Logger'
 
 // ==========================================
 // 常量定义
@@ -166,7 +167,7 @@ function createWindow(isEmpty = false): BrowserWindow {
         ipcModule?.cleanupAllHandlers()
         await lspManager?.stopAllServers()
       } catch (err) {
-        console.error('[Main] Cleanup error:', err)
+        logger.system.error('[Main] Cleanup error:', err)
       }
       win.destroy()
       app.quit()
@@ -318,7 +319,7 @@ app.whenReady().then(async () => {
 
   // 3. 后台加载模块（不阻塞窗口显示）
   initializeModules(firstWin).catch(err => {
-    console.error('[Main] Module initialization failed:', err)
+    logger.system.error('[Main] Module initialization failed:', err)
   })
 })
 
