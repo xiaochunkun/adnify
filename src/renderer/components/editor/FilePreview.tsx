@@ -6,6 +6,7 @@ import { api } from '@/renderer/services/electronAPI'
 import { logger } from '@utils/Logger'
 import { useState, useCallback, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Eye, Edit, FileQuestion, Image as ImageIcon, AlertTriangle, Columns } from 'lucide-react'
@@ -58,6 +59,7 @@ export function MarkdownPreview({ content, fontSize = 14 }: MarkdownPreviewProps
         >
             <div className="max-w-3xl mx-auto prose prose-invert">
                 <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
                     components={{
                         code({ className, children, node, ...props }) {
                             const match = /language-(\w+)/.exec(className || '')
@@ -102,6 +104,9 @@ export function MarkdownPreview({ content, fontSize = 14 }: MarkdownPreviewProps
                                 <table className="min-w-full border-collapse border border-border">{children}</table>
                             </div>
                         ),
+                        thead: ({ children }) => <thead className="bg-surface/50">{children}</thead>,
+                        tbody: ({ children }) => <tbody>{children}</tbody>,
+                        tr: ({ children }) => <tr className="border-b border-border hover:bg-white/5 transition-colors">{children}</tr>,
                         th: ({ children }) => <th className="border border-border px-4 py-2 bg-surface/50 text-left font-semibold">{children}</th>,
                         td: ({ children }) => <td className="border border-border px-4 py-2">{children}</td>,
                         img: ({ src, alt }) => (
