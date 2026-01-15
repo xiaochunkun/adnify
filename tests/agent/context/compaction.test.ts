@@ -16,8 +16,8 @@ import {
   isOverflow,
   getPruneMinimum,
   getPruneProtect,
-} from '../../src/renderer/agent/context/compaction'
-import type { ChatMessage, UserMessage, AssistantMessage, ToolResultMessage } from '../../src/renderer/agent/types'
+} from '@renderer/agent/context/compaction'
+import type { ChatMessage, UserMessage, AssistantMessage, ToolResultMessage } from '@renderer/agent/types'
 
 // ===== 辅助函数 =====
 

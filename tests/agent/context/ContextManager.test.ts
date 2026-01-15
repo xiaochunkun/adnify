@@ -18,10 +18,11 @@ import {
   COMPRESSION_LEVEL_NAMES,
   getPruneMinimum,
   getPruneProtect,
-} from '../../src/renderer/agent/context/compaction'
-import type { ChatMessage, UserMessage, AssistantMessage, ToolResultMessage } from '../../src/renderer/agent/types'
+} from '@renderer/agent/context/compaction'
+import type { ChatMessage, UserMessage, AssistantMessage, ToolResultMessage } from '@renderer/agent/types'
 
 // ===== 辅助函数 =====
+
 
 function createUserMessage(content: string, id = `user-${Date.now()}`): UserMessage {
   return {
