@@ -207,7 +207,7 @@ jobs:
           fi
           # macOS arm64
           if [ -f "artifacts/macos-arm64/latest-mac.yml" ]; then
-            cp artifacts/macos-arm64/latest-mac.yml release-files/latest-mac-arm64.yml
+            cp artifacts/macos-arm64/latest-mac.yml release-files/latest-arm64-mac.yml
           fi
           # Linux x64
           if [ -f "artifacts/linux-x64/latest-linux.yml" ]; then
