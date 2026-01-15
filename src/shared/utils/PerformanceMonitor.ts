@@ -142,7 +142,7 @@ class PerformanceMonitorClass {
         }
       } else if (typeof performance !== 'undefined' && 'memory' in performance) {
         // Chrome 特有的 performance.memory API
-        const perfWithMemory = performance as Performance & {
+        const perfWithMemory = performance as typeof performance & {
           memory?: {
             usedJSHeapSize: number
             totalJSHeapSize: number
