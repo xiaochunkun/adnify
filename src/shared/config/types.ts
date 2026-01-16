@@ -185,6 +185,7 @@ export interface SecuritySettings {
   enableAuditLog: boolean
   strictWorkspaceMode: boolean
   allowedShellCommands: string[]
+  allowedGitSubcommands: string[]
   showSecurityWarnings: boolean
 }
 

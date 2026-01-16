@@ -6,7 +6,7 @@ import { logger } from '@shared/utils/Logger'
 import { ipcMain, BrowserWindow } from 'electron'
 import { spawn, execSync } from 'child_process'
 import { securityManager, OperationType } from './securityModule'
-import { SECURITY_DEFAULTS } from '../../shared/constants'
+import { SECURITY_DEFAULTS } from '@shared/constants'
 
 
 interface SecureShellRequest {

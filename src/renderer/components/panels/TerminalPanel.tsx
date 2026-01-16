@@ -172,9 +172,8 @@ export default function TerminalPanel() {
         loadScripts()
     }, [selectedRoot])
 
-    // 自动创建第一个终端
+    // 当终端面板可见但没有终端时，自动创建一个
     useEffect(() => {
-        // 确保有有效的工作区根目录才创建终端
         const hasValidWorkspace = selectedRoot || (workspace?.roots && workspace.roots.length > 0)
         if (terminalVisible && managerState.terminals.length === 0 && availableShells.length > 0 && hasValidWorkspace) {
             createTerminal()
@@ -263,6 +262,13 @@ export default function TerminalPanel() {
         if (managerState.terminals.length <= 2) {
             setTerminalLayout('tabs')
         }
+    }
+
+    const closePanel = () => {
+        // 关闭面板时清理所有终端，避免下次打开时出现空白终端
+        managerState.terminals.forEach(t => terminalManager.closeTerminal(t.id))
+        mountedTerminals.current.clear()
+        setTerminalVisible(false)
     }
 
     const handleFixWithAI = () => {
@@ -376,7 +382,7 @@ export default function TerminalPanel() {
                         <Button variant="ghost" size="icon" onClick={() => setTerminalLayout(isSplitView ? 'tabs' : 'split')} className={`h-7 w-7 rounded-lg ${isSplitView ? 'text-accent' : ''}`} title="Toggle Split View"><LayoutTemplate className="w-3.5 h-3.5" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => activeId && terminalManager.getXterm(activeId)?.clear()} className="h-7 w-7 rounded-lg" title="Clear"><Trash2 className="w-3.5 h-3.5" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => setIsCollapsed(!isCollapsed)} className="h-7 w-7 rounded-lg">{isCollapsed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</Button>
-                        <Button variant="ghost" size="icon" onClick={() => setTerminalVisible(false)} className="h-7 w-7 rounded-lg" title="Close"><X className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="icon" onClick={closePanel} className="h-7 w-7 rounded-lg" title="Close"><X className="w-3.5 h-3.5" /></Button>
                     </div>
                 </div>
 
