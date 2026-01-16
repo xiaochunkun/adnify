@@ -746,18 +746,24 @@ TIPS:
     uiux_search: {
         name: 'uiux_search',
         displayName: 'UI/UX Search',
-        description: 'Search UI/UX design database for styles, colors, typography, and best practices.',
+        description: 'Search UI/UX design database for styles, colors, typography, icons, performance tips, and best practices.',
         detailedDescription: `Search the design knowledge base for:
 - UI styles (glassmorphism, minimalism, etc.)
 - Color palettes for different industries
 - Typography and font pairings
 - Chart recommendations
 - Landing page patterns
-- UX best practices`,
+- UX best practices
+- Icon sets and recommendations
+- React performance optimization
+- UI reasoning and decision making
+- Web interface components`,
         examples: [
             'uiux_search query="glassmorphism" domain="style"',
             'uiux_search query="saas dashboard" domain="color"',
             'uiux_search query="elegant font" domain="typography"',
+            'uiux_search query="lucide heroicons" domain="icons"',
+            'uiux_search query="memo optimization" domain="react-performance"',
         ],
         category: 'search',
         approvalType: 'none',
@@ -769,12 +775,12 @@ TIPS:
             domain: {
                 type: 'string',
                 description: 'Search domain (auto-detected if not specified)',
-                enum: ['style', 'color', 'typography', 'chart', 'landing', 'product', 'ux', 'prompt'],
+                enum: ['style', 'color', 'typography', 'chart', 'landing', 'product', 'ux', 'prompt', 'icons', 'react-performance', 'ui-reasoning', 'web-interface'],
             },
             stack: {
                 type: 'string',
                 description: 'Tech stack for stack-specific guidelines',
-                enum: ['html-tailwind', 'react', 'nextjs', 'vue', 'svelte', 'swiftui', 'react-native', 'flutter'],
+                enum: ['html-tailwind', 'react', 'nextjs', 'vue', 'svelte', 'swiftui', 'react-native', 'flutter', 'jetpack-compose', 'nuxt-ui', 'nuxtjs', 'shadcn'],
             },
             max_results: { type: 'number', description: 'Maximum results (default: 3)', default: 3 },
         },
