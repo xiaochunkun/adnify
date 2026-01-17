@@ -126,6 +126,18 @@ export class BM25Index {
     this.avgDocLength = 0
   }
 
+  /** 删除文件的所有文档 */
+  deleteFile(relativePath: string): void {
+    const before = this.documents.length
+    this.documents = this.documents.filter(doc => doc.relativePath !== relativePath)
+    const after = this.documents.length
+    
+    if (before !== after) {
+      // 文档数量变化，需要重建 IDF
+      // 注意：调用者需要在批量删除后手动调用 build()
+    }
+  }
+
   /** 获取文档数量 */
   get size(): number {
     return this.documents.length

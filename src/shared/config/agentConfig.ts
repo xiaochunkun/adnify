@@ -119,6 +119,13 @@ export interface AgentRuntimeConfig {
   enableLLMSummary: boolean
   autoHandoff: boolean
   
+  // 摘要生成配置
+  summaryMaxContextChars: {
+    quick: number
+    detailed: number
+    handoff: number
+  }
+  
   // Prune 配置
   pruneMinimumTokens: number
   pruneProtectTokens: number
@@ -142,6 +149,7 @@ export interface AgentRuntimeConfig {
 export const DEFAULT_AGENT_CONFIG: AgentRuntimeConfig = {
   ...AGENT_DEFAULTS,
   loopDetection: { ...AGENT_DEFAULTS.loopDetection },
+  summaryMaxContextChars: { ...AGENT_DEFAULTS.summaryMaxContextChars },
   ignoredDirectories: [...AGENT_DEFAULTS.ignoredDirectories],
 }
 

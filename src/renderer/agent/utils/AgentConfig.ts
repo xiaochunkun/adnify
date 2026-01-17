@@ -49,6 +49,9 @@ export function getAgentConfig(): AgentRuntimeConfig {
         enableLLMSummary: agentConfig.enableLLMSummary ?? DEFAULT_AGENT_CONFIG.enableLLMSummary,
         autoHandoff: agentConfig.autoHandoff ?? DEFAULT_AGENT_CONFIG.autoHandoff,
         
+        // 摘要生成配置
+        summaryMaxContextChars: agentConfig.summaryMaxContextChars ?? DEFAULT_AGENT_CONFIG.summaryMaxContextChars,
+        
         // Prune 配置
         pruneMinimumTokens: agentConfig.pruneMinimumTokens ?? DEFAULT_AGENT_CONFIG.pruneMinimumTokens,
         pruneProtectTokens: agentConfig.pruneProtectTokens ?? DEFAULT_AGENT_CONFIG.pruneProtectTokens,

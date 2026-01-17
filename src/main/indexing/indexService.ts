@@ -293,12 +293,23 @@ export class CodebaseIndexService {
   async updateFiles(filePaths: string[]): Promise<void> {
     if (filePaths.length === 0) return
 
-    // 结构化模式：重新索引变更的文件
+    logger.index.info(`[IndexService] Updating ${filePaths.length} files...`)
+
+    // 结构化模式：增量更新
     if (this.config.mode === 'structural') {
+      let updated = 0
       for (const filePath of filePaths) {
         try {
           const ext = path.extname(filePath).toLowerCase()
           if (!this.config.includedExts.includes(ext)) continue
+
+          // 检查文件是否存在
+          if (!fs.existsSync(filePath)) {
+            // 文件被删除，从索引中移除
+            await this.deleteFileFromStructuralIndex(filePath)
+            updated++
+            continue
+          }
 
           const content = await fs.promises.readFile(filePath, 'utf-8')
           if (content.length > this.config.maxFileSize) continue
@@ -306,6 +317,10 @@ export class CodebaseIndexService {
           const chunks = await this.chunkFile(filePath, content)
           const relativePath = path.relative(this.workspacePath, filePath)
 
+          // 先删除该文件的旧索引
+          await this.deleteFileFromStructuralIndex(filePath)
+
+          // 添加新索引
           for (const chunk of chunks) {
             this.bm25Index.addDocument({
               id: chunk.id,
@@ -332,11 +347,19 @@ export class CodebaseIndexService {
               }
             }
           }
+          updated++
         } catch (e) {
           logger.index.warn(`[IndexService] Failed to update ${filePath}:`, e)
         }
       }
-      this.bm25Index.build()
+      
+      if (updated > 0) {
+        // 重建 BM25 索引（必须调用以更新 IDF）
+        this.bm25Index.build()
+        // 保存到缓存
+        await this.saveStructuralIndex()
+        logger.index.info(`[IndexService] Updated ${updated} files in structural index`)
+      }
       return
     }
 
@@ -351,14 +374,35 @@ export class CodebaseIndexService {
     }
   }
 
+  /** 从结构化索引中删除文件 */
+  private async deleteFileFromStructuralIndex(filePath: string): Promise<void> {
+    const relativePath = path.relative(this.workspacePath, filePath)
+    
+    // 从 BM25 索引中删除
+    this.bm25Index.deleteFile(relativePath)
+    
+    // 从符号索引中删除
+    this.symbolIndex.deleteFile(relativePath)
+  }
+
   /** 删除文件索引 */
   async deleteFileIndex(filePath: string): Promise<void> {
-    // 结构化模式暂不支持单文件删除，需要重建
+    const relativePath = path.relative(this.workspacePath, filePath)
+    
+    // 结构化模式：从索引中删除
+    if (this.config.mode === 'structural') {
+      await this.deleteFileFromStructuralIndex(filePath)
+      this.bm25Index.build()
+      await this.saveStructuralIndex()
+      logger.index.info(`[IndexService] Deleted structural index for: ${relativePath}`)
+      return
+    }
+    
     // 语义模式：从向量存储删除
     if (this.config.mode === 'semantic' && this.vectorStore) {
       await this.vectorStore.deleteFile(filePath)
+      logger.index.info(`[IndexService] Deleted semantic index for: ${relativePath}`)
     }
-    logger.index.info(`[IndexService] Deleted index for: ${filePath}`)
   }
 
   /** 更新 Embedding 配置 */

@@ -95,6 +95,28 @@ export class SymbolIndex {
     this.byFile.clear()
   }
 
+  /** 删除文件的所有符号 */
+  deleteFile(relativePath: string): void {
+    const symbols = this.byFile.get(relativePath)
+    if (!symbols) return
+
+    // 从 byName 中删除这些符号
+    for (const symbol of symbols) {
+      const list = this.byName.get(symbol.name)
+      if (list) {
+        const filtered = list.filter(s => s.relativePath !== relativePath)
+        if (filtered.length === 0) {
+          this.byName.delete(symbol.name)
+        } else {
+          this.byName.set(symbol.name, filtered)
+        }
+      }
+    }
+
+    // 从 byFile 中删除
+    this.byFile.delete(relativePath)
+  }
+
   /** 符号数量 */
   get size(): number {
     return this.byName.size

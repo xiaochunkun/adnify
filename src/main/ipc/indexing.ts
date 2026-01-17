@@ -214,10 +214,32 @@ export function registerIndexingHandlers(getMainWindow: () => BrowserWindow | nu
   })
 
   // 更新单个文件索引（用于文件监听）
-  ipcMain.handle('index:updateFile', async (_, _workspacePath: string, _filePath: string): Promise<Result<void>> => {
+  ipcMain.handle('index:updateFile', async (_, workspacePath: string, filePath: string): Promise<Result<void>> => {
     try {
-      // 结构化模式下暂不支持增量更新，需要重建
-      // 语义模式通过 worker 处理
+      const indexService = getIndexService(workspacePath)
+      await indexService.updateFiles([filePath])
+      return ok(undefined)
+    } catch (e) {
+      return failFromError(e)
+    }
+  })
+
+  // 批量更新文件索引（用于文件监听）
+  ipcMain.handle('index:updateFiles', async (_, workspacePath: string, filePaths: string[]): Promise<Result<void>> => {
+    try {
+      const indexService = getIndexService(workspacePath)
+      await indexService.updateFiles(filePaths)
+      return ok(undefined)
+    } catch (e) {
+      return failFromError(e)
+    }
+  })
+
+  // 删除文件索引（用于文件监听）
+  ipcMain.handle('index:deleteFile', async (_, workspacePath: string, filePath: string): Promise<Result<void>> => {
+    try {
+      const indexService = getIndexService(workspacePath)
+      await indexService.deleteFileIndex(filePath)
       return ok(undefined)
     } catch (e) {
       return failFromError(e)

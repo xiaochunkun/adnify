@@ -92,6 +92,12 @@ export interface AgentConfig {
   maxImportantOldTurns: number
   enableLLMSummary: boolean
   autoHandoff: boolean
+  // 摘要生成配置
+  summaryMaxContextChars?: {
+    quick: number
+    detailed: number
+    handoff: number
+  }
   // Prune 配置
   pruneMinimumTokens?: number
   pruneProtectTokens?: number

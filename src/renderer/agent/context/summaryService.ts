@@ -10,24 +10,27 @@ import { api } from '@/renderer/services/electronAPI'
 import { logger } from '@utils/Logger'
 import { useStore } from '@store'
 import { getAdapterConfig } from '@/shared/config/providers'
+import { getAgentConfig } from '../utils/AgentConfig'
 import type { StructuredSummary, HandoffDocument, FileChangeRecord } from './types'
 import type { ChatMessage, AssistantMessage, UserMessage } from '../types'
 import { getMessageText } from '../types'
 
 // ===== Prompts =====
 
-const COMPACTION_PROMPT = `You are a helpful AI assistant tasked with summarizing conversations.
+const HANDOFF_PROMPT = `Analyze this conversation and extract structured information for session handoff.
 
-When asked to summarize, provide a detailed but concise summary of the conversation. 
-Focus on information that would be helpful for continuing the conversation, including:
-- What was done
-- What is currently being worked on
-- Which files are being modified
-- What needs to be done next
-- Key user requests, constraints, or preferences that should persist
-- Important technical decisions and why they were made
+You must respond with a JSON object (no markdown, just raw JSON) with this exact structure:
+{
+  "objective": "string - what the user is trying to achieve",
+  "completedSteps": ["array of strings - what has been done"],
+  "pendingSteps": ["array of strings - what still needs to be done, INCLUDE the last user request if not completed"],
+  "keyDecisions": ["array of strings - important technical decisions"],
+  "userConstraints": ["array of strings - special requirements or preferences"],
+  "lastRequestStatus": "completed | partial | not_started - status of the last user request"
+}
 
-Your summary should be comprehensive enough to provide context but concise enough to be quickly understood.`
+CRITICAL: If the last user message contains a request that wasn't fully completed, it MUST appear in "pendingSteps".
+Example: If user asked "add error handling" but conversation ended before completion, pendingSteps should include "Add error handling as requested".`
 
 const SUMMARY_PROMPT = `Summarize what was done in this conversation. Write like a pull request description.
 
@@ -179,17 +182,23 @@ export async function generateSummary(
     return generateRuleBasedSummary(messages)
   }
 
-  const conversationText = buildConversationText(messages)
+  // 从配置中获取上下文长度限制
+  const agentConfig = getAgentConfig()
+  const maxContextLength = agentConfig.summaryMaxContextChars[options.type]
+  const conversationText = buildConversationText(messages, maxContextLength)
   const fileChanges = extractFileChanges(messages)
   const userRequests = extractUserRequests(messages)
 
-  const prompt = options.type === 'handoff' ? COMPACTION_PROMPT : SUMMARY_PROMPT
-  const userPrompt = options.type === 'handoff'
-    ? `Please summarize the following conversation for handoff to a new session:\n\n${conversationText}`
-    : `Please summarize the following conversation:\n\n${conversationText}`
+  // Handoff 模式：使用结构化提示词
+  if (options.type === 'handoff') {
+    return generateHandoffSummary(messages, conversationText, fileChanges, userRequests, llmConfig)
+  }
+
+  // Quick/Detailed 模式：使用简单摘要
+  const prompt = SUMMARY_PROMPT
+  const userPrompt = `Please summarize the following conversation:\n\n${conversationText}`
 
   try {
-    // 使用同步 LLM 调用
     const result = await api.llm.compactContext({
       config: {
         provider: llmConfig.provider,
@@ -228,12 +237,111 @@ export async function generateSummary(
 }
 
 /**
+ * 生成 Handoff 专用的结构化摘要
+ */
+async function generateHandoffSummary(
+  messages: ChatMessage[],
+  conversationText: string,
+  fileChanges: FileChangeRecord[],
+  userRequests: string[],
+  llmConfig: import('@store').LLMConfig
+): Promise<SummaryResult> {
+  const lastUserRequest = userRequests[userRequests.length - 1] || ''
+  
+  const userPrompt = `Analyze the following conversation and extract structured information:\n\n${conversationText}\n\nLast user request: "${lastUserRequest}"`
+
+  try {
+    const result = await api.llm.compactContext({
+      config: {
+        provider: llmConfig.provider,
+        model: llmConfig.model,
+        apiKey: llmConfig.apiKey,
+        baseUrl: llmConfig.baseUrl,
+        timeout: llmConfig.timeout,
+        maxTokens: 1000,
+        temperature: 0.2, // 更低的温度以获得更结构化的输出
+        adapterConfig: llmConfig.adapterConfig || getAdapterConfig(llmConfig.provider),
+      },
+      messages: [
+        { role: 'system', content: HANDOFF_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+    })
+
+    if (result.error) {
+      logger.agent.warn('[SummaryService] Handoff LLM error, falling back to rule-based:', result.error)
+      return generateRuleBasedSummary(messages, lastUserRequest)
+    }
+
+    // 尝试解析 JSON 响应
+    const content = result.content || ''
+    let parsed: any
+    
+    try {
+      // 移除可能的 markdown 代码块标记
+      const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      parsed = JSON.parse(cleaned)
+    } catch {
+      logger.agent.warn('[SummaryService] Failed to parse JSON, falling back to rule-based')
+      return generateRuleBasedSummary(messages, lastUserRequest)
+    }
+
+    // 验证并提取字段
+    const objective = parsed.objective || userRequests[0] || 'Unknown objective'
+    const completedSteps = Array.isArray(parsed.completedSteps) ? parsed.completedSteps : extractCompletedSteps(messages)
+    let pendingSteps = Array.isArray(parsed.pendingSteps) ? parsed.pendingSteps : []
+    
+    // 确保最后一个未完成的请求在 pendingSteps 中
+    if (parsed.lastRequestStatus !== 'completed' && lastUserRequest) {
+      const lastRequestInPending = pendingSteps.some((step: string) => 
+        step.toLowerCase().includes(lastUserRequest.slice(0, 30).toLowerCase())
+      )
+      if (!lastRequestInPending) {
+        pendingSteps.unshift(`Continue: ${lastUserRequest.slice(0, 100)}${lastUserRequest.length > 100 ? '...' : ''}`)
+      }
+    }
+
+    const summary = `**Objective**: ${objective}\n\n` +
+      `**Completed**: ${completedSteps.length} steps\n` +
+      `**Pending**: ${pendingSteps.length} steps\n` +
+      (parsed.keyDecisions?.length > 0 ? `**Key Decisions**: ${parsed.keyDecisions.join('; ')}\n` : '') +
+      (parsed.userConstraints?.length > 0 ? `**Constraints**: ${parsed.userConstraints.join('; ')}` : '')
+
+    return {
+      summary,
+      objective,
+      completedSteps,
+      pendingSteps,
+      fileChanges,
+    }
+  } catch (error) {
+    logger.agent.error('[SummaryService] Error generating handoff summary:', error)
+    return generateRuleBasedSummary(messages, lastUserRequest)
+  }
+}
+
+/**
  * 基于规则生成摘要（不使用 LLM）
  */
-function generateRuleBasedSummary(messages: ChatMessage[]): SummaryResult {
+function generateRuleBasedSummary(messages: ChatMessage[], lastUserRequest?: string): SummaryResult {
   const fileChanges = extractFileChanges(messages)
   const userRequests = extractUserRequests(messages)
   const completedSteps = extractCompletedSteps(messages)
+
+  // 检测最后一个请求是否完成
+  const pendingSteps: string[] = []
+  if (lastUserRequest) {
+    // 简单启发式：如果最后几条消息中没有成功的工具调用，认为请求未完成
+    const lastMessages = messages.slice(-5)
+    const hasRecentSuccess = lastMessages.some(m => 
+      m.role === 'assistant' && 
+      (m as import('../types').AssistantMessage).toolCalls?.some(tc => tc.status === 'success')
+    )
+    
+    if (!hasRecentSuccess) {
+      pendingSteps.push(`Continue: ${lastUserRequest.slice(0, 100)}${lastUserRequest.length > 100 ? '...' : ''}`)
+    }
+  }
 
   // 构建简单摘要
   const parts: string[] = []
@@ -251,11 +359,15 @@ function generateRuleBasedSummary(messages: ChatMessage[]): SummaryResult {
     parts.push(`Completed: ${completedSteps.length} steps`)
   }
 
+  if (pendingSteps.length > 0) {
+    parts.push(`Pending: ${pendingSteps.join('; ')}`)
+  }
+
   return {
     summary: parts.join('\n'),
     objective: userRequests[0] || 'Unknown objective',
     completedSteps,
-    pendingSteps: [],
+    pendingSteps,
     fileChanges,
   }
 }
