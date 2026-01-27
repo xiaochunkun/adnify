@@ -6,6 +6,7 @@
 import { api } from '@/renderer/services/electronAPI'
 import { useStore } from '@store'
 import { logger } from '@utils/Logger'
+import { handleError, getUserFriendlyMessage } from '@shared/utils/errorHandler'
 import type {
   McpServerState,
   McpToolCallRequest,
@@ -49,10 +50,12 @@ class McpService {
       store.setMcpInitialized(true)
       this.initialized = true
       logger.agent.info('[McpService] Initialized')
-    } catch (err: any) {
-      logger.agent.error('[McpService] Initialize failed:', err)
-      store.setMcpError(err.message)
-      throw err
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Initialize failed: ${error.code}`, error)
+      const userMessage = getUserFriendlyMessage(error, 'zh')
+      store.setMcpError(userMessage)
+      throw error
     } finally {
       store.setMcpLoading(false)
     }
@@ -69,9 +72,11 @@ class McpService {
         throw new Error(result.error)
       }
       await this.refreshServersState()
-    } catch (err: any) {
-      logger.agent.error('[McpService] Reinitialize failed:', err)
-      store.setMcpError(err.message)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Reinitialize failed: ${error.code}`, error)
+      const userMessage = getUserFriendlyMessage(error, 'zh')
+      store.setMcpError(userMessage)
     } finally {
       store.setMcpLoading(false)
     }
@@ -86,8 +91,9 @@ class McpService {
         return result.servers
       }
       return []
-    } catch (err: any) {
-      logger.agent.error('[McpService] Refresh servers state failed:', err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Refresh servers state failed: ${error.code}`, error)
       return []
     }
   }
@@ -100,8 +106,9 @@ class McpService {
         await this.refreshServersState()
       }
       return result.success
-    } catch (err: any) {
-      logger.agent.error(`[McpService] Connect server ${serverId} failed:`, err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Connect server ${serverId} failed: ${error.code}`, error)
       return false
     }
   }
@@ -114,8 +121,9 @@ class McpService {
         await this.refreshServersState()
       }
       return result.success
-    } catch (err: any) {
-      logger.agent.error(`[McpService] Disconnect server ${serverId} failed:`, err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Disconnect server ${serverId} failed: ${error.code}`, error)
       return false
     }
   }
@@ -128,8 +136,9 @@ class McpService {
         await this.refreshServersState()
       }
       return result.success
-    } catch (err: any) {
-      logger.agent.error(`[McpService] Reconnect server ${serverId} failed:`, err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Reconnect server ${serverId} failed: ${error.code}`, error)
       return false
     }
   }
@@ -139,9 +148,10 @@ class McpService {
     try {
       const result = await api.mcp.callTool(request)
       return result
-    } catch (err: any) {
-      logger.agent.error('[McpService] Call tool failed:', err)
-      return { success: false, error: err.message }
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Call tool failed: ${error.code}`, error)
+      return { success: false, error: error.message }
     }
   }
 
@@ -150,9 +160,10 @@ class McpService {
     try {
       const result = await api.mcp.readResource(request)
       return result
-    } catch (err: any) {
-      logger.agent.error('[McpService] Read resource failed:', err)
-      return { success: false, error: err.message }
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Read resource failed: ${error.code}`, error)
+      return { success: false, error: error.message }
     }
   }
 
@@ -161,9 +172,10 @@ class McpService {
     try {
       const result = await api.mcp.getPrompt(request)
       return result
-    } catch (err: any) {
-      logger.agent.error('[McpService] Get prompt failed:', err)
-      return { success: false, error: err.message }
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Get prompt failed: ${error.code}`, error)
+      return { success: false, error: error.message }
     }
   }
 
@@ -175,8 +187,9 @@ class McpService {
         await this.refreshServersState()
       }
       return result.success
-    } catch (err: any) {
-      logger.agent.error(`[McpService] Refresh capabilities ${serverId} failed:`, err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Refresh capabilities ${serverId} failed: ${error.code}`, error)
       return false
     }
   }
@@ -186,8 +199,9 @@ class McpService {
     try {
       const result = await api.mcp.getConfigPaths()
       return result.success ? result.paths! : null
-    } catch (err: any) {
-      logger.agent.error('[McpService] Get config paths failed:', err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Get config paths failed: ${error.code}`, error)
       return null
     }
   }
@@ -200,8 +214,9 @@ class McpService {
         await this.refreshServersState()
       }
       return result.success
-    } catch (err: any) {
-      logger.agent.error('[McpService] Reload config failed:', err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Reload config failed: ${error.code}`, error)
       return false
     }
   }
@@ -223,8 +238,9 @@ class McpService {
     try {
       const result = await api.mcp.addServer(config)
       return result.success
-    } catch (err: any) {
-      logger.agent.error('[McpService] Add server failed:', err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Add server failed: ${error.code}`, error)
       return false
     }
   }
@@ -234,8 +250,9 @@ class McpService {
     try {
       const result = await api.mcp.removeServer(serverId)
       return result.success
-    } catch (err: any) {
-      logger.agent.error(`[McpService] Remove server ${serverId} failed:`, err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Remove server ${serverId} failed: ${error.code}`, error)
       return false
     }
   }
@@ -245,8 +262,9 @@ class McpService {
     try {
       const result = await api.mcp.toggleServer(serverId, disabled)
       return result.success
-    } catch (err: any) {
-      logger.agent.error(`[McpService] Toggle server ${serverId} failed:`, err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Toggle server ${serverId} failed: ${error.code}`, error)
       return false
     }
   }
@@ -256,9 +274,10 @@ class McpService {
     try {
       const result = await api.mcp.startOAuth(serverId)
       return result
-    } catch (err: any) {
-      logger.agent.error(`[McpService] Start OAuth ${serverId} failed:`, err)
-      return { success: false, error: err.message }
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Start OAuth ${serverId} failed: ${error.code}`, error)
+      return { success: false, error: error.message }
     }
   }
 
@@ -270,9 +289,10 @@ class McpService {
         await this.refreshServersState()
       }
       return result
-    } catch (err: any) {
-      logger.agent.error(`[McpService] Finish OAuth ${serverId} failed:`, err)
-      return { success: false, error: err.message }
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Finish OAuth ${serverId} failed: ${error.code}`, error)
+      return { success: false, error: error.message }
     }
   }
 
@@ -284,9 +304,10 @@ class McpService {
         await this.refreshServersState()
       }
       return result
-    } catch (err: any) {
-      logger.agent.error(`[McpService] Refresh OAuth token ${serverId} failed:`, err)
-      return { success: false, error: err.message }
+    } catch (err) {
+      const error = handleError(err)
+      logger.agent.error(`[McpService] Refresh OAuth token ${serverId} failed: ${error.code}`, error)
+      return { success: false, error: error.message }
     }
   }
 

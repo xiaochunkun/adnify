@@ -6,6 +6,7 @@
 import { BrowserWindow, shell } from 'electron'
 import { EventEmitter } from 'events'
 import { logger } from '@shared/utils/Logger'
+import { handleError } from '@shared/utils/errorHandler'
 import { McpClient } from './McpClient'
 import { McpConfigLoader } from './McpConfigLoader'
 import { McpOAuthCallback } from './McpOAuthCallback'
@@ -86,8 +87,9 @@ export class McpManager extends EventEmitter {
           }
           await this.connectServer(config)
           logger.mcp?.info(`[McpManager] Auto-connected: ${config.id}`)
-        } catch (err: any) {
-          logger.mcp?.warn(`[McpManager] Auto-connect failed for ${config.id}:`, err.message)
+        } catch (err) {
+          const error = handleError(err)
+          logger.mcp?.warn(`[McpManager] Auto-connect failed for ${config.id}: ${error.code}`, error)
         }
       })
     ).then(() => {
@@ -169,8 +171,9 @@ export class McpManager extends EventEmitter {
 
     try {
       await client.connect()
-    } catch (err: any) {
-      logger.mcp?.error(`[McpManager] Failed to connect ${config.id}:`, err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.mcp?.error(`[McpManager] Failed to connect ${config.id}: ${error.code}`, error)
     }
 
     this.notifyStateChange()
@@ -256,8 +259,9 @@ export class McpManager extends EventEmitter {
     try {
       const result = await client.callTool(toolName, args)
       return { success: !result.isError, content: result.content, isError: result.isError }
-    } catch (err: any) {
-      return { success: false, error: err.message }
+    } catch (err) {
+      const error = handleError(err)
+      return { success: false, error: error.message }
     }
   }
 
@@ -271,8 +275,9 @@ export class McpManager extends EventEmitter {
     try {
       const result = await client.readResource(uri)
       return { success: true, contents: result.contents }
-    } catch (err: any) {
-      return { success: false, error: err.message }
+    } catch (err) {
+      const error = handleError(err)
+      return { success: false, error: error.message }
     }
   }
 
@@ -286,8 +291,9 @@ export class McpManager extends EventEmitter {
     try {
       const result = await client.getPrompt(promptName, args)
       return { success: true, description: result.description, messages: result.messages }
-    } catch (err: any) {
-      return { success: false, error: err.message }
+    } catch (err) {
+      const error = handleError(err)
+      return { success: false, error: error.message }
     }
   }
 
@@ -353,8 +359,9 @@ export class McpManager extends EventEmitter {
     try {
       await shell.openExternal(authUrl)
       return { success: true, authorizationUrl: authUrl }
-    } catch (err: any) {
-      return { success: false, error: `Failed to open browser: ${err.message}` }
+    } catch (err) {
+      const error = handleError(err)
+      return { success: false, error: `Failed to open browser: ${error.message}` }
     }
   }
 
@@ -372,9 +379,10 @@ export class McpManager extends EventEmitter {
       // 重新连接
       await this.reconnectServer(serverId)
       return { success: true }
-    } catch (err: any) {
-      logger.mcp?.error(`[McpManager] OAuth finish failed for ${serverId}:`, err)
-      return { success: false, error: err.message }
+    } catch (err) {
+      const error = handleError(err)
+      logger.mcp?.error(`[McpManager] OAuth finish failed for ${serverId}: ${error.code}`, error)
+      return { success: false, error: error.message }
     }
   }
 

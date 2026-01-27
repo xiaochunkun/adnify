@@ -8,13 +8,14 @@
  */
 
 import { api } from '@/renderer/services/electronAPI'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, memo } from 'react'
 import { X, Plus, Trash2, Terminal as TerminalIcon, Sparkles, Play, SplitSquareHorizontal } from 'lucide-react'
 import { useStore, useModeStore } from '@store'
 import { useAgentStore } from '@/renderer/agent'
 import { themes } from '../editor/ThemeManager'
 import { Button } from '../ui'
 import { terminalManager, TerminalManagerState } from '@/renderer/services/TerminalManager'
+import { useClickOutside } from '@renderer/hooks/usePerformance'
 
 // xterm 样式
 const XTERM_STYLE = `
@@ -67,7 +68,7 @@ function getTerminalTheme(themeName: string) {
     }
 }
 
-export default function TerminalPanel() {
+const TerminalPanel = memo(function TerminalPanel() {
     const { terminalVisible, setTerminalVisible, workspace, currentTheme, terminalLayout, setTerminalLayout } = useStore()
     const { setMode } = useModeStore()
     // 从 AgentStore 获取 setInputPrompt
@@ -227,23 +228,12 @@ export default function TerminalPanel() {
     }, [isResizing, managerState.activeId])
 
     // ===== 菜单点击外部关闭 =====
-    
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (showShellMenu && shellMenuRef.current && !shellMenuRef.current.contains(event.target as Node) && shellButtonRef.current && !shellButtonRef.current.contains(event.target as Node)) {
-                setShowShellMenu(false)
-            }
-            if (showScriptMenu && scriptMenuRef.current && !scriptMenuRef.current.contains(event.target as Node) && scriptButtonRef.current && !scriptButtonRef.current.contains(event.target as Node)) {
-                setShowScriptMenu(false)
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside)
-        return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [showShellMenu, showScriptMenu])
+    useClickOutside(() => setShowShellMenu(false), showShellMenu, [shellMenuRef, shellButtonRef])
+    useClickOutside(() => setShowScriptMenu(false), showScriptMenu, [scriptMenuRef, scriptButtonRef])
 
     // ===== 操作函数 =====
     
-    const createTerminal = async (shellPath?: string, shellName?: string) => {
+    const createTerminal = useCallback(async (shellPath?: string, shellName?: string) => {
         const cwd = selectedRoot || workspace?.roots?.[0] || ''
         if (!cwd) return
         
@@ -253,33 +243,33 @@ export default function TerminalPanel() {
             shell: shellPath,
         })
         setShowShellMenu(false)
-    }
+    }, [selectedRoot, workspace?.roots, availableShells])
 
-    const closeTerminal = (id: string, e?: React.MouseEvent) => {
+    const closeTerminal = useCallback((id: string, e?: React.MouseEvent) => {
         e?.stopPropagation()
         terminalManager.closeTerminal(id)
         if (managerState.terminals.length <= 2) {
             setTerminalLayout('tabs')
         }
-    }
+    }, [managerState.terminals.length, setTerminalLayout])
 
-    const closePanel = () => {
+    const closePanel = useCallback(() => {
         // 关闭面板时清理所有终端，避免下次打开时出现空白终端
         managerState.terminals.forEach(t => terminalManager.closeTerminal(t.id))
         mountedTerminals.current.clear()
         setTerminalVisible(false)
-    }
+    }, [managerState.terminals, setTerminalVisible])
 
-    const handleFixWithAI = () => {
+    const handleFixWithAI = useCallback(() => {
         if (!managerState.activeId) return
         const buffer = terminalManager.getOutputBuffer(managerState.activeId)
         const content = buffer.join('').replace(/\u001b\[[0-9;]*m/g, '').slice(-2000).trim()
         if (!content) return
         setMode('chat')
         setInputPrompt(`I'm getting this error in the terminal. Please analyze it and fix the code:\n\n\`\`\`\n${content}\n\`\`\``)
-    }
+    }, [managerState.activeId, setMode, setInputPrompt])
 
-    const runScript = async (name: string) => {
+    const runScript = useCallback(async (name: string) => {
         setShowScriptMenu(false)
         if (!terminalVisible) setTerminalVisible(true)
         
@@ -293,7 +283,7 @@ export default function TerminalPanel() {
             terminalManager.focusTerminal(targetId)
             terminalManager.writeToTerminal(targetId, `npm run ${name}\r`)
         }
-    }
+    }, [terminalVisible, setTerminalVisible, managerState.activeId, managerState.terminals, createTerminal])
 
     // ===== 渲染 =====
     
@@ -418,4 +408,6 @@ export default function TerminalPanel() {
             </div>
         </>
     )
-}
+})
+
+export default TerminalPanel

@@ -16,6 +16,7 @@ import {
   PromptListChangedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { logger } from '@shared/utils/Logger'
+import { handleError } from '@shared/utils/errorHandler'
 import { McpOAuthProvider } from './McpOAuthProvider'
 import type {
   McpServerConfig,
@@ -100,12 +101,13 @@ export class McpClient extends EventEmitter {
       } else {
         await this.connectLocal(config)
       }
-    } catch (err: any) {
-      logger.mcp?.error(`[MCP:${config.id}] Connection failed:`, err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.mcp?.error(`[MCP:${config.id}] Connection failed: ${error.code}`, error)
       if (this.state.status !== 'needs_auth' && this.state.status !== 'needs_registration') {
-        this.updateStatus('error', err.message)
+        this.updateStatus('error', error.message)
       }
-      throw err
+      throw error
     }
   }
 
@@ -339,9 +341,10 @@ export class McpClient extends EventEmitter {
       logger.mcp?.info(
         `[MCP:${this.id}] Capabilities: ${this.state.tools.length} tools, ${this.state.resources.length} resources, ${this.state.prompts.length} prompts`
       )
-    } catch (err: any) {
-      logger.mcp?.error(`[MCP:${this.id}] Failed to refresh capabilities:`, err)
-      throw err
+    } catch (err) {
+      const error = handleError(err)
+      logger.mcp?.error(`[MCP:${this.id}] Failed to refresh capabilities: ${error.code}`, error)
+      throw error
     }
   }
 

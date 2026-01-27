@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, Check } from 'lucide-react'
+import { useClickOutside } from '@renderer/hooks/usePerformance'
 
 export interface SelectOption {
     value: string
@@ -18,7 +19,7 @@ interface SelectProps {
     dropdownPosition?: 'top' | 'bottom' | 'auto'
 }
 
-export function Select({
+export const Select = memo(function Select({
     options,
     value,
     onChange,
@@ -33,6 +34,9 @@ export function Select({
     const dropdownRef = useRef<HTMLDivElement>(null)
 
     const selectedOption = options.find(opt => opt.value === value)
+    
+    // 使用自定义 hook 处理点击外部关闭
+    useClickOutside(() => setIsOpen(false), isOpen, [containerRef, dropdownRef])
 
     useEffect(() => {
         if (isOpen && containerRef.current) {
@@ -55,16 +59,7 @@ export function Select({
         }
     }, [isOpen, dropdownPosition])
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node) &&
-                dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false)
-            }
-        }
-        if (isOpen) document.addEventListener('mousedown', handleClickOutside)
-        return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [isOpen])
+
 
     const dropdown = isOpen && (
         <div
@@ -121,4 +116,4 @@ export function Select({
             {createPortal(dropdown, document.body)}
         </div>
     )
-}
+})

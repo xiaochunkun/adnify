@@ -13,6 +13,7 @@ import { spawn, execSync } from 'child_process'
 import * as path from 'path'
 import * as fs from 'fs'
 import { logger } from '@shared/utils/Logger'
+import { handleError } from '@shared/utils/errorHandler'
 import Store from 'electron-store'
 
 // ============ 配置持久化 ============
@@ -51,11 +52,10 @@ export function getLspBinDir(): string {
     try {
       fs.mkdirSync(dir, { recursive: true })
       logger.lsp.info(`[LSP Installer] Created bin directory: ${dir}`)
-    } catch (err: any) {
-      logger.lsp.error(`[LSP Installer] Failed to create bin directory: ${dir}`, {
-        error: err.message,
-      })
-      throw new Error(`Failed to create LSP bin directory: ${err.message}`)
+    } catch (err) {
+      const error = handleError(err)
+      logger.lsp.error(`[LSP Installer] Failed to create bin directory: ${dir} - ${error.code}`, error)
+      throw new Error(`Failed to create LSP bin directory: ${error.message}`)
     }
   }
   
@@ -225,10 +225,10 @@ async function downloadFile(url: string, destPath: string): Promise<boolean> {
     }
     
     return true
-  } catch (err: any) {
-    logger.lsp.error(`[LSP Installer] Download failed with exception:`, {
-      error: err.message,
-      stack: err.stack,
+  } catch (err) {
+    const error = handleError(err)
+    logger.lsp.error(`[LSP Installer] Download failed: ${error.code}`, {
+      error: error.message,
       url,
       destPath,
     })
@@ -272,10 +272,10 @@ async function extractZip(zipPath: string, destDir: string): Promise<boolean> {
     logger.lsp.info(`[LSP Installer] ZIP extracted successfully to ${destDir}`)
     
     return true
-  } catch (err: any) {
-    logger.lsp.error(`[LSP Installer] Extract failed with exception:`, {
-      error: err.message,
-      stack: err.stack,
+  } catch (err) {
+    const error = handleError(err)
+    logger.lsp.error(`[LSP Installer] Extract failed: ${error.code}`, {
+      error: error.message,
       zipPath,
       destDir,
     })
@@ -320,12 +320,9 @@ async function extractTarXz(archivePath: string, destDir: string): Promise<boole
         logger.lsp.debug(`[LSP Installer] tar output: ${output}`)
         logger.lsp.info('[LSP Installer] tar.xz extracted successfully (Windows)')
         return true
-      } catch (err: any) {
-        logger.lsp.error('[LSP Installer] tar command failed on Windows:', {
-          error: err.message,
-          stderr: err.stderr?.toString(),
-          stdout: err.stdout?.toString(),
-        })
+      } catch (err) {
+        const error = handleError(err)
+        logger.lsp.error(`[LSP Installer] tar command failed on Windows: ${error.code}`, error)
         logger.lsp.warn('[LSP Installer] Please ensure tar is available (Windows 10 1803+ or install 7-Zip)')
         return false
       }
@@ -348,19 +345,16 @@ async function extractTarXz(archivePath: string, destDir: string): Promise<boole
         logger.lsp.debug(`[LSP Installer] tar output: ${output}`)
         logger.lsp.info('[LSP Installer] tar.xz extracted successfully (Unix)')
         return true
-      } catch (err: any) {
-        logger.lsp.error('[LSP Installer] tar command failed on Unix:', {
-          error: err.message,
-          stderr: err.stderr?.toString(),
-          stdout: err.stdout?.toString(),
-        })
+      } catch (err) {
+        const error = handleError(err)
+        logger.lsp.error(`[LSP Installer] tar command failed on Unix: ${error.code}`, error)
         return false
       }
     }
-  } catch (err: any) {
-    logger.lsp.error('[LSP Installer] Extract tar.xz failed with exception:', {
-      error: err.message,
-      stack: err.stack,
+  } catch (err) {
+    const error = handleError(err)
+    logger.lsp.error(`[LSP Installer] Extract tar.xz failed: ${error.code}`, {
+      error: error.message,
       archivePath,
       destDir,
     })
@@ -376,10 +370,9 @@ function setExecutable(filePath: string): void {
     try {
       fs.chmodSync(filePath, 0o755)
       logger.lsp.debug(`[LSP Installer] Set executable permission: ${filePath}`)
-    } catch (err: any) {
-      logger.lsp.warn(`[LSP Installer] Failed to set executable permission: ${filePath}`, {
-        error: err.message,
-      })
+    } catch (err) {
+      const error = handleError(err)
+      logger.lsp.warn(`[LSP Installer] Failed to set executable permission: ${filePath} - ${error.code}`, error)
     }
   }
 }
@@ -910,12 +903,10 @@ export async function installClangd(): Promise<LspInstallResult> {
       dirContents: fs.existsSync(binDir) ? fs.readdirSync(binDir) : [],
     })
     return { success: false, error: 'clangd binary not found after extraction. Check installation directory.' }
-  } catch (err: any) {
-    logger.lsp.error('[LSP Installer] clangd installation failed with exception:', {
-      error: err.message,
-      stack: err.stack,
-    })
-    return { success: false, error: `Installation error: ${err.message}` }
+  } catch (err) {
+    const error = handleError(err)
+    logger.lsp.error(`[LSP Installer] clangd installation failed: ${error.code}`, error)
+    return { success: false, error: `Installation error: ${error.message}` }
   }
 }
 
@@ -1038,12 +1029,10 @@ export async function installZls(): Promise<LspInstallResult> {
       dirContents: fs.existsSync(binDir) ? fs.readdirSync(binDir) : [],
     })
     return { success: false, error: 'zls binary not found after extraction. Check installation directory.' }
-  } catch (err: any) {
-    logger.lsp.error('[LSP Installer] zls installation failed with exception:', {
-      error: err.message,
-      stack: err.stack,
-    })
-    return { success: false, error: `Installation error: ${err.message}` }
+  } catch (err) {
+    const error = handleError(err)
+    logger.lsp.error(`[LSP Installer] zls installation failed: ${error.code}`, error)
+    return { success: false, error: `Installation error: ${error.message}` }
   }
 }
 

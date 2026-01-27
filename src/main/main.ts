@@ -1,6 +1,9 @@
 /**
  * Adnify Main Process
  * 简化的启动逻辑，参考 VSCode 的快速启动模式
+ * 
+ * 优化说明：
+ * - 启用 TypeScript 增量编译以提升构建速度
  */
 
 import { app, BrowserWindow, Menu, shell } from 'electron'
@@ -124,9 +127,30 @@ function createWindow(isEmpty = false): BrowserWindow {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
       v8CacheOptions: 'bypassHeatCheck',
       backgroundThrottling: false,
     },
+  })
+
+  // 添加 CSP 头以提升安全性
+  win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",  // Monaco 编辑器需要
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: https:",
+          "connect-src 'self' https:",  // 允许所有 HTTPS 连接，支持自定义 baseURL
+          "font-src 'self' data:",
+          "media-src 'self'",
+        ].join('; ')
+      }
+    })
   })
 
   // 等待 DOM 渲染完成后显示窗口，避免白屏闪烁

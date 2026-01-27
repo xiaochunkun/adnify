@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react'
+import React, { memo, useMemo } from 'react'
 import { X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
+import { useEscapeKey } from '@/renderer/hooks/usePerformance'
 
 interface ModalProps {
     isOpen: boolean
@@ -14,36 +15,26 @@ interface ModalProps {
     showCloseButton?: boolean
 }
 
-export const Modal: React.FC<ModalProps> = ({ 
+const sizes = {
+    sm: 'max-w-sm',
+    md: 'max-w-md',
+    lg: 'max-w-lg',
+    xl: 'max-w-xl',
+    '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl',
+    '4xl': 'max-w-4xl',
+    '5xl': 'max-w-5xl',
+    'full': 'max-w-full mx-4 h-[90vh]'
+}
+
+export const Modal: React.FC<ModalProps> = memo(function Modal({ 
     isOpen, onClose, title, children, size = 'md', noPadding = false, className = '', showCloseButton = true
-}) => {
-    useEffect(() => {
-        const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose()
-        }
-        if (isOpen) {
-            document.addEventListener('keydown', handleEscape)
-            document.body.style.overflow = 'hidden'
-        }
-        return () => {
-            document.removeEventListener('keydown', handleEscape)
-            document.body.style.overflow = 'unset'
-        }
-    }, [isOpen, onClose])
+}) {
+    useEscapeKey(onClose, isOpen)
+
+    const sizeClass = useMemo(() => sizes[size], [size])
 
     if (!isOpen) return null
-
-    const sizes = {
-        sm: 'max-w-sm',
-        md: 'max-w-md',
-        lg: 'max-w-lg',
-        xl: 'max-w-xl',
-        '2xl': 'max-w-2xl',
-        '3xl': 'max-w-3xl',
-        '4xl': 'max-w-4xl',
-        '5xl': 'max-w-5xl',
-        'full': 'max-w-full mx-4 h-[90vh]'
-    }
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -62,7 +53,7 @@ export const Modal: React.FC<ModalProps> = ({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ type: "spring", duration: 0.5, bounce: 0.2 }}
                 className={`
-                    relative w-full ${sizes[size]} 
+                    relative w-full ${sizeClass} 
                     bg-background/80 backdrop-blur-2xl 
                     border border-border/50 
                     rounded-3xl shadow-2xl shadow-black/20 
@@ -93,4 +84,4 @@ export const Modal: React.FC<ModalProps> = ({
         </div>,
         document.body
     )
-}
+})

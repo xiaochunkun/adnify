@@ -14,6 +14,7 @@
 import { app, BrowserWindow } from 'electron'
 import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater'
 import { logger } from '@shared/utils/Logger'
+import { handleError } from '@shared/utils/errorHandler'
 import * as path from 'path'
 import * as fs from 'fs'
 
@@ -154,7 +155,7 @@ class UpdateService {
       logger.system.error('[Updater] Error:', err)
       this.updateStatus({
         status: 'error',
-        error: err.message,
+        error: handleError(err).message,
       })
     })
 
@@ -287,13 +288,14 @@ class UpdateService {
       })
 
       await Promise.race([checkPromise, timeoutPromise])
-    } catch (err: any) {
-      logger.system.error('[Updater] Check failed:', err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.system.error(`[Updater] Check failed: ${handleError(err).code}`, error)
       // 如果状态还是 checking，说明超时或出错了
       if (this.status.status === 'checking') {
         this.updateStatus({
           status: 'error',
-          error: err.message || '更新检查失败',
+          error: handleError(err).message || '更新检查失败',
         })
       }
     }
@@ -371,18 +373,19 @@ class UpdateService {
         } else {
           this.updateStatus({ status: 'not-available' })
         }
-      } catch (fetchErr: any) {
+      } catch (err) {
         clearTimeout(timeoutId)
-        if (fetchErr.name === 'AbortError') {
+        if (handleError(err).name === 'AbortError') {
           throw new Error('更新检查超时，请检查网络连接')
         }
-        throw fetchErr
+        throw err
       }
-    } catch (err: any) {
-      logger.system.error('[Updater] Portable check failed:', err)
+    } catch (err) {
+      const error = handleError(err)
+      logger.system.error(`[Updater] Portable check failed: ${handleError(err).code}`, error)
       this.updateStatus({
         status: 'error',
-        error: err.message || '更新检查失败',
+        error: handleError(err).message || '更新检查失败',
       })
     }
 

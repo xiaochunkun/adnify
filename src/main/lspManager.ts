@@ -11,6 +11,7 @@
  */
 
 import { logger } from '@shared/utils/Logger'
+import { handleError } from '@shared/utils/errorHandler'
 import { spawn, ChildProcess } from 'child_process'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -537,7 +538,7 @@ class LspManager {
     logger.lsp.debug(`[LSP ${key}] Starting process: ${command} ${args.join(' ')}`)
 
     proc.on('error', (err) => {
-      logger.lsp.error(`[LSP ${key}] Process spawn error:`, err.message)
+      logger.lsp.error(`[LSP ${key}] Process spawn error:`, handleError(err).message)
     })
 
     proc.stdout.on('data', (data: Buffer) => this.handleServerOutput(key, data))
@@ -582,15 +583,15 @@ class LspManager {
       }
     })
 
-    proc.stdin.on('error', (err) => logger.lsp.warn(`[LSP ${key}] stdin error:`, err.message))
+    proc.stdin.on('error', (err) => logger.lsp.warn(`[LSP ${key}] stdin error:`, handleError(err).message))
 
     try {
       await this.initializeServer(key, workspacePath)
       instance.initialized = true
       logger.lsp.debug(`[LSP ${key}] Initialized successfully`)
       return true
-    } catch (error: any) {
-      logger.lsp.error(`[LSP ${key}] Init failed:`, error.message)
+    } catch (err) {
+      logger.lsp.error(`[LSP ${key}] Init failed:`, handleError(err).message)
       this.stopServerByKey(key)
       return false
     }
@@ -735,7 +736,7 @@ class LspManager {
 
       try {
         instance.process.stdin.write(message)
-      } catch (err: any) {
+      } catch (err) {
         instance.pendingRequests.delete(id)
         clearTimeout(timeout)
         reject(err)

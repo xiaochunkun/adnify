@@ -10,7 +10,6 @@ import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { GlobalErrorHandler } from './components/common/GlobalErrorHandler'
 import { ThemeManager } from './components/editor/ThemeManager'
 import { EditorSkeleton, PanelSkeleton, ChatSkeleton, FullScreenLoading, SettingsSkeleton } from './components/ui/Loading'
-import { Modal } from './components/ui'
 import { startupMetrics } from '@shared/utils/startupMetrics'
 
 startupMetrics.mark('app-module-loaded')
@@ -50,7 +49,6 @@ function AppContent() {
   // Zustand 会自动优化这些独立的 selector，只订阅相关状态变化
   const workspace = useStore((state) => state.workspace)
   const showSettings = useStore((state) => state.showSettings)
-  const setShowSettings = useStore((state) => state.setShowSettings)
   const activeSidePanel = useStore((state) => state.activeSidePanel)
   const showComposer = useStore((state) => state.showComposer)
   const setShowComposer = useStore((state) => state.setShowComposer)
@@ -173,17 +171,7 @@ function AppContent() {
 
       {/* 模态框 */}
       {showSettings && (
-        <Suspense fallback={
-          <Modal 
-            isOpen 
-            onClose={() => setShowSettings(false)} 
-            title="" 
-            size="5xl" 
-            noPadding
-          >
-            <SettingsSkeleton />
-          </Modal>
-        }>
+        <Suspense fallback={<SettingsSkeleton />}>
           <SettingsModal />
         </Suspense>
       )}

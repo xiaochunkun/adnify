@@ -1,10 +1,19 @@
 import { api } from '@/renderer/services/electronAPI'
+import { handleError } from '@shared/utils/errorHandler'
 
 /**
  * Git 服务 (使用安全的 Git API)
  * 支持多根目录工作区
  * 增强功能: rebase, cherry-pick, stash 管理, 冲突解决等
  */
+
+/**
+ * 处理 Git 错误的辅助函数
+ */
+function handleGitError(err: unknown): string {
+    const error = handleError(err)
+    return error.message
+}
 
 export interface GitStatus {
     branch: string
@@ -85,10 +94,10 @@ class GitService {
                 stderr: result.stderr || '',
                 exitCode: result.exitCode || 0
             }
-        } catch (error: any) {
+        } catch (err) {
             return {
                 stdout: '',
-                stderr: error?.message || 'Git execution failed',
+                stderr: handleGitError(err),
                 exitCode: 1
             }
         }
@@ -340,8 +349,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr || result.stdout : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -355,8 +364,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -374,8 +383,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -387,8 +396,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -399,8 +408,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -495,8 +504,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -510,8 +519,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -523,8 +532,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -535,8 +544,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -561,8 +570,8 @@ class GitService {
             }
 
             return { success: true }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -573,8 +582,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -590,8 +599,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -602,8 +611,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -614,8 +623,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -626,8 +635,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -640,8 +649,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -652,8 +661,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -664,8 +673,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -681,8 +690,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -693,8 +702,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -708,8 +717,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -720,8 +729,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -732,8 +741,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -913,8 +922,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -925,8 +934,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -937,8 +946,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -949,8 +958,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -982,8 +991,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 
@@ -994,8 +1003,8 @@ class GitService {
                 success: result.exitCode === 0,
                 error: result.exitCode !== 0 ? result.stderr : undefined,
             }
-        } catch (e: any) {
-            return { success: false, error: e.message }
+        } catch (err) {
+            return { success: false, error: handleGitError(err) }
         }
     }
 

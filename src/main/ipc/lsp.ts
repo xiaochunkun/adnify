@@ -3,6 +3,7 @@
  */
 
 import { logger } from '@shared/utils/Logger'
+import { handleError } from '@shared/utils/errorHandler'
 import { ipcMain } from 'electron'
 import { lspManager, LanguageId } from '../lspManager'
 import { EXTENSION_TO_LANGUAGE } from '@shared/languages'
@@ -423,8 +424,8 @@ export function registerLspHandlers(mainStore?: any): void {
   ipcMain.handle('lsp:installServer', async (_, serverType: string) => {
     try {
       return await installServer(serverType)
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (err) {
+      return { success: false, error: handleError(err).message }
     }
   })
 
@@ -432,8 +433,8 @@ export function registerLspHandlers(mainStore?: any): void {
     try {
       await installBasicServers()
       return { success: true }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (err) {
+      return { success: false, error: handleError(err).message }
     }
   })
 

@@ -1,8 +1,9 @@
 /**
  * 通用右键菜单组件
  */
-import { useEffect, useRef, useCallback, useState, useLayoutEffect } from 'react'
+import { useCallback, useState, useLayoutEffect, memo } from 'react'
 import { LucideIcon } from 'lucide-react'
+import { useCloseOnOutsideOrEscape } from '@/renderer/hooks/usePerformance'
 
 export interface ContextMenuItem {
   id: string
@@ -22,8 +23,8 @@ interface ContextMenuProps {
   onClose: () => void
 }
 
-export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null)
+export const ContextMenu = memo(function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
+  const menuRef = useCloseOnOutsideOrEscape<HTMLDivElement>(onClose)
   const [position, setPosition] = useState({ x, y })
 
   // 在渲染后调整位置，确保菜单不超出视口
@@ -56,36 +57,11 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     })
   }, [x, y])
 
-  // 点击外部关闭
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    
-    // 延迟添加监听，避免立即触发
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside)
-      document.addEventListener('keydown', handleEscape)
-    }, 0)
-    
-    return () => {
-      clearTimeout(timer)
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleEscape)
-    }
-  }, [onClose])
-
-  const handleItemClick = (item: ContextMenuItem) => {
+  const handleItemClick = useCallback((item: ContextMenuItem) => {
     if (item.disabled) return
     item.onClick?.()
     onClose()
-  }
+  }, [onClose])
 
   return (
     <div
@@ -125,7 +101,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       })}
     </div>
   )
-}
+})
 
 // 右键菜单状态 hook
 export interface ContextMenuState {

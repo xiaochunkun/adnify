@@ -4,7 +4,7 @@
  */
 import { api } from '@/renderer/services/electronAPI'
 import { logger } from '@utils/Logger'
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react'
 import {
     GitBranch, GitCommit as GitCommitIcon, GitMerge, GitPullRequest,
     ChevronDown, ChevronRight, Plus, Minus, RefreshCw, Trash2,
@@ -21,6 +21,7 @@ import { keybindingService } from '@services/keybindingService'
 import { Input, Button, Modal } from '@components/ui'
 import { getFileName } from '@shared/utils/pathUtils'
 import { ConflictResolver } from '@components/git/ConflictResolver'
+import { useClickOutside } from '@renderer/hooks/usePerformance'
 
 // ==================== 类型定义 ====================
 type GitTab = 'changes' | 'branches' | 'stash' | 'history'
@@ -29,7 +30,7 @@ type OperationState = 'normal' | 'merge' | 'rebase' | 'cherry-pick' | 'revert'
 // ==================== 子组件 ====================
 
 // 文件状态图标
-function FileStatusBadge({ status }: { status: string }) {
+const FileStatusBadge = memo(function FileStatusBadge({ status }: { status: string }) {
     const config: Record<string, { color: string; label: string }> = {
         added: { color: 'text-green-400', label: 'A' },
         modified: { color: 'text-yellow-400', label: 'M' },
@@ -41,10 +42,10 @@ function FileStatusBadge({ status }: { status: string }) {
     }
     const c = config[status] || { color: 'text-text-muted', label: '?' }
     return <span className={`text-[10px] font-mono ${c.color} w-4 text-center flex-shrink-0`}>{c.label}</span>
-}
+})
 
 // 文件项组件
-function FileItem({
+const FileItem = memo(function FileItem({
     path,
     status,
     staged,
@@ -106,10 +107,10 @@ function FileItem({
             </div>
         </div>
     )
-}
+})
 
 // 分支项组件
-function BranchItem({
+const BranchItem = memo(function BranchItem({
     branch,
     onCheckout,
     onDelete,
@@ -124,20 +125,12 @@ function BranchItem({
 }) {
     const [showMenu, setShowMenu] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
+    const buttonRef = useRef<HTMLButtonElement>(null)
     const { language } = useStore()
     const tt = useCallback((key: TranslationKey) => t(key, language), [language])
 
-    // 点击外部关闭菜单
-    useEffect(() => {
-        if (!showMenu) return
-        const handleClickOutside = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setShowMenu(false)
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside)
-        return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [showMenu])
+    // 使用性能 hook 处理点击外部关闭
+    useClickOutside(() => setShowMenu(false), showMenu, [menuRef, buttonRef])
 
     return (
         <div
@@ -172,6 +165,7 @@ function BranchItem({
             {!branch.current && !branch.remote && (
                 <div className="relative" ref={menuRef}>
                     <button
+                        ref={buttonRef}
                         onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu) }}
                         className="p-1 hover:bg-surface-active rounded opacity-0 group-hover:opacity-100 transition-opacity"
                     >
@@ -204,10 +198,10 @@ function BranchItem({
             )}
         </div>
     )
-}
+})
 
 // Commit 项组件
-function CommitItem({
+const CommitItem = memo(function CommitItem({
     commit,
     onCherryPick,
     onRevert,
@@ -222,21 +216,13 @@ function CommitItem({
 }) {
     const [showMenu, setShowMenu] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
+    const buttonRef = useRef<HTMLButtonElement>(null)
     const { language } = useStore()
     const tt = useCallback((key: TranslationKey) => t(key, language), [language])
     const timeAgo = getTimeAgo(commit.date, language)
 
-    // 点击外部关闭菜单
-    useEffect(() => {
-        if (!showMenu) return
-        const handleClickOutside = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setShowMenu(false)
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside)
-        return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [showMenu])
+    // 使用性能 hook 处理点击外部关闭
+    useClickOutside(() => setShowMenu(false), showMenu, [menuRef, buttonRef])
 
     return (
         <div
@@ -255,6 +241,7 @@ function CommitItem({
                 </div>
                 <div className="relative" ref={menuRef}>
                     <button
+                        ref={buttonRef}
                         onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu) }}
                         className="p-1 hover:bg-surface-active rounded opacity-0 group-hover:opacity-100 transition-opacity"
                     >
@@ -286,10 +273,10 @@ function CommitItem({
             </div>
         </div>
     )
-}
+})
 
 // Stash 项组件
-function StashItem({
+const StashItem = memo(function StashItem({
     stash,
     onApply,
     onPop,
@@ -304,20 +291,12 @@ function StashItem({
 }) {
     const [showMenu, setShowMenu] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
+    const buttonRef = useRef<HTMLButtonElement>(null)
     const { language } = useStore()
     const tt = useCallback((key: TranslationKey) => t(key, language), [language])
 
-    // 点击外部关闭菜单
-    useEffect(() => {
-        if (!showMenu) return
-        const handleClickOutside = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setShowMenu(false)
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside)
-        return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [showMenu])
+    // 使用性能 hook 处理点击外部关闭
+    useClickOutside(() => setShowMenu(false), showMenu, [menuRef, buttonRef])
 
     return (
         <div className="group px-3 py-2 hover:bg-surface-hover cursor-pointer" onClick={onView}>
@@ -332,6 +311,7 @@ function StashItem({
                 </div>
                 <div className="relative" ref={menuRef}>
                     <button
+                        ref={buttonRef}
                         onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu) }}
                         className="p-1 hover:bg-surface-active rounded opacity-0 group-hover:opacity-100 transition-opacity"
                     >
@@ -364,7 +344,7 @@ function StashItem({
             </div>
         </div>
     )
-}
+})
 
 // 时间格式化 (带语言参数)
 function getTimeAgo(date: Date, language: 'en' | 'zh'): string {

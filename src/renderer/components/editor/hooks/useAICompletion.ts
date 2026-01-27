@@ -4,11 +4,10 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { completionService } from '@services/completionService'
 import { getEditorConfig } from '@renderer/settings'
+import { LSP_SUPPORTED_LANGUAGES } from '@shared/languages'
 
-const SUPPORTED_LANGUAGES = [
-  'typescript', 'javascript', 'typescriptreact', 'javascriptreact',
-  'html', 'css', 'json', 'python', 'java', 'go', 'rust'
-]
+// AI 补全支持的语言（使用 LSP 支持的语言列表）
+const AI_COMPLETION_LANGUAGES = LSP_SUPPORTED_LANGUAGES as string[]
 
 export function useAICompletion(activeFilePath: string | null) {
   const providerRef = useRef<import('monaco-editor').IDisposable | null>(null)
@@ -18,7 +17,7 @@ export function useAICompletion(activeFilePath: string | null) {
     providerRef.current?.dispose()
 
     providerRef.current = monaco.languages.registerInlineCompletionsProvider(
-      SUPPORTED_LANGUAGES,
+      AI_COMPLETION_LANGUAGES,
       {
         provideInlineCompletions: async (model, position, _context, token) => {
           if (!getEditorConfig().ai?.completionEnabled) return { items: [] }

@@ -3,6 +3,7 @@
  */
 
 import { logger } from '@shared/utils/Logger'
+import { handleError } from '@shared/utils/errorHandler'
 import { ipcMain, BrowserWindow } from 'electron'
 import { spawn, execSync } from 'child_process'
 import { securityManager, OperationType } from './securityModule'
@@ -156,8 +157,8 @@ class SecureCommandParser {
         resolve({ stdout, stderr, exitCode: code || 0 })
       })
 
-      child.on('error', (error) => {
-        reject(error)
+      child.on('error', (err) => {
+        reject(err)
       })
     })
   }
@@ -268,13 +269,13 @@ export function registerSecureTerminalHandlers(
         errorOutput: result.stderr,
         exitCode: result.exitCode,
       }
-    } catch (error: any) {
+    } catch (err) {
       securityManager.logOperation(OperationType.SHELL_EXECUTE, fullCommand, false, {
-        error: error.message,
+        error: handleError(err).message,
       })
       return {
         success: false,
-        error: `执行失败: ${error.message}`,
+        error: `执行失败: ${handleError(err).message}`,
       }
     }
   })
@@ -394,13 +395,13 @@ export function registerSecureTerminalHandlers(
           stderr: result.stderr,
           exitCode: result.exitCode,
         }
-      } catch (spawnError: any) {
+      } catch (err) {
         securityManager.logOperation(OperationType.GIT_EXEC, fullCommand, false, {
-          error: spawnError.message,
+          error: handleError(err).message,
         })
         return {
           success: false,
-          error: `Git执行失败: ${spawnError.message}`,
+          error: `Git执行失败: ${handleError(err).message}`,
         }
       }
     }
@@ -422,14 +423,14 @@ export function registerSecureTerminalHandlers(
         throw new Error('node-pty.spawn is not a function')
       }
       logger.security.info('[Terminal] node-pty loaded and verified successfully')
-    } catch (verifyError: any) {
-      logger.security.error('[Terminal] node-pty verification failed:', verifyError)
+    } catch (err) {
+      logger.security.error('[Terminal] node-pty verification failed:', err)
       logger.security.error('[Terminal] This usually means node-pty needs to be rebuilt for Electron.')
       logger.security.error('[Terminal] Please run: npm run rebuild')
       pty = null
     }
-  } catch (e: any) {
-    const errorMsg = e?.message || e?.toString() || 'Unknown error'
+  } catch (err) {
+    const errorMsg = handleError(err).message || handleError(err).message || 'Unknown error'
     logger.security.warn('[Terminal] node-pty not available, interactive terminal disabled')
     logger.security.warn('[Terminal] Error:', errorMsg)
     
@@ -560,15 +561,15 @@ export function registerSecureTerminalHandlers(
               }
               
               resolve()
-            } catch (spawnError: any) {
-              reject(spawnError)
+            } catch (err) {
+              reject(err)
             }
           })
         })
-      } catch (spawnError: any) {
+      } catch (err) {
         // 捕获原生模块异常
-        const errorMsg = spawnError?.message || spawnError?.toString() || 'Unknown spawn error'
-        logger.security.error(`[Terminal] PTY spawn failed: ${errorMsg}`, spawnError)
+        const errorMsg = handleError(err).message || handleError(err).message || 'Unknown spawn error'
+        logger.security.error(`[Terminal] PTY spawn failed: ${errorMsg}`, err)
         
         // 检查是否是原生模块问题
         if (errorMsg.includes('Napi::Error') || errorMsg.includes('native') || errorMsg.includes('module') || errorMsg.includes('libc++abi')) {
@@ -595,7 +596,7 @@ export function registerSecureTerminalHandlers(
         logger.security.error(`[Terminal] PTY Error (id: ${id}):`, err)
         // 通知渲染进程终端出错
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('terminal:error', { id, error: err.message })
+          mainWindow.webContents.send('terminal:error', { id, error: handleError(err).message })
         }
       })
 
@@ -615,9 +616,9 @@ export function registerSecureTerminalHandlers(
 
       logger.security.info(`[Terminal] Created terminal ${id} with shell ${shellPath}`)
       return { success: true }
-    } catch (error: any) {
-      logger.security.error('[Terminal] Failed to create terminal:', error)
-      return { success: false, error: error.message }
+    } catch (err) {
+      logger.security.error('[Terminal] Failed to create terminal:', err)
+      return { success: false, error: handleError(err).message }
     }
   })
 
@@ -830,7 +831,7 @@ export function registerSecureTerminalHandlers(
           success: false,
           output: stdout + stderr,
           exitCode: 1,
-          error: err.message
+          error: handleError(err).message
         })
       })
     })

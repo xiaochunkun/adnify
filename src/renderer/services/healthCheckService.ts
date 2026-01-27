@@ -4,6 +4,7 @@
  */
 
 import { CacheService } from '@shared/utils/CacheService'
+import { handleError } from '@shared/utils/errorHandler'
 import { getCacheConfig } from '@shared/config/agentConfig'
 import { getEditorConfig } from '@renderer/settings'
 
@@ -76,11 +77,11 @@ export async function checkProviderHealth(
             healthCache.set(provider, result)
             return result
         }
-    } catch (err: any) {
+    } catch (err) {
         const result: HealthCheckResult = {
             provider,
             status: 'unhealthy',
-            error: err.message || 'Connection failed',
+            error: handleError(err).message || 'Connection failed',
             checkedAt: new Date()
         }
         healthCache.set(provider, result)

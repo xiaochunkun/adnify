@@ -3,7 +3,7 @@
  * 只渲染可见区域的节点，提升大目录性能
  */
 import { api } from '@/renderer/services/electronAPI'
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import {
   ChevronRight,
   FilePlus,
@@ -47,7 +47,7 @@ interface VirtualFileTreeProps {
   onCreateSubmit: (parentPath: string, name: string, type: 'file' | 'folder') => void
 }
 
-export function VirtualFileTree({
+export const VirtualFileTree = memo(function VirtualFileTree({
   items,
   onRefresh,
   creatingIn,
@@ -631,4 +631,4 @@ export function VirtualFileTree({
       )}
     </div>
   )
-}
+})

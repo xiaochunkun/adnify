@@ -4,6 +4,7 @@
  */
 
 import { ipcMain, app } from 'electron'
+import { handleError } from '@shared/utils/errorHandler'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
@@ -50,8 +51,8 @@ export function registerResourcesHandlers() {
       cache.set(relativePath, data)
 
       return { success: true, data }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (err) {
+      return { success: false, error: handleError(err).message }
     }
   })
 
@@ -69,8 +70,8 @@ export function registerResourcesHandlers() {
       const content = await fs.readFile(fullPath, 'utf-8')
 
       return { success: true, data: content }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (err) {
+      return { success: false, error: handleError(err).message }
     }
   })
 

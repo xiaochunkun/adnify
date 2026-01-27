@@ -3,8 +3,9 @@
  * 在底部状态栏显示图标，点击后向上展开一个面板
  */
 
-import { useState, useRef, useEffect, ReactNode } from 'react'
+import { useState, useRef, useCallback, ReactNode, memo, useMemo } from 'react'
 import { X } from 'lucide-react'
+import { useCloseOnOutsideOrEscape } from '@/renderer/hooks/usePerformance'
 
 export interface BottomBarPopoverProps {
     /** 触发按钮的图标 */
@@ -25,7 +26,7 @@ export interface BottomBarPopoverProps {
     language?: 'en' | 'zh'
 }
 
-export default function BottomBarPopover({
+export default memo(function BottomBarPopover({
     icon,
     tooltip,
     title,
@@ -38,42 +39,24 @@ export default function BottomBarPopover({
     const popoverRef = useRef<HTMLDivElement>(null)
     const buttonRef = useRef<HTMLButtonElement>(null)
 
-    // 点击外部关闭
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (
-                popoverRef.current &&
-                !popoverRef.current.contains(e.target as Node) &&
-                buttonRef.current &&
-                !buttonRef.current.contains(e.target as Node)
-            ) {
-                setIsOpen(false)
-            }
-        }
+    const handleClose = useCallback(() => setIsOpen(false), [])
+    const handleToggle = useCallback(() => setIsOpen(prev => !prev), [])
 
-        if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside)
-        }
-        return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [isOpen])
+    // 使用自定义 Hook 处理点击外部和 ESC 键关闭
+    // 但需要排除按钮本身
+    useCloseOnOutsideOrEscape(handleClose, isOpen)
 
-    // ESC 键关闭
-    useEffect(() => {
-        const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setIsOpen(false)
-        }
-        if (isOpen) {
-            document.addEventListener('keydown', handleEsc)
-        }
-        return () => document.removeEventListener('keydown', handleEsc)
-    }, [isOpen])
+    const contentHeight = useMemo(() => 
+        title ? height - 40 : height,
+        [title, height]
+    )
 
     return (
         <div className="relative">
             {/* 触发按钮 */}
             <button
                 ref={buttonRef}
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={handleToggle}
                 className={`
           flex items-center justify-center p-1.5 rounded
           transition-colors relative
@@ -104,7 +87,7 @@ export default function BottomBarPopover({
                         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-white/[0.02] z-10 shrink-0">
                             <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">{title}</span>
                             <button
-                                onClick={() => setIsOpen(false)}
+                                onClick={handleClose}
                                 className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-white/10 transition-colors"
                             >
                                 <X className="w-3.5 h-3.5" />
@@ -113,14 +96,14 @@ export default function BottomBarPopover({
                     )}
 
                     {/* 面板内容 */}
-                    <div className="overflow-auto custom-scrollbar" style={{ height: title ? height - 40 : height }}>
+                    <div className="overflow-auto custom-scrollbar" style={{ height: contentHeight }}>
                         {children}
                     </div>
                 </div>
             )}
         </div>
     )
-}
+})
 
 // 添加动画样式
 const style = document.createElement('style')

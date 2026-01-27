@@ -4,6 +4,7 @@
  */
 
 import { logger } from '@shared/utils/Logger'
+import { handleError } from '@shared/utils/errorHandler'
 import Store from 'electron-store'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -225,8 +226,8 @@ class SecurityManager implements SecurityModule {
 
       // 检查日志文件大小，超过限制时截断
       this.truncateAuditLogIfNeeded(logPath)
-    } catch (e: any) {
-      logger.security.error('[Security] Failed to write audit log:', e.message)
+    } catch (err) {
+      logger.security.error('[Security] Failed to write audit log:', handleError(err).message)
     }
 
     const status = success ? '✅' : '❌'
@@ -274,8 +275,8 @@ class SecurityManager implements SecurityModule {
         }
       }
       return logs
-    } catch (e: any) {
-      logger.security.error('[Security] Failed to read audit logs:', e.message)
+    } catch (err) {
+      logger.security.error('[Security] Failed to read audit logs:', handleError(err).message)
       return []
     }
   }
@@ -291,8 +292,8 @@ class SecurityManager implements SecurityModule {
       if (fs.existsSync(logPath)) {
         fs.unlinkSync(logPath)
       }
-    } catch (e: any) {
-      logger.security.error('[Security] Failed to clear audit logs:', e.message)
+    } catch (err) {
+      logger.security.error('[Security] Failed to clear audit logs:', handleError(err).message)
     }
   }
 

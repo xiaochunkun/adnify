@@ -4,6 +4,7 @@
  */
 
 import { api } from '@/renderer/services/electronAPI'
+import { handleError } from '@shared/utils/errorHandler'
 import { logger } from '@utils/Logger'
 import type { ToolExecutionResult, ToolExecutionContext } from '@/shared/types'
 import type { PlanItem, PlanFileData } from '../types'
@@ -758,11 +759,11 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
                     title: `UI/UX ${result.domain}: ${query}`,
                 }],
             }
-        } catch (error: any) {
+        } catch (err) {
             return {
                 success: false,
                 result: '',
-                error: `UI/UX search failed: ${error.message}`,
+                error: `UI/UX search failed: ${handleError(err).message}`,
             }
         }
     },
@@ -794,11 +795,11 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
                     title: `Design Recommendation: ${productType}`,
                 }],
             }
-        } catch (error: any) {
+        } catch (err) {
             return {
                 success: false,
                 result: '',
-                error: `UI/UX recommendation failed: ${error.message}`,
+                error: `UI/UX recommendation failed: ${handleError(err).message}`,
             }
         }
     },
@@ -860,11 +861,11 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
                     title: 'Code Analysis Result',
                 }],
             }
-        } catch (error: any) {
+        } catch (err) {
             return {
                 success: false,
                 result: '',
-                error: `Code analysis failed: ${error.message}`,
+                error: `Code analysis failed: ${handleError(err).message}`,
             }
         }
     },
@@ -917,11 +918,11 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
                     title: 'Refactoring Suggestions',
                 }],
             }
-        } catch (error: any) {
+        } catch (err) {
             return {
                 success: false,
                 result: '',
-                error: `Refactoring suggestion failed: ${error.message}`,
+                error: `Refactoring suggestion failed: ${handleError(err).message}`,
             }
         }
     },
@@ -942,7 +943,7 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
             // 获取诊断信息
             const lintErrors = await lintService.getLintErrors(path, true)
             const diagnostics = lintErrors.map(err => ({
-                message: err.message,
+                message: handleError(err).message,
                 line: err.startLine ?? err.line ?? 1,
                 column: err.column ?? 1,
                 severity: err.severity === 'error' ? 1 : err.severity === 'warning' ? 2 : 3,
@@ -990,11 +991,11 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
                     title: 'Fix Suggestions',
                 }],
             }
-        } catch (error: any) {
+        } catch (err) {
             return {
                 success: false,
                 result: '',
-                error: `Fix suggestion failed: ${error.message}`,
+                error: `Fix suggestion failed: ${handleError(err).message}`,
             }
         }
     },
@@ -1050,11 +1051,11 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
                     title: 'Generated Tests',
                 }],
             }
-        } catch (error: any) {
+        } catch (err) {
             return {
                 success: false,
                 result: '',
-                error: `Test generation failed: ${error.message}`,
+                error: `Test generation failed: ${handleError(err).message}`,
             }
         }
     },

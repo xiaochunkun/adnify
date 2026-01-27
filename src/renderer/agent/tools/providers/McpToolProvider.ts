@@ -4,6 +4,7 @@
  */
 
 import { useStore } from '@store'
+import { handleError } from '@shared/utils/errorHandler'
 import { mcpService } from '@services/mcpService'
 import { logger } from '@utils/Logger'
 import { getFileName } from '@shared/utils/pathUtils'
@@ -181,12 +182,12 @@ export class McpToolProvider implements ToolProvider {
         richContent: richContent.length > 0 ? richContent : undefined,
         error: result.isError ? 'Tool returned an error' : undefined,
       }
-    } catch (err: any) {
+    } catch (err) {
       logger.agent.error(`[McpToolProvider] Execution failed:`, err)
       return {
         success: false,
         result: '',
-        error: err.message,
+        error: handleError(err).message,
       }
     }
   }

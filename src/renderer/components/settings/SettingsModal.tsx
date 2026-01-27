@@ -3,7 +3,7 @@
  * 管理设置标签页切换和状态同步
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Cpu, Settings2, Code, Keyboard, Database, Shield, Monitor, Globe, Plug, Braces, Brain, FileCode, Check } from 'lucide-react'
 import { useStore } from '@store'
 import { PROVIDERS } from '@/shared/config/providers'
@@ -79,17 +79,20 @@ export default function SettingsModal() {
     // 高级编辑器配置（包含所有字段）
     const [advancedEditorConfig, setAdvancedEditorConfig] = useState(editorConfig)
 
-    useEffect(() => { setLocalConfig(llmConfig) }, [llmConfig])
-    useEffect(() => { setLocalProviderConfigs(providerConfigs) }, [providerConfigs])
-    useEffect(() => { setLocalLanguage(language) }, [language])
-    useEffect(() => { setLocalAutoApprove(autoApprove) }, [autoApprove])
-    useEffect(() => { setLocalAgentConfig(agentConfig) }, [agentConfig])
-    useEffect(() => { setLocalAiInstructions(aiInstructions) }, [aiInstructions])
-    useEffect(() => { setLocalWebSearchConfig(webSearchConfig) }, [webSearchConfig])
-    useEffect(() => { setLocalMcpConfig(mcpConfig) }, [mcpConfig])
-    useEffect(() => { setLocalEnableFileLogging(enableFileLogging) }, [enableFileLogging])
+    // 合并多个 useEffect 为单个，减少重复渲染
+    useEffect(() => {
+        setLocalConfig(llmConfig)
+        setLocalProviderConfigs(providerConfigs)
+        setLocalLanguage(language)
+        setLocalAutoApprove(autoApprove)
+        setLocalAgentConfig(agentConfig)
+        setLocalAiInstructions(aiInstructions)
+        setLocalWebSearchConfig(webSearchConfig)
+        setLocalMcpConfig(mcpConfig)
+        setLocalEnableFileLogging(enableFileLogging)
+    }, [llmConfig, providerConfigs, language, autoApprove, agentConfig, aiInstructions, webSearchConfig, mcpConfig, enableFileLogging])
 
-    const handleSave = async () => {
+    const handleSave = useCallback(async () => {
         // 合并当前 provider 的配置
         const currentProviderLocalConfig = localProviderConfigs[localConfig.provider] || {}
         const finalProviderConfigs = {
@@ -180,16 +183,25 @@ export default function SettingsModal() {
 
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
-    }
+    }, [localConfig, localLanguage, localAutoApprove, localPromptTemplateId, localAgentConfig, localAiInstructions, localWebSearchConfig, localMcpConfig, localEnableFileLogging, localProviderConfigs, editorSettings, advancedEditorConfig, set, setProvider, save])
 
-    const providers = Object.entries(PROVIDERS).map(([id, p]) => ({
-        id,
-        name: p.name,
-        models: [...(p.models || []), ...(providerConfigs[id]?.customModels || [])]
-    }))
-    const selectedProvider = providers.find(p => p.id === localConfig.provider)
+    // 使用 useMemo 缓存计算结果
+    const providers = useMemo(() => 
+        Object.entries(PROVIDERS).map(([id, p]) => ({
+            id,
+            name: p.name,
+            models: [...(p.models || []), ...(providerConfigs[id]?.customModels || [])]
+        })),
+        [providerConfigs]
+    )
+    
+    const selectedProvider = useMemo(() => 
+        providers.find(p => p.id === localConfig.provider),
+        [providers, localConfig.provider]
+    )
 
-    const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+    // 使用 useMemo 缓存 tabs 配置
+    const tabs = useMemo(() => [
         { id: 'provider', label: language === 'zh' ? '模型提供商' : 'Providers', icon: <Cpu className="w-4 h-4" /> },
         { id: 'editor', label: language === 'zh' ? '编辑器' : 'Editor', icon: <Code className="w-4 h-4" /> },
         { id: 'snippets', label: language === 'zh' ? '代码片段' : 'Snippets', icon: <FileCode className="w-4 h-4" /> },
@@ -201,7 +213,7 @@ export default function SettingsModal() {
         { id: 'indexing', label: language === 'zh' ? '代码索引' : 'Indexing', icon: <Database className="w-4 h-4" /> },
         { id: 'security', label: language === 'zh' ? '安全设置' : 'Security', icon: <Shield className="w-4 h-4" /> },
         { id: 'system', label: language === 'zh' ? '系统' : 'System', icon: <Monitor className="w-4 h-4" /> },
-    ]
+    ] as const, [language])
 
     return (
         <Modal isOpen={true} onClose={() => setShowSettings(false)} title="" size="5xl" noPadding className="overflow-hidden bg-background/80 backdrop-blur-2xl border border-border/50 shadow-2xl shadow-black/20 rounded-3xl">

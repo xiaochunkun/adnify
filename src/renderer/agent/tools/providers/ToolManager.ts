@@ -4,6 +4,7 @@
  */
 
 import { logger } from '@utils/Logger'
+import { handleError } from '@shared/utils/errorHandler'
 import type { ToolProvider, ToolMeta } from './types'
 import type {
   ToolDefinition,
@@ -168,12 +169,12 @@ class ToolManager {
     // 执行
     try {
       return await provider.execute(toolName, args, context)
-    } catch (err: any) {
+    } catch (err) {
       logger.agent.error(`[ToolManager] Tool execution failed:`, err)
       return {
         success: false,
         result: '',
-        error: `Execution error: ${err.message}`,
+        error: `Execution error: ${handleError(err).message}`,
       }
     }
   }

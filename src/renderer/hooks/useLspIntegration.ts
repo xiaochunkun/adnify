@@ -13,14 +13,12 @@ import {
 } from '@services/lspService'
 import { registerLspProviders } from '@services/lspProviders'
 import { pathLinkService } from '@services/pathLinkService'
+import { useDiagnosticsStore } from '@services/diagnosticsStore'
 import type { editor } from 'monaco-editor'
+import { LSP_SUPPORTED_LANGUAGES } from '@shared/languages'
 
-const SUPPORTED_LANGUAGES = [
-  'typescript', 'typescriptreact', 'javascript', 'javascriptreact',
-  'html', 'htm', 'vue', 'svelte',
-  'css', 'scss', 'less',
-  'markdown'
-]
+// 路径链接支持的语言（包括 LSP 支持的语言 + markdown）
+const PATH_LINK_LANGUAGES = [...LSP_SUPPORTED_LANGUAGES, 'markdown'] as string[]
 
 export function useLspIntegration() {
   const workspacePath = useStore((state) => state.workspacePath)
@@ -46,7 +44,7 @@ export function useLspIntegration() {
   const registerProviders = useCallback((monaco: typeof import('monaco-editor')) => {
     registerLspProviders(monaco)
 
-    // 注册定义提供者
+    // 注册定义提供者（仅 TypeScript/JavaScript）
     monaco.languages.registerDefinitionProvider(
       ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'],
       {
@@ -92,12 +90,13 @@ export function useLspIntegration() {
     )
 
     // 注册路径链接提供者
-    monaco.languages.registerLinkProvider(SUPPORTED_LANGUAGES, pathLinkService.createLinkProvider())
+    monaco.languages.registerLinkProvider(PATH_LINK_LANGUAGES, pathLinkService.createLinkProvider())
   }, [])
 
   // 设置诊断监听
   const setupDiagnostics = useCallback((monaco: typeof import('monaco-editor')) => {
-    return onDiagnostics((uri, diagnostics) => {
+    // 监听 LSP 诊断
+    const unsubscribeLsp = onDiagnostics((uri, diagnostics) => {
       const model = monaco.editor.getModels().find(m => m.uri.toString() === uri)
       if (model) {
         const markers = diagnostics.map(d => ({
@@ -116,6 +115,62 @@ export function useLspIntegration() {
         monaco.editor.setModelMarkers(model, 'lsp', markers)
       }
     })
+
+    // 监听 Monaco 自己的诊断（TypeScript/JavaScript 等）
+    // 同步 Monaco markers 到 diagnosticsStore
+    const syncMonacoMarkers = () => {
+      const models = monaco.editor.getModels()
+      models.forEach(model => {
+        const uri = model.uri.toString()
+        const markers = monaco.editor.getModelMarkers({ resource: model.uri })
+        
+        // 转换 Monaco markers 为 LSP 诊断格式
+        const diagnostics = markers.map(marker => ({
+          range: {
+            start: {
+              line: marker.startLineNumber - 1,
+              character: marker.startColumn - 1
+            },
+            end: {
+              line: marker.endLineNumber - 1,
+              character: marker.endColumn - 1
+            }
+          },
+          severity: marker.severity === monaco.MarkerSeverity.Error ? 1
+            : marker.severity === monaco.MarkerSeverity.Warning ? 2
+              : marker.severity === monaco.MarkerSeverity.Info ? 3
+                : 4,
+          message: marker.message,
+          source: marker.source || 'monaco',
+          code: typeof marker.code === 'object' && marker.code !== null 
+            ? marker.code.value 
+            : marker.code
+        }))
+
+        useDiagnosticsStore.getState().setDiagnostics(uri, diagnostics)
+      })
+    }
+
+    // 初始同步
+    syncMonacoMarkers()
+
+    // 使用防抖的同步函数
+    let syncTimeout: NodeJS.Timeout | null = null
+    const debouncedSync = () => {
+      if (syncTimeout) clearTimeout(syncTimeout)
+      syncTimeout = setTimeout(syncMonacoMarkers, 500) // 500ms 防抖
+    }
+
+    // 监听 marker 变化事件（更高效）
+    const markerDisposable = monaco.editor.onDidChangeMarkers(() => {
+      debouncedSync()
+    })
+
+    return () => {
+      unsubscribeLsp()
+      markerDisposable.dispose()
+      if (syncTimeout) clearTimeout(syncTimeout)
+    }
   }, [])
 
   // 设置 Ctrl+Click 链接跳转

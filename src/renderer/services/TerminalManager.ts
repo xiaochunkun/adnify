@@ -16,6 +16,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { getEditorConfig } from '@renderer/settings'
 import { logger } from '@utils/Logger'
+import { handleError } from '@shared/utils/errorHandler'
 
 // ===== 类型定义 =====
 
@@ -240,14 +241,14 @@ class TerminalManagerClass {
         return false
       }
       return true
-    } catch (error: any) {
-      logger.system.error(`[TerminalManager] Exception creating PTY for ${id}:`, error)
+    } catch (err) {
+      const error = handleError(err)
+      logger.system.error(`[TerminalManager] Exception creating PTY for ${id}: ${error.code}`, error)
       
       // 显示错误信息到终端
       const xterm = this.xtermInstances.get(id)
       if (xterm?.terminal) {
-        const errorMsg = error?.message || 'Failed to create terminal'
-        xterm.terminal.write(`\r\n\x1b[31m[Error: ${errorMsg}]\x1b[0m\r\n`)
+        xterm.terminal.write(`\r\n\x1b[31m[Error: ${error.message}]\x1b[0m\r\n`)
       }
       return false
     }
