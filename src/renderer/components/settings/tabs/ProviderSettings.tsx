@@ -7,10 +7,10 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { Plus, Trash, Eye, EyeOff, Check, AlertTriangle, X, Server, Sliders, Box } from 'lucide-react'
-import { PROVIDERS, type ApiProtocol } from '@/shared/config/providers'
+import { PROVIDERS, type ApiProtocol, getProviderDefaultHeaders } from '@/shared/config/providers'
 import { LLM_DEFAULTS } from '@/shared/config/defaults'
 import { toast } from '@components/common/ToastProvider'
-import { Button, Input, Select } from '@components/ui'
+import { Button, Input, Select, ScrollShadow, Switch } from '@components/ui'
 import { ProviderSettingsProps } from '../types'
 import { isCustomProvider } from '@renderer/types/provider'
 
@@ -203,20 +203,6 @@ export function ProviderSettings({
   // Headers 状态
   const [customHeaders, setCustomHeaders] = useState<Array<{ key: string; value: string }>>([])
 
-  // Sync logitBiasString with localConfig
-  useEffect(() => {
-    setLogitBiasString(localConfig.logitBias ? JSON.stringify(localConfig.logitBias, null, 2) : '')
-  }, [localConfig.logitBias])
-  
-  // Sync customHeaders with localConfig
-  useEffect(() => {
-    if (localConfig.headers) {
-      setCustomHeaders(Object.entries(localConfig.headers).map(([key, value]) => ({ key, value })))
-    } else {
-      setCustomHeaders([])
-    }
-  }, [localConfig.headers])
-
   // 从 localProviderConfigs 获取自定义厂商列表
   const customProviders = useMemo(() => {
     return Object.entries(localProviderConfigs)
@@ -228,6 +214,22 @@ export function ProviderSettings({
   const isCustomSelected = isCustomProvider(localConfig.provider)
   const selectedCustomConfig = isCustomSelected ? localProviderConfigs[localConfig.provider] : null
 
+  // 获取当前 provider 的协议（用于获取默认请求头）
+  const getCurrentProtocol = (): ApiProtocol | undefined => {
+    if (isCustomSelected && selectedCustomConfig) {
+      return selectedCustomConfig.protocol
+    }
+    return undefined // 内置 provider 不需要传协议
+  }
+
+  // Sync logitBiasString with localConfig
+  useEffect(() => {
+    setLogitBiasString(localConfig.logitBias ? JSON.stringify(localConfig.logitBias, null, 2) : '')
+  }, [localConfig.logitBias])
+  
+  // 不再使用 useEffect 同步，而是在初始化时设置
+  // customHeaders 只用于额外的请求头，不包括默认请求头
+  
   // 添加模型到本地配置
   const handleAddModel = () => {
     if (!newModelName.trim()) return
@@ -275,7 +277,7 @@ export function ProviderSettings({
 
   // 选择内置 Provider
   const handleSelectBuiltinProvider = (providerId: string) => {
-    // 保存当前配置
+    // 保存当前配置（包括 headers）
     const updatedConfigs = {
       ...localProviderConfigs,
       [localConfig.provider]: {
@@ -284,6 +286,7 @@ export function ProviderSettings({
         baseUrl: localConfig.baseUrl,
         timeout: localConfig.timeout,
         model: localConfig.model,
+        headers: localConfig.headers,  // 保存当前 provider 的 headers
       },
     }
     setLocalProviderConfigs(updatedConfigs)
@@ -295,16 +298,17 @@ export function ProviderSettings({
       ...localConfig,
       provider: providerId as any,
       apiKey: nextConfig.apiKey || '',
-      baseUrl: nextConfig.baseUrl || providerInfo?.endpoint.default || '',
+      baseUrl: nextConfig.baseUrl || providerInfo?.baseUrl || '',
       timeout: nextConfig.timeout || providerInfo?.defaults.timeout || 120000,
       model: nextConfig.model || providerInfo?.models[0] || '',
+      headers: nextConfig.headers,  // 加载新 provider 的 headers
     })
     setIsAddingCustom(false)
   }
 
   // 选择自定义 Provider
   const handleSelectCustomProvider = (id: string) => {
-    // 保存当前配置
+    // 保存当前配置（包括 headers）
     const updatedConfigs = {
       ...localProviderConfigs,
       [localConfig.provider]: {
@@ -313,6 +317,7 @@ export function ProviderSettings({
         baseUrl: localConfig.baseUrl,
         timeout: localConfig.timeout,
         model: localConfig.model,
+        headers: localConfig.headers,  // 保存当前 provider 的 headers
       },
     }
     setLocalProviderConfigs(updatedConfigs)
@@ -328,6 +333,7 @@ export function ProviderSettings({
       baseUrl: customConfig.baseUrl || '',
       timeout: customConfig.timeout || 120000,
       model: customConfig.model || models[0] || '',
+      headers: customConfig.headers,  // 加载新 provider 的 headers
     })
     setIsAddingCustom(false)
   }
@@ -488,15 +494,16 @@ export function ProviderSettings({
           {/* 上方两列：模型配置 + 生成参数 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 左列：模型配置 */}
-            <section className="p-5 bg-surface/30 rounded-xl border border-border space-y-4">
-              <div className="flex items-center gap-2 mb-1">
+            <section className="p-5 bg-surface/30 rounded-xl border border-border">
+              <div className="flex items-center gap-2 mb-4">
                 <Box className="w-4 h-4 text-accent" />
                 <h5 className="text-sm font-medium text-text-primary">
                   {language === 'zh' ? '模型配置' : 'Model Configuration'}
                 </h5>
               </div>
 
-              <div className="space-y-3">
+              <ScrollShadow maxHeight="500px" className="pr-2">
+                <div className="space-y-4 pr-2">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-text-secondary">
                     {language === 'zh' ? '选择模型' : 'Select Model'}
@@ -553,17 +560,21 @@ export function ProviderSettings({
                     </div>
                   )}
                 </div>
-              </div>
+                </div>
+              </ScrollShadow>
             </section>
 
             {/* 右列：生成参数 */}
-            <section className="p-5 bg-surface/30 rounded-xl border border-border space-y-5">
-              <div className="flex items-center gap-2 mb-1">
+            <section className="p-5 bg-surface/30 rounded-xl border border-border">
+              <div className="flex items-center gap-2 mb-4">
                 <Sliders className="w-4 h-4 text-accent" />
                 <h5 className="text-sm font-medium text-text-primary">
                   {language === 'zh' ? '生成参数' : 'Generation Parameters'}
                 </h5>
               </div>
+
+              <ScrollShadow maxHeight="500px" className="pr-2">
+                <div className="space-y-5 pr-2">
 
               {/* Max Tokens */}
               <div className="space-y-3">
@@ -674,7 +685,7 @@ export function ProviderSettings({
 
               {/* 深度思考模式 */}
               <div className="flex items-center justify-between pt-3 border-t border-border/50">
-                <div className="space-y-0.5">
+                <div className="space-y-0.5 flex-1">
                   <label className="text-xs font-medium text-text-secondary">
                     {language === 'zh' ? '深度思考模式' : 'Extended Thinking'}
                   </label>
@@ -684,16 +695,11 @@ export function ProviderSettings({
                       : 'Enable deeper reasoning (e.g., Claude extended thinking)'}
                   </p>
                 </div>
-                <button
-                  onClick={() => setLocalConfig({ ...localConfig, enableThinking: !localConfig.enableThinking })}
-                  className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${localConfig.enableThinking ? 'bg-accent' : 'bg-surface-active'
-                    }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${localConfig.enableThinking ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                  />
-                </button>
+                <Switch
+                  checked={localConfig.enableThinking}
+                  onChange={(e) => setLocalConfig({ ...localConfig, enableThinking: e.target.checked })}
+                  className="flex-shrink-0"
+                />
               </div>
 
               {/* Frequency Penalty */}
@@ -857,115 +863,209 @@ export function ProviderSettings({
                     </label>
                     <p className="text-[10px] text-text-muted">
                       {language === 'zh'
-                        ? '添加自定义 HTTP 请求头（如认证、追踪等）'
-                        : 'Add custom HTTP headers (auth, tracking, etc.)'}
+                        ? '添加额外的 HTTP 请求头（如组织 ID、项目 ID 等）'
+                        : 'Add extra HTTP headers (e.g., organization ID, project ID, etc.)'}
                     </p>
                   </div>
                   <button
                     onClick={() => {
                       setCustomHeaders([...customHeaders, { key: '', value: '' }])
                     }}
-                    className="text-xs text-accent hover:text-accent-hover flex items-center gap-1"
+                    className="text-xs text-accent hover:text-accent-hover flex items-center gap-1 flex-shrink-0"
                   >
                     <Plus className="w-3 h-3" />
                     {language === 'zh' ? '添加' : 'Add'}
                   </button>
                 </div>
 
+                {/* 默认请求头（可编辑） */}
+                {(() => {
+                  const protocol = getCurrentProtocol()
+                  const defaultHeaders = getProviderDefaultHeaders(localConfig.provider, protocol)
+                  const defaultKeys = Object.keys(defaultHeaders)
+                  
+                  return defaultKeys.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-[10px] font-medium text-text-muted uppercase tracking-wider">
+                        {language === 'zh' ? '默认请求头（可修改）' : 'Default Headers (Editable)'}
+                      </div>
+                      {defaultKeys.map((key) => {
+                        const defaultValue = defaultHeaders[key]
+                        const currentValue = localConfig.headers?.[key] ?? defaultValue
+                        return (
+                          <div key={key} className="p-3 bg-surface/20 rounded-lg border border-accent/20 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Input
+                                type="text"
+                                value={key}
+                                onChange={(e) => {
+                                  const newKey = e.target.value
+                                  if (!newKey) return
+                                  
+                                  // 重命名 key
+                                  const newHeaders = { ...localConfig.headers }
+                                  delete newHeaders[key]
+                                  newHeaders[newKey] = currentValue
+                                  setLocalConfig({
+                                    ...localConfig,
+                                    headers: newHeaders
+                                  })
+                                }}
+                                className="flex-1 bg-background/50 border-border text-xs font-mono h-8"
+                              />
+                              <span className="text-[10px] text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20 flex-shrink-0 ml-2">
+                                {language === 'zh' ? '默认' : 'Default'}
+                              </span>
+                            </div>
+                            <Input
+                              type="text"
+                              value={currentValue}
+                              onChange={(e) => {
+                                const newHeaders = { ...localConfig.headers, [key]: e.target.value }
+                                setLocalConfig({
+                                  ...localConfig,
+                                  headers: newHeaders
+                                })
+                              }}
+                              placeholder={defaultValue}
+                              className="bg-background/50 border-border text-xs font-mono h-8"
+                            />
+                            <p className="text-[10px] text-text-muted">
+                              {language === 'zh' 
+                                ? '使用 {{apiKey}} 作为 API Key 的占位符' 
+                                : 'Use {{apiKey}} as placeholder for API Key'}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+
+                {/* 自定义请求头 */}
                 {customHeaders.length > 0 && (
                   <div className="space-y-2">
+                    {Object.keys(getProviderDefaultHeaders(localConfig.provider, getCurrentProtocol())).length > 0 && (
+                      <div className="text-[10px] font-medium text-text-muted uppercase tracking-wider">
+                        {language === 'zh' ? '额外请求头' : 'Additional Headers'}
+                      </div>
+                    )}
                     {customHeaders.map((header, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <select
-                          value={header.key}
-                          onChange={(e) => {
-                            const newHeaders = [...customHeaders]
-                            newHeaders[index].key = e.target.value
-                            setCustomHeaders(newHeaders)
-                            // 更新 localConfig
-                            const headersObj = newHeaders.reduce((acc, h) => {
-                              if (h.key && h.value) acc[h.key] = h.value
-                              return acc
-                            }, {} as Record<string, string>)
-                            setLocalConfig({
-                              ...localConfig,
-                              headers: Object.keys(headersObj).length > 0 ? headersObj : undefined
-                            })
-                          }}
-                          className="flex-1 bg-surface-active rounded-lg px-3 py-1.5 text-xs border border-border focus:border-accent focus:ring-1 focus:ring-accent/50 outline-none transition-all"
-                        >
-                          <option value="">{language === 'zh' ? '选择或自定义' : 'Select or custom'}</option>
-                          <option value="X-API-Key">X-API-Key</option>
-                          <option value="Authorization">Authorization</option>
-                          <option value="X-Request-ID">X-Request-ID</option>
-                          <option value="X-Organization">X-Organization</option>
-                          <option value="User-Agent">User-Agent</option>
-                          <option value="X-Custom-Header">{language === 'zh' ? '自定义...' : 'Custom...'}</option>
-                        </select>
-                        {header.key === 'X-Custom-Header' && (
-                          <input
-                            type="text"
-                            value={header.key === 'X-Custom-Header' ? '' : header.key}
-                            onChange={(e) => {
-                              const newHeaders = [...customHeaders]
-                              newHeaders[index].key = e.target.value
+                      <div key={index} className="space-y-1.5 p-2.5 bg-background/30 rounded-lg border border-border/50">
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 space-y-1.5">
+                            <Select
+                              value={header.key}
+                              onChange={(value) => {
+                                const newHeaders = [...customHeaders]
+                                newHeaders[index].key = value
+                                setCustomHeaders(newHeaders)
+                                // 更新 localConfig - 合并默认请求头和自定义请求头
+                                const protocol = getCurrentProtocol()
+                                const defaultHeaders = getProviderDefaultHeaders(localConfig.provider, protocol)
+                                const customHeadersObj: Record<string, string> = {}
+                                newHeaders.forEach(h => {
+                                  if (h.key && h.key !== 'X-Custom-Header') {
+                                    customHeadersObj[h.key] = h.value || ''
+                                  }
+                                })
+                                // 合并：默认请求头 + 自定义请求头（自定义会覆盖默认）
+                                const allHeaders = { ...defaultHeaders, ...customHeadersObj }
+                                setLocalConfig({
+                                  ...localConfig,
+                                  headers: Object.keys(allHeaders).length > 0 ? allHeaders : undefined
+                                })
+                              }}
+                              options={[
+                                { value: '', label: language === 'zh' ? '选择请求头' : 'Select header' },
+                                { value: 'X-Request-ID', label: 'X-Request-ID' },
+                                { value: 'X-Organization', label: 'X-Organization' },
+                                { value: 'X-Project-ID', label: 'X-Project-ID' },
+                                { value: 'User-Agent', label: 'User-Agent' },
+                                { value: 'Content-Type', label: 'Content-Type' },
+                                { value: 'Accept', label: 'Accept' },
+                                { value: 'X-Custom-Header', label: language === 'zh' ? '自定义...' : 'Custom...' }
+                              ]}
+                              className="w-full bg-surface-active border-border text-xs h-8"
+                            />
+                            {header.key === 'X-Custom-Header' && (
+                              <Input
+                                type="text"
+                                value=""
+                                onChange={(e) => {
+                                  const newHeaders = [...customHeaders]
+                                  newHeaders[index].key = e.target.value
+                                  setCustomHeaders(newHeaders)
+                                }}
+                                placeholder={language === 'zh' ? '请求头名称' : 'Header name'}
+                                className="bg-surface-active border-border text-xs font-mono h-8"
+                              />
+                            )}
+                            <Input
+                              type="text"
+                              value={header.value}
+                              onChange={(e) => {
+                                const newHeaders = [...customHeaders]
+                                newHeaders[index].value = e.target.value
+                                setCustomHeaders(newHeaders)
+                                // 更新 localConfig - 合并默认请求头和自定义请求头
+                                const protocol = getCurrentProtocol()
+                                const defaultHeaders = getProviderDefaultHeaders(localConfig.provider, protocol)
+                                const customHeadersObj: Record<string, string> = {}
+                                newHeaders.forEach(h => {
+                                  if (h.key && h.key !== 'X-Custom-Header') {
+                                    customHeadersObj[h.key] = h.value || ''
+                                  }
+                                })
+                                const allHeaders = { ...defaultHeaders, ...customHeadersObj }
+                                setLocalConfig({
+                                  ...localConfig,
+                                  headers: Object.keys(allHeaders).length > 0 ? allHeaders : undefined
+                                })
+                              }}
+                              placeholder={language === 'zh' ? '值' : 'Value'}
+                              className="bg-surface-active border-border text-xs font-mono h-8"
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              const newHeaders = customHeaders.filter((_, i) => i !== index)
                               setCustomHeaders(newHeaders)
+                              // 更新 localConfig - 合并默认请求头和自定义请求头
+                              const protocol = getCurrentProtocol()
+                              const defaultHeaders = getProviderDefaultHeaders(localConfig.provider, protocol)
+                              const customHeadersObj: Record<string, string> = {}
+                              newHeaders.forEach(h => {
+                                if (h.key && h.key !== 'X-Custom-Header') {
+                                  customHeadersObj[h.key] = h.value || ''
+                                }
+                              })
+                              const allHeaders = { ...defaultHeaders, ...customHeadersObj }
+                              setLocalConfig({
+                                ...localConfig,
+                                headers: Object.keys(allHeaders).length > 0 ? allHeaders : undefined
+                              })
                             }}
-                            placeholder={language === 'zh' ? '请求头名称' : 'Header name'}
-                            className="flex-1 bg-surface-active rounded-lg px-3 py-1.5 text-xs border border-border focus:border-accent focus:ring-1 focus:ring-accent/50 outline-none transition-all font-mono"
-                          />
-                        )}
-                        <input
-                          type="text"
-                          value={header.value}
-                          onChange={(e) => {
-                            const newHeaders = [...customHeaders]
-                            newHeaders[index].value = e.target.value
-                            setCustomHeaders(newHeaders)
-                            // 更新 localConfig
-                            const headersObj = newHeaders.reduce((acc, h) => {
-                              if (h.key && h.value) acc[h.key] = h.value
-                              return acc
-                            }, {} as Record<string, string>)
-                            setLocalConfig({
-                              ...localConfig,
-                              headers: Object.keys(headersObj).length > 0 ? headersObj : undefined
-                            })
-                          }}
-                          placeholder={language === 'zh' ? '值' : 'Value'}
-                          className="flex-1 bg-surface-active rounded-lg px-3 py-1.5 text-xs border border-border focus:border-accent focus:ring-1 focus:ring-accent/50 outline-none transition-all font-mono"
-                        />
-                        <button
-                          onClick={() => {
-                            const newHeaders = customHeaders.filter((_, i) => i !== index)
-                            setCustomHeaders(newHeaders)
-                            // 更新 localConfig
-                            const headersObj = newHeaders.reduce((acc, h) => {
-                              if (h.key && h.value) acc[h.key] = h.value
-                              return acc
-                            }, {} as Record<string, string>)
-                            setLocalConfig({
-                              ...localConfig,
-                              headers: Object.keys(headersObj).length > 0 ? headersObj : undefined
-                            })
-                          }}
-                          className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                            className="p-1 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded transition-colors flex-shrink-0 mt-0.5"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {customHeaders.length === 0 && (
-                  <div className="text-[10px] text-text-muted bg-background/50 px-3 py-2 rounded-lg border border-border">
+                {customHeaders.length === 0 && Object.keys(getProviderDefaultHeaders(localConfig.provider, getCurrentProtocol())).length === 0 && (
+                  <div className="text-[10px] text-text-muted bg-background/50 px-3 py-2 rounded-lg border border-border text-center">
                     {language === 'zh'
                       ? '点击"添加"按钮添加自定义请求头'
                       : 'Click "Add" to add custom headers'}
                   </div>
                 )}
               </div>
+                </div>
+              </ScrollShadow>
             </section>
           </div>
 

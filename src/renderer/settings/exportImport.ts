@@ -35,7 +35,7 @@ export function exportSettings(settings: SettingsState, includeApiKeys = false):
       baseUrl: config.baseUrl,
       timeout: config.timeout,
       customModels: config.customModels,
-      advanced: config.advanced,
+      headers: config.headers,  // 导出 headers
     }
 
     if (includeApiKeys && config.apiKey) {

@@ -17,84 +17,23 @@ export type AuthType = 'bearer' | 'api-key' | 'header' | 'query' | 'none'
 /** API 协议类型 */
 export type ApiProtocol = 'openai' | 'anthropic' | 'google' | 'custom'
 
-/** 认证配置 */
+/** 认证配置（仅用于 UI 显示） */
 export interface AuthConfig {
   type: AuthType
-  headerName?: string // 自定义 header 名称，如 'x-api-key'
-  headerTemplate?: string // 自定义 header 值模板，如 'Bearer {{apiKey}}'
-  queryParam?: string // query 参数名
   placeholder?: string // UI 显示的占位符
   helpUrl?: string // 帮助链接
 }
 
-/** 请求配置 */
-export interface RequestConfig {
-  endpoint: string
-  method: 'POST' | 'GET'
-  headers: Record<string, string>
-  bodyTemplate: Record<string, unknown>
+/** 协议特定配置 */
+export interface ProtocolConfig {
+  /** 认证头配置 */
+  authHeader?: {
+    name: string // 请求头名称
+    template: string // 值模板，{{apiKey}} 会被替换为实际的 API Key
+  }
+  /** 额外的固定请求头 */
+  staticHeaders?: Record<string, string>
 }
-
-/** 响应解析配置（用于 custom 协议） */
-export interface ResponseConfig {
-  // SSE 配置
-  dataPrefix?: string // SSE data 前缀，默认 'data:'
-  doneMarker?: string // 结束标记，如 '[DONE]' 或 'message_stop'
-
-  // 流式响应字段路径
-  contentField: string // 内容字段，如 'delta.content' 或 'delta.text'
-  reasoningField?: string // 推理字段，如 'delta.reasoning_content'
-  finishReasonField?: string // 结束原因字段
-
-  // 工具调用字段路径
-  toolCallField?: string // 工具调用字段，如 'delta.tool_calls' 或 'content_block'
-  toolNamePath?: string // 工具名称路径
-  toolArgsPath?: string // 工具参数路径
-  toolIdPath?: string // 工具 ID 路径
-  argsIsObject?: boolean // 参数是否为对象（Anthropic 是 true，OpenAI 是 false）
-}
-
-/** 消息格式配置（用于 custom 协议） */
-export interface MessageFormatConfig {
-  // 系统消息处理
-  systemMessageMode: 'message' | 'parameter' | 'first-user' // 作为消息、单独参数、合并到第一条用户消息
-  systemParameterName?: string // 系统消息参数名，如 'system'
-
-  // 工具结果消息
-  toolResultRole: 'tool' | 'user' | 'function' // 工具结果的 role
-  toolResultIdField: string // 工具调用 ID 字段名，如 'tool_call_id' 或 'tool_use_id'
-  toolResultWrapper?: string // 包装类型，如 'tool_result'（Anthropic 需要）
-
-  // 助手消息中的工具调用
-  assistantToolCallField: string // 如 'tool_calls'（OpenAI）或 'content'（Anthropic）
-  assistantToolCallFormat: 'openai' | 'anthropic' // 工具调用格式
-}
-
-/** 图片格式配置 - 完整的图片内容块模板 */
-export interface ImageFormatConfig {
-  // 完整的图片内容块模板，支持变量：{{url}}, {{base64}}, {{mediaType}}
-  // OpenAI: { "type": "image_url", "image_url": { "url": "{{url}}" } }
-  // Anthropic: { "type": "image", "source": { "type": "base64", "media_type": "{{mediaType}}", "data": "{{base64}}" } }
-  template: Record<string, unknown>
-}
-
-/** 视觉配置（用于所有协议） */
-export interface VisionConfig {
-  // 是否启用图片发送（覆盖 features.vision）
-  enabled?: boolean
-  // 图片格式配置（覆盖默认格式）
-  imageFormat?: ImageFormatConfig
-}
-
-/** 工具格式配置（用于 custom 协议） */
-export interface ToolFormatConfig {
-  wrapMode: 'none' | 'function' | 'tool' // 包装模式
-  wrapField?: string // 包装字段名，如 'function'
-  parameterField: 'parameters' | 'input_schema' | 'schema' // 参数字段名
-  includeType: boolean // 是否包含 type 字段
-}
-
-
 
 /** 功能支持声明 */
 export interface ProviderFeatures {
@@ -119,7 +58,6 @@ export interface LLMDefaults {
 /** Provider 基础配置（内置和自定义共用） */
 export interface BaseProviderConfig {
   id: string
-  name: string
   displayName: string
   description: string
   baseUrl: string
@@ -143,22 +81,6 @@ export interface CustomProviderConfig extends BaseProviderConfig {
   updatedAt?: number
 }
 
-/** 高级配置（覆盖默认行为） */
-export interface AdvancedConfig {
-  /** 认证配置 - 所有 provider 都可用 */
-  auth?: { type?: AuthType; headerName?: string }
-  /** 请求配置 */
-  request?: { endpoint?: string; headers?: Record<string, string>; bodyTemplate?: Record<string, unknown> }
-  /** 响应解析配置 - 仅用于 custom 协议 */
-  response?: Partial<ResponseConfig>
-  /** 消息格式配置 - 仅用于 custom 协议 */
-  messageFormat?: Partial<MessageFormatConfig>
-  /** 工具格式配置 - 仅用于 custom 协议 */
-  toolFormat?: Partial<ToolFormatConfig>
-  /** 视觉配置 - 所有 provider 都可用 */
-  vision?: VisionConfig
-}
-
 /** 用户 Provider 配置（保存到配置文件，覆盖默认值） */
 export interface UserProviderConfig {
   apiKey?: string
@@ -166,6 +88,7 @@ export interface UserProviderConfig {
   timeout?: number
   model?: string
   customModels?: string[]
+  headers?: Record<string, string>  // 每个 provider 独立的 headers
   // 自定义厂商专用字段
   displayName?: string
   protocol?: ApiProtocol
@@ -174,20 +97,91 @@ export interface UserProviderConfig {
 }
 
 // ============================================
-// 内置适配器预设
+// 协议配置映射表（用于自定义 provider）
 // ============================================
 
-/** OpenAI 风格图片格式（大多数国产厂商兼容） */
-export const OPENAI_IMAGE_FORMAT: ImageFormatConfig = {
-  template: { type: 'image_url', image_url: { url: '{{url}}' } },
+/** 协议默认配置映射 */
+const PROTOCOL_CONFIGS: Record<ApiProtocol, ProtocolConfig> = {
+  openai: {
+    authHeader: {
+      name: 'Authorization',
+      template: 'Bearer {{apiKey}}',
+    },
+  },
+  anthropic: {
+    authHeader: {
+      name: 'x-api-key',
+      template: '{{apiKey}}',
+    },
+    staticHeaders: {
+      'anthropic-version': '2023-06-01',
+    },
+  },
+  google: {
+    authHeader: {
+      name: 'x-goog-api-key',
+      template: '{{apiKey}}',
+    },
+  },
+  custom: {
+    // 自定义协议没有默认配置
+  },
 }
 
-/** Anthropic 风格图片格式 */
-export const ANTHROPIC_IMAGE_FORMAT: ImageFormatConfig = {
-  template: { type: 'image', source: { type: 'base64', media_type: '{{mediaType}}', data: '{{base64}}' } },
+/** 根据协议获取协议配置 */
+export function getProtocolConfig(protocol: ApiProtocol): ProtocolConfig {
+  return PROTOCOL_CONFIGS[protocol] || {}
 }
 
+/** 根据协议配置生成默认请求头模板（使用 {{apiKey}} 占位符） */
+export function getDefaultHeadersByProtocol(protocol: ApiProtocol): Record<string, string> {
+  const config = getProtocolConfig(protocol)
+  const headers: Record<string, string> = {}
 
+  // 1. 添加认证头模板（使用占位符）
+  if (config.authHeader) {
+    headers[config.authHeader.name] = config.authHeader.template
+  }
+
+  // 2. 添加静态头
+  if (config.staticHeaders) {
+    Object.assign(headers, config.staticHeaders)
+  }
+
+  return headers
+}
+
+/** 获取 Provider 的默认请求头模板（统一入口，支持内置和自定义 provider） */
+export function getProviderDefaultHeaders(
+  providerId: string,
+  customProtocol?: ApiProtocol
+): Record<string, string> {
+  // 1. 如果是内置 provider，使用内置配置的协议
+  const builtinProvider = BUILTIN_PROVIDERS[providerId]
+  if (builtinProvider) {
+    return getDefaultHeadersByProtocol(builtinProvider.protocol)
+  }
+
+  // 2. 如果是自定义 provider，使用传入的协议
+  if (customProtocol) {
+    return getDefaultHeadersByProtocol(customProtocol)
+  }
+
+  // 3. 默认返回空对象
+  return {}
+}
+
+/** 将请求头模板替换为实际值 */
+export function replaceHeaderTemplates(
+  headers: Record<string, string>,
+  apiKey: string
+): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    result[key] = value.replace(/\{\{apiKey\}\}/g, apiKey)
+  }
+  return result
+}
 
 // ============================================
 // 内置 Provider 定义
@@ -196,7 +190,6 @@ export const ANTHROPIC_IMAGE_FORMAT: ImageFormatConfig = {
 export const BUILTIN_PROVIDERS: Record<string, BuiltinProviderDef> = {
   openai: {
     id: 'openai',
-    name: 'openai',
     displayName: 'OpenAI',
     description: 'GPT-4, GPT-4o, o1 等模型',
     baseUrl: 'https://api.openai.com/v1',
@@ -211,7 +204,6 @@ export const BUILTIN_PROVIDERS: Record<string, BuiltinProviderDef> = {
 
   anthropic: {
     id: 'anthropic',
-    name: 'anthropic',
     displayName: 'Anthropic',
     description: 'Claude 3.5, Claude 4 等模型',
     baseUrl: 'https://api.anthropic.com',
@@ -220,22 +212,21 @@ export const BUILTIN_PROVIDERS: Record<string, BuiltinProviderDef> = {
     protocol: 'anthropic',
     features: { streaming: true, tools: true, vision: true, reasoning: true },
     defaults: { maxTokens: 8192, temperature: 0.7, topP: 1, timeout: 120000 },
-    auth: { type: 'api-key', headerName: 'x-api-key', placeholder: 'sk-ant-...', helpUrl: 'https://console.anthropic.com/settings/keys' },
+    auth: { type: 'api-key', placeholder: 'sk-ant-...', helpUrl: 'https://console.anthropic.com/settings/keys' },
     isBuiltin: true,
   },
 
   gemini: {
     id: 'gemini',
-    name: 'gemini',
     displayName: 'Google Gemini',
     description: 'Gemini Pro, Gemini Flash 等模型',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
     models: ['gemini-2.0-flash-exp', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-pro-preview-05-06'],
     defaultModel: 'gemini-2.0-flash-exp',
-    protocol: 'google', // 使用 'google' 协议（AI SDK 标准）
+    protocol: 'google',
     features: { streaming: true, tools: true, vision: true },
     defaults: { maxTokens: 8192, temperature: 0.7, topP: 1, timeout: 120000 },
-    auth: { type: 'query', queryParam: 'key', placeholder: 'AIzaSy...', helpUrl: 'https://aistudio.google.com/apikey' },
+    auth: { type: 'query', placeholder: 'AIzaSy...', helpUrl: 'https://aistudio.google.com/apikey' },
     isBuiltin: true,
   },
 }
@@ -259,8 +250,6 @@ export function getBuiltinProvider(providerId: string): BuiltinProviderDef | und
   return BUILTIN_PROVIDERS[providerId]
 }
 
-
-
 /** 获取 Provider 的默认模型 */
 export function getProviderDefaultModel(providerId: string): string {
   const provider = BUILTIN_PROVIDERS[providerId]
@@ -273,105 +262,9 @@ export function getProviderProtocol(providerId: string): ApiProtocol {
   return provider?.protocol || 'openai'
 }
 
-/**
- * 根据 provider 类型清理高级配置
- * 移除对特定 provider 无效的配置项
- */
-export function cleanAdvancedConfig(providerId: string, advanced?: AdvancedConfig): AdvancedConfig | undefined {
-  if (!advanced) return undefined
-
-  const provider = getBuiltinProvider(providerId)
-  const protocol = provider?.protocol || 'custom'
-  const cleaned: AdvancedConfig = {}
-
-  // auth 配置对所有 provider 都有效
-  if (advanced.auth) {
-    cleaned.auth = advanced.auth
-  }
-
-  // request 配置
-  if (advanced.request) {
-    const { headers, bodyTemplate } = advanced.request
-    if (headers || bodyTemplate) {
-      cleaned.request = {}
-      if (headers) cleaned.request.headers = headers
-      if (bodyTemplate) cleaned.request.bodyTemplate = bodyTemplate
-    }
-  }
-
-  // response 配置仅对 custom 协议有效（内置协议使用 SDK 自动解析）
-  if (protocol === 'custom' && advanced.response) {
-    cleaned.response = advanced.response
-  }
-
-  // vision 配置对所有 provider 都有效
-  if (advanced.vision) {
-    cleaned.vision = advanced.vision
-  }
-
-  return Object.keys(cleaned).length > 0 ? cleaned : undefined
-}
-
-/** 获取 provider 支持的高级配置字段 */
-export function getSupportedAdvancedFields(providerId: string): {
-  auth: boolean
-  request: { endpoint: boolean; headers: boolean; bodyTemplate: boolean }
-  response: boolean
-} {
-  const provider = getBuiltinProvider(providerId)
-  const protocol = provider?.protocol || 'custom'
-
-  return {
-    auth: true,
-    request: {
-      endpoint: protocol === 'custom',
-      headers: true,
-      bodyTemplate: true,
-    },
-    response: protocol === 'custom',
-  }
-}
-
 // ============================================
-// UI 组件使用的辅助类型和函数
+// 向后兼容的导出（用于 UI 组件）
 // ============================================
 
-/** Provider 信息（用于 UI 显示） */
-export interface ProviderInfo {
-  id: string
-  name: string
-  displayName: string
-  description: string
-  models: string[]
-  protocol: ApiProtocol
-  auth: { type: string; placeholder: string; helpUrl?: string; headerName?: string }
-  endpoint: { default: string }
-  defaults: { timeout: number }
-}
-
-/** 获取所有 Provider 信息（用于 UI） */
-export function getProviders(): Record<string, ProviderInfo> {
-  const result: Record<string, ProviderInfo> = {}
-  for (const [id, def] of Object.entries(BUILTIN_PROVIDERS)) {
-    result[id] = {
-      id: def.id,
-      name: def.name,
-      displayName: def.displayName,
-      description: def.description,
-      models: def.models,
-      protocol: def.protocol,
-      auth: {
-        type: def.auth.type,
-        placeholder: def.auth.placeholder || '',
-        helpUrl: def.auth.helpUrl,
-        headerName: def.auth.headerName,
-      },
-      endpoint: { default: def.baseUrl },
-      defaults: { timeout: def.defaults.timeout },
-    }
-  }
-  return result
-}
-
-/** PROVIDERS 常量（用于 UI 组件） */
-export const PROVIDERS = getProviders()
+/** @deprecated 直接使用 BUILTIN_PROVIDERS */
+export const PROVIDERS = BUILTIN_PROVIDERS

@@ -6,9 +6,7 @@
  * - 自定义厂商：存储完整配置，通过 id 以 "custom-" 前缀区分
  */
 
-import type { AdvancedConfig, ApiProtocol } from '@/shared/config/providers'
-
-export type { AdvancedConfig }
+import type { ApiProtocol } from '@/shared/config/providers'
 
 // ============ Provider 设置类型 ============
 
@@ -20,7 +18,7 @@ export interface ProviderModelConfig {
   timeout?: number
   model?: string
   customModels?: string[]           // 模型列表（内置厂商是额外添加的，自定义厂商是全部模型）
-  advanced?: AdvancedConfig
+  headers?: Record<string, string>  // 每个 provider 独立的 headers
 
   // 自定义厂商专用字段（custom- 前缀的 provider）
   displayName?: string              // 显示名称

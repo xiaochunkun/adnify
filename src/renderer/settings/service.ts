@@ -24,7 +24,6 @@ import {
 import {
   isBuiltinProvider,
   getBuiltinProvider,
-  cleanAdvancedConfig,
 } from '@shared/config/providers'
 import type { ProviderConfig, LLMConfig } from '@shared/config/types'
 
@@ -91,11 +90,7 @@ function cleanProviderConfig(
   if (isCurrentProvider && config.model) cleaned.model = config.model
   if (config.timeout && config.timeout !== 120000) cleaned.timeout = config.timeout
   if (config.customModels?.length) cleaned.customModels = config.customModels
-
-  if (config.advanced) {
-    const cleanedAdvanced = cleanAdvancedConfig(providerId, config.advanced)
-    if (cleanedAdvanced) cleaned.advanced = cleanedAdvanced
-  }
+  if (config.headers && Object.keys(config.headers).length > 0) cleaned.headers = config.headers
 
   if (!isBuiltin) {
     if (config.displayName) cleaned.displayName = config.displayName
@@ -136,9 +131,6 @@ function mergeLLMConfig(
   const providerConfig = providerConfigs[providerId] ?? {}
   const builtinDef = getBuiltinProvider(providerId)
 
-  // 从 advanced 配置中提取 headers
-  const advancedHeaders = providerConfig.advanced?.request?.headers
-
   // 优先级：saved > providerConfig > builtinDef > defaults
   return {
     provider: providerId,
@@ -162,7 +154,7 @@ function mergeLLMConfig(
     maxRetries: saved.maxRetries ?? defaults.maxRetries,
     toolChoice: saved.toolChoice ?? defaults.toolChoice,
     parallelToolCalls: saved.parallelToolCalls ?? defaults.parallelToolCalls,
-    headers: saved.headers ?? advancedHeaders ?? defaults.headers,  // 优先级：saved > advanced > defaults
+    headers: providerConfig.headers ?? defaults.headers,  // 从 providerConfig 加载 headers
     
     // 功能开关
     enableThinking: saved.enableThinking ?? defaults.enableThinking,

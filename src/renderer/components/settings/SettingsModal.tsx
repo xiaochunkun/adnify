@@ -93,7 +93,7 @@ export default function SettingsModal() {
     }, [llmConfig, providerConfigs, language, autoApprove, agentConfig, aiInstructions, webSearchConfig, mcpConfig, enableFileLogging])
 
     const handleSave = useCallback(async () => {
-        // 合并当前 provider 的配置
+        // 合并当前 provider 的配置（包括 headers）
         const currentProviderLocalConfig = localProviderConfigs[localConfig.provider] || {}
         const finalProviderConfigs = {
             ...localProviderConfigs,
@@ -103,11 +103,11 @@ export default function SettingsModal() {
                 baseUrl: localConfig.baseUrl,
                 timeout: localConfig.timeout,
                 model: localConfig.model,
-                advanced: currentProviderLocalConfig.advanced,
+                headers: localConfig.headers,  // 保存 headers
             }
         }
 
-        // 更新 Store 状态
+        // 更新 Store 状态（包括 headers）
         set('llmConfig', localConfig)
         set('language', localLanguage)
         set('autoApprove', localAutoApprove)
@@ -189,7 +189,7 @@ export default function SettingsModal() {
     const providers = useMemo(() => 
         Object.entries(PROVIDERS).map(([id, p]) => ({
             id,
-            name: p.name,
+            name: p.displayName,
             models: [...(p.models || []), ...(providerConfigs[id]?.customModels || [])]
         })),
         [providerConfigs]
