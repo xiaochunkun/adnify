@@ -309,6 +309,15 @@ export interface ElectronAPI {
   }>
   httpSetGoogleSearch: (apiKey: string, cx: string) => Promise<{ success: boolean }>
 
+  // Health Check
+  healthCheckProvider: (provider: string, apiKey: string, baseUrl?: string, timeout?: number) => Promise<{
+    provider: string
+    status: 'healthy' | 'unhealthy' | 'unknown'
+    latency?: number
+    error?: string
+    checkedAt: Date
+  }>
+
   // MCP (Model Context Protocol)
   mcpInitialize: (workspaceRoots: string[]) => Promise<{ success: boolean; error?: string }>
   mcpGetServersState: () => Promise<{ success: boolean; servers?: any[]; error?: string }>
@@ -559,6 +568,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   httpReadUrl: (url: string, timeout?: number) => ipcRenderer.invoke('http:readUrl', url, timeout),
   httpWebSearch: (query: string, maxResults?: number) => ipcRenderer.invoke('http:webSearch', query, maxResults),
   httpSetGoogleSearch: (apiKey: string, cx: string) => ipcRenderer.invoke('http:setGoogleSearch', apiKey, cx),
+
+  // Health Check API
+  healthCheckProvider: (provider: string, apiKey: string, baseUrl?: string, timeout?: number) =>
+    ipcRenderer.invoke('healthCheck:check', provider, apiKey, baseUrl, timeout),
 
   // MCP API
   mcpInitialize: (workspaceRoots: string[]) => ipcRenderer.invoke('mcp:initialize', workspaceRoots),

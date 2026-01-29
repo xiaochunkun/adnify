@@ -17,6 +17,7 @@ import { registerHttpHandlers } from './http'
 import { registerMcpHandlers, cleanupMcpHandlers } from './mcp'
 import { registerResourcesHandlers } from './resources'
 import { registerDebugHandlers } from './debug'
+import { registerHealthCheckHandlers } from './healthCheck'
 
 // 安全模块
 import {
@@ -111,6 +112,9 @@ export function registerAllHandlers(context: IPCContext) {
 
   // 调试服务
   registerDebugHandlers()
+
+  // 健康检查
+  registerHealthCheckHandlers()
 
   logger.ipc.info('[Security] 所有安全IPC处理器已注册')
 }

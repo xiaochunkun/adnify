@@ -26,57 +26,27 @@ const healthCache = new CacheService<HealthCheckResult>('HealthCheck', {
 
 /**
  * 检查单个 Provider 的健康状态
+ * 通过主进程执行以避免 CORS 问题
  */
 export async function checkProviderHealth(
     provider: string,
     apiKey: string,
     baseUrl?: string
 ): Promise<HealthCheckResult> {
-    const startTime = Date.now()
-
-    const defaultUrls: Record<string, string> = {
-        openai: 'https://api.openai.com/v1',
-        anthropic: 'https://api.anthropic.com/v1',
-        deepseek: 'https://api.deepseek.com/v1',
-        groq: 'https://api.groq.com/openai/v1',
-        mistral: 'https://api.mistral.ai/v1',
-        ollama: 'http://localhost:11434/v1'
-    }
-
-    const url = baseUrl || defaultUrls[provider] || defaultUrls.openai
-
     try {
-        const response = await fetch(`${url}/models`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            signal: AbortSignal.timeout(getEditorConfig().performance.healthCheckTimeoutMs)
-        })
+        const timeout = getEditorConfig().performance.healthCheckTimeoutMs
+        const result = await window.electronAPI.healthCheckProvider(
+            provider,
+            apiKey,
+            baseUrl,
+            timeout
+        )
 
-        const latency = Date.now() - startTime
+        // 将 checkedAt 从字符串转换回 Date 对象
+        result.checkedAt = new Date(result.checkedAt)
 
-        if (response.ok) {
-            const result: HealthCheckResult = {
-                provider,
-                status: 'healthy',
-                latency,
-                checkedAt: new Date()
-            }
-            healthCache.set(provider, result)
-            return result
-        } else {
-            const result: HealthCheckResult = {
-                provider,
-                status: 'unhealthy',
-                latency,
-                error: `HTTP ${response.status}`,
-                checkedAt: new Date()
-            }
-            healthCache.set(provider, result)
-            return result
-        }
+        healthCache.set(provider, result)
+        return result
     } catch (err) {
         const result: HealthCheckResult = {
             provider,
