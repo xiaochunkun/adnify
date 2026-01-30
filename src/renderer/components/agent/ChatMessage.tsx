@@ -8,8 +8,9 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { User, Copy, Check, RefreshCw, Edit2, RotateCcw, ChevronDown, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import aiAvatar from '../../assets/icon/ai-avatar.gif'
+import { themeManager } from '../../config/themeConfig'
 import {
   ChatMessage as ChatMessageType,
   isUserMessage,
@@ -50,6 +51,9 @@ interface ChatMessageProps {
 // 代码块组件 - 更加精致的玻璃质感
 const CodeBlock = React.memo(({ language, children, fontSize }: { language: string | undefined; children: React.ReactNode; fontSize: number }) => {
   const [copied, setCopied] = useState(false)
+  const { currentTheme } = useStore()
+  const theme = themeManager.getThemeById(currentTheme)
+  const syntaxStyle = theme?.type === 'light' ? vs : vscDarkPlus
 
   // Handle children which might contain the cursor span
   const { codeText, hasCursor } = React.useMemo(() => {
@@ -82,8 +86,8 @@ const CodeBlock = React.memo(({ language, children, fontSize }: { language: stri
   }, [codeText])
 
   return (
-    <div className="relative group/code my-4 rounded-xl overflow-hidden border border-border bg-black/40 shadow-sm">
-      <div className="flex items-center justify-between px-4 py-2 bg-white/[0.03] border-b border-border/50">
+    <div className="relative group/code my-4 rounded-xl overflow-hidden border border-border bg-background-tertiary shadow-sm">
+      <div className="flex items-center justify-between px-4 py-2 bg-surface/50 border-b border-border/50">
         <span className="text-[10px] text-text-muted font-bold font-mono uppercase tracking-widest opacity-70">
           {language || 'text'}
         </span>
@@ -98,7 +102,7 @@ const CodeBlock = React.memo(({ language, children, fontSize }: { language: stri
       </div>
       <div className="relative">
         <SyntaxHighlighter
-          style={vscDarkPlus}
+          style={syntaxStyle}
           language={language}
           PreTag="div"
           className="!bg-transparent !p-4 !m-0 custom-scrollbar leading-relaxed font-mono"
@@ -251,7 +255,7 @@ const MarkdownContent = React.memo(({ content, fontSize, isStreaming }: { conten
       const isInline = !isCodeBlock && !codeContent.includes('\n')
 
       return isInline ? (
-        <code className="bg-white/10 px-1.5 py-0.5 rounded-md text-accent-light font-mono text-[0.9em] border border-white/5 break-all animate-fluid-text" {...props}>
+        <code className="bg-surface-muted px-1.5 py-0.5 rounded-md text-accent font-mono text-[0.9em] border border-border break-all animate-fluid-text" {...props}>
           {children}
         </code>
       ) : (
@@ -281,7 +285,7 @@ const MarkdownContent = React.memo(({ content, fontSize, isStreaming }: { conten
     ),
     thead: ({ children }: any) => <thead className="bg-surface/50">{children}</thead>,
     tbody: ({ children }: any) => <tbody>{children}</tbody>,
-    tr: ({ children }: any) => <tr className="border-b border-border hover:bg-white/5 transition-colors">{children}</tr>,
+    tr: ({ children }: any) => <tr className="border-b border-border hover:bg-surface-hover transition-colors">{children}</tr>,
     th: ({ children }: any) => <th className="border border-border px-4 py-2 text-left font-semibold text-text-primary">{children}</th>,
     td: ({ children }: any) => <td className="border border-border px-4 py-2 text-text-secondary">{children}</td>,
   }), [fontSize])
@@ -532,7 +536,7 @@ const ChatMessage = React.memo(({
   return (
     <div className={`
       w-full group/msg transition-colors duration-300
-      ${isUser ? 'py-1 bg-transparent' : 'py-2 bg-black/[0.02] border-y border-white/[0.01] hover:bg-black/[0.04]'}
+      ${isUser ? 'py-1 bg-transparent' : 'py-2 border-y border-border bg-surface hover:bg-surface-hover'}
     `}>
       <div className="w-full px-4 flex flex-col gap-1">
 
@@ -648,7 +652,7 @@ const ChatMessage = React.memo(({
         {!isUser && (
           <div className="w-full min-w-0 flex flex-col gap-2">
             <div className="flex items-center gap-3 px-1">
-              <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/10 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.3)] bg-surface/50 backdrop-blur-md relative flex-shrink-0">
+              <div className="w-9 h-9 rounded-xl overflow-hidden border border-border shadow-[0_4px_12px_-2px_rgba(0,0,0,0.1)] bg-surface/50 backdrop-blur-md relative flex-shrink-0">
                 <div className="absolute inset-0 bg-accent/5 pointer-events-none" />
                 <img src={aiAvatar} alt="AI" className="w-full h-full object-cover" />
               </div>

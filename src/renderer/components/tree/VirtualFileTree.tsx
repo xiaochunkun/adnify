@@ -22,7 +22,6 @@ import { getDirPath, joinPath, pathEquals, normalizePath } from '@shared/utils/p
 import { toast } from '../common/ToastProvider'
 import { Input, ContextMenu, ContextMenuItem } from '../ui'
 import { directoryCacheService } from '@services/directoryCacheService'
-import { keybindingService } from '@services/keybindingService'
 import FileIcon from '../common/FileIcon'
 import { getFileType } from '../editor/FilePreview'
 
