@@ -171,6 +171,8 @@ import { getToolTruncateConfig } from '@shared/config/agentConfig'
 /**
  * 智能截断工具结果
  * 根据工具类型和内容特点进行截断，避免 UI 卡顿
+ * 
+ * 优化：根据内容特征动态调整截断策略
  */
 export function truncateToolResult(
   result: string,
@@ -186,9 +188,12 @@ export function truncateToolResult(
     return result
   }
 
+  // 智能检测内容特征，动态调整截断比例
+  const { headRatio, tailRatio } = detectContentStrategy(result, toolName, config)
+
   // 计算截断位置
-  const headSize = Math.floor(limit * config.headRatio)
-  const tailSize = Math.floor(limit * config.tailRatio)
+  const headSize = Math.floor(limit * headRatio)
+  const tailSize = Math.floor(limit * tailRatio)
   const omitted = result.length - headSize - tailSize
 
   // 尝试在行边界截断（更友好的输出）
@@ -198,6 +203,60 @@ export function truncateToolResult(
   const truncatedMsg = `\n\n... [truncated: ${omitted.toLocaleString()} chars omitted] ...\n\n`
 
   return head + truncatedMsg + tail
+}
+
+/**
+ * 检测内容特征，返回最佳截断策略
+ */
+function detectContentStrategy(
+  content: string,
+  toolName: string,
+  defaultConfig: { headRatio: number; tailRatio: number }
+): { headRatio: number; tailRatio: number } {
+  // 1. 检测错误信息（通常在末尾）
+  const hasError = /error|exception|failed|fatal|panic|traceback|stack trace/i.test(content)
+  if (hasError) {
+    // 错误信息保留更多尾部
+    return { headRatio: 0.25, tailRatio: 0.7 }
+  }
+
+  // 2. 检测成功信息（通常在开头或末尾）
+  const hasSuccess = /success|completed|done|✓|✔/i.test(content)
+  if (hasSuccess && content.length < 5000) {
+    // 短成功消息，保留更多头部
+    return { headRatio: 0.8, tailRatio: 0.15 }
+  }
+
+  // 3. 根据工具类型特殊处理
+  switch (toolName) {
+    case 'run_command':
+    case 'execute_command':
+      // 命令输出：错误通常在末尾，保留更多尾部
+      return { headRatio: 0.2, tailRatio: 0.75 }
+
+    case 'search_files':
+    case 'grep_search':
+    case 'codebase_search':
+      // 搜索结果：最相关的在前面
+      return { headRatio: 0.9, tailRatio: 0.05 }
+
+    case 'read_file':
+      // 文件内容：保持平衡，但稍微偏向头部
+      return { headRatio: 0.7, tailRatio: 0.25 }
+
+    case 'get_lint_errors':
+      // Lint 错误：通常按文件顺序，保持平衡
+      return { headRatio: 0.6, tailRatio: 0.35 }
+
+    case 'list_directory':
+    case 'get_dir_tree':
+      // 目录列表：保持平衡
+      return { headRatio: 0.6, tailRatio: 0.35 }
+
+    default:
+      // 使用默认配置
+      return defaultConfig
+  }
 }
 
 /**

@@ -31,6 +31,8 @@ export interface ChatThread {
   pendingObjective?: string
   /** 待完成的步骤（从 Handoff 继承） */
   pendingSteps?: string[]
+  /** 压缩统计信息（每个线程独立） */
+  compressionStats?: import('../core/types').CompressionStats | null
 }
 
 /** 流阶段 */

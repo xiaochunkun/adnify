@@ -62,7 +62,7 @@ export {
 export type { CompressionLevel, CompressionStats, StructuredSummary, HandoffDocument } from './context'
 
 // LLM 相关
-export { buildContextContent, buildUserContent, calculateContextStats } from './llm/ContextBuilder'
+export { buildContextContent, buildUserContent } from './llm/ContextBuilder'
 export { buildLLMMessages } from './llm/MessageBuilder'
 
 // 工具函数

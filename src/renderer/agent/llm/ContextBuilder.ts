@@ -10,13 +10,26 @@ import { useAgentStore } from '../store/AgentStore'
 import { toolRegistry } from '../tools'
 import { getAgentConfig } from '../utils/AgentConfig'
 import { ContextItem, MessageContent, TextContent, ProblemsContext } from '../types'
-import { createTypedCache } from '@shared/utils/CacheService'
+import { CacheService } from '@shared/utils/CacheService'
 import { useDiagnosticsStore } from '@/renderer/services/diagnosticsStore'
 import { normalizePath } from '@shared/utils/pathUtils'
 
-// 创建缓存实例
-const fileContentCache = createTypedCache<string>('fileContent')
-const searchResultCache = createTypedCache<unknown[]>('searchResult')
+// 创建文件内容缓存（使用 CacheService）
+const fileContentCache = new CacheService<string>('ContextFileCache', {
+  maxSize: 200,
+  maxMemory: 30 * 1024 * 1024, // 30MB
+  defaultTTL: 5 * 60 * 1000, // 5分钟
+  evictionPolicy: 'lru',
+  slidingExpiration: true, // 访问时重置过期时间
+})
+
+// 创建搜索结果缓存
+const searchResultCache = new CacheService<unknown[]>('ContextSearchCache', {
+  maxSize: 50,
+  maxMemory: 10 * 1024 * 1024, // 10MB
+  defaultTTL: 2 * 60 * 1000, // 2分钟
+  evictionPolicy: 'lfu', // 搜索结果用 LFU 更合适
+})
 
 /**
  * 构建上下文内容
@@ -99,7 +112,7 @@ async function processContextItem(
 }
 
 /**
- * 处理文件上下文（带缓存）
+ * 处理文件上下文（使用 CacheService）
  */
 async function processFileContext(
   item: { uri: string },
@@ -107,20 +120,26 @@ async function processFileContext(
 ): Promise<string | null> {
   const filePath = item.uri
   try {
+    // 使用 CacheService 的 getOrSet 方法
     const content = await fileContentCache.getOrSet(
       filePath,
       async () => {
         const fileContent = await api.file.read(filePath)
-        return fileContent || ''
+        if (!fileContent) throw new Error('File not found')
+        return fileContent
+      },
+      {
+        // 文件内容使用滑动过期，访问时重置 TTL
+        slidingExpiration: true,
       }
     )
-    
-    if (content) {
-      const truncated = content.length > config.maxFileContentChars
-        ? content.slice(0, config.maxFileContentChars) + '\n...(file truncated)'
-        : content
-      return `\n### File: ${filePath}\n\`\`\`\n${truncated}\n\`\`\`\n`
-    }
+
+    if (!content) return null
+
+    const truncated = content.length > config.maxFileContentChars
+      ? content.slice(0, config.maxFileContentChars) + '\n...(file truncated)'
+      : content
+    return `\n### File: ${filePath}\n\`\`\`\n${truncated}\n\`\`\`\n`
   } catch (e) {
     logger.agent.error('[ContextBuilder] Failed to read file:', filePath, e)
   }
@@ -128,7 +147,7 @@ async function processFileContext(
 }
 
 /**
- * 处理代码库搜索上下文（带缓存）
+ * 处理代码库搜索上下文（使用 CacheService）
  */
 async function processCodebaseContext(
   userQuery: string | undefined,
@@ -141,6 +160,7 @@ async function processCodebaseContext(
     const cacheKey = `${workspacePath}:${cleanQuery}`
     const config = getAgentConfig()
     
+    // 使用 CacheService 的 getOrSet
     const results = await searchResultCache.getOrSet(
       cacheKey,
       async () => {
@@ -383,75 +403,4 @@ export function buildUserContent(
     return [contextPart, { type: 'text', text: message }]
   }
   return [contextPart, ...message]
-}
-
-/**
- * 计算并更新当前上下文统计信息
- */
-export async function calculateContextStats(
-  contextItems: ContextItem[],
-  currentInput: string
-): Promise<void> {
-  const agentStore = useAgentStore.getState()
-  const messages = agentStore.getMessages()
-  const filteredMessages = messages.filter(m => m.role !== 'checkpoint')
-  const config = getAgentConfig()
-
-  let totalChars = 0
-  let fileCount = 0
-  let semanticResultCount = 0
-
-  // 1. 计算消息历史长度
-  for (const msg of filteredMessages) {
-    if (msg.role === 'user' || msg.role === 'assistant') {
-      const content = msg.role === 'user' 
-        ? (msg as import('../types').UserMessage).content
-        : (msg as import('../types').AssistantMessage).content
-      if (typeof content === 'string') {
-        totalChars += content.length
-      } else if (Array.isArray(content)) {
-        for (const part of content) {
-          if (part.type === 'text') totalChars += part.text.length
-        }
-      }
-    } else if (msg.role === 'tool') {
-      const toolMsg = msg as import('../types').ToolResultMessage
-      totalChars += typeof toolMsg.content === 'string' ? toolMsg.content.length : 0
-    }
-  }
-
-  // 2. 计算当前输入长度
-  totalChars += currentInput.length
-
-  // 3. 计算上下文项长度（复用 fileContentCache）
-  for (const item of contextItems) {
-    if (item.type === 'File') {
-      fileCount++
-      const fileItem = item as { uri?: string }
-      const filePath = fileItem.uri
-      if (filePath) {
-        // 复用 fileContentCache，避免重复读取
-        const content = fileContentCache.get(filePath)
-        const fileSize = content?.length ?? 0
-        totalChars += Math.min(fileSize, config.maxFileContentChars)
-      }
-    } else if (item.type === 'Codebase') {
-      semanticResultCount++
-      totalChars += 2000 // 预估搜索结果长度
-    }
-  }
-
-  // 只统计 user + assistant 消息
-  const userAssistantMessages = filteredMessages.filter(m => m.role === 'user' || m.role === 'assistant')
-
-  agentStore.setContextStats({
-    totalChars,
-    maxChars: config.maxTotalContextChars,
-    fileCount,
-    maxFiles: 10,
-    messageCount: userAssistantMessages.length,
-    maxMessages: config.maxHistoryMessages,
-    semanticResultCount,
-    terminalChars: 0
-  })
 }

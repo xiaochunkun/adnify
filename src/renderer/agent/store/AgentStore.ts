@@ -183,7 +183,20 @@ export const useAgentStore = create<AgentStore>()(
                 contextSummary: null,
                 isCompacting: false,
                 compressionPhase: 'idle',
-                setCompressionStats: (stats) => set({ compressionStats: stats }),
+                setCompressionStats: (stats) => {
+                    // 存储到当前线程
+                    const state = get()
+                    const threadId = state.currentThreadId
+                    if (threadId && state.threads[threadId]) {
+                        state.threads[threadId].compressionStats = stats
+                        set({ 
+                            compressionStats: stats,
+                            threads: { ...state.threads }
+                        })
+                    } else {
+                        set({ compressionStats: stats })
+                    }
+                },
                 setHandoffDocument: (doc) => set({ handoffDocument: doc }),
                 setHandoffRequired: (required) => set({ handoffRequired: required }),
                 setContextSummary: (summary) => set({ contextSummary: summary }),
@@ -375,7 +388,15 @@ export const selectIsOnBranch = (state: AgentStore) => {
 export const selectContextStats = (state: AgentStore) => state.contextStats
 export const selectInputPrompt = (state: AgentStore) => state.inputPrompt
 export const selectCurrentSessionId = (state: AgentStore) => state.currentSessionId
-export const selectCompressionStats = (state: AgentStore) => state.compressionStats
+export const selectCompressionStats = (state: AgentStore) => {
+    // 优先从当前线程读取
+    const threadId = state.currentThreadId
+    if (threadId && state.threads[threadId]?.compressionStats) {
+        return state.threads[threadId].compressionStats
+    }
+    // 降级到全局状态（兼容旧数据）
+    return state.compressionStats
+}
 export const selectHandoffDocument = (state: AgentStore) => state.handoffDocument
 export const selectHandoffRequired = (state: AgentStore) => state.handoffRequired
 export const selectContextSummary = (state: AgentStore) => state.contextSummary
@@ -412,11 +433,10 @@ export async function initializeAgentStore(): Promise<void> {
         useAgentStore.subscribe((state) => {
             if (state.currentThreadId !== lastThreadId) {
                 lastThreadId = state.currentThreadId
-                // 重置 handoff 状态
+                // 重置 handoff 状态（但不重置 compressionStats，它现在存储在线程中）
                 useAgentStore.getState().setHandoffRequired(false)
                 useAgentStore.getState().setHandoffDocument(null)
-                useAgentStore.getState().setCompressionStats(null)
-                logger.agent.info('[AgentStore] Thread changed, compression state reset')
+                logger.agent.info('[AgentStore] Thread changed, handoff state reset')
             }
         })
     } catch (error) {

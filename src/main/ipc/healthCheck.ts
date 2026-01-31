@@ -183,16 +183,16 @@ export function registerHealthCheckHandlers() {
         throw new Error(`HTTP ${response.status}: ${await response.text()}`)
       }
 
-      const data = await response.json()
+      const data = await response.json() as unknown
       let models: string[] = []
 
       if (activeProtocol === 'google' || provider === 'gemini') {
-        if (Array.isArray(data.models)) {
+        if (data && typeof data === 'object' && 'models' in data && Array.isArray(data.models)) {
           models = data.models.map((m: any) => m.name.replace('models/', ''))
         }
       } else {
         // OpenAI 格式
-        if (Array.isArray(data.data)) {
+        if (data && typeof data === 'object' && 'data' in data && Array.isArray(data.data)) {
           models = data.data.map((m: any) => m.id)
         } else if (Array.isArray(data)) {
           // 某些非标准接口直接返回数组

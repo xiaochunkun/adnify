@@ -69,6 +69,8 @@ export interface AssistantMessage {
   reasoningStartTime?: number
   usage?: TokenUsage
   interactive?: InteractiveContent
+  /** 内部标记：文本是否已结束（用于工具调用显示时机） */
+  _textFinalized?: boolean
 }
 
 /** 工具结果消息 */

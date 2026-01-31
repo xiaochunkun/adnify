@@ -560,6 +560,11 @@ export async function runLoop(
         name: toolCall.name,
         content: toolResult.content,
       })
+      
+      // 记录工具执行结果到循环检测器
+      const success = !toolResult.content.startsWith('Error:')
+      loopDetector.recordResult(toolCall.id, success)
+      
       const meta = toolResult.meta
       if (meta?.filePath && typeof meta.filePath === 'string' && typeof meta.newContent === 'string') {
         loopDetector.updateContentHash(meta.filePath, meta.newContent)

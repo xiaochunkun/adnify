@@ -10,11 +10,12 @@ import { useAgentStore } from '../store/AgentStore'
 import { buildLLMApiMessages, validateLLMMessages } from './MessageConverter'
 import type { LLMMessage } from '@/shared/types'
 import { prepareMessages, estimateMessagesTokens, CompressionLevel, LEVEL_NAMES } from '../context/CompressionManager'
+import { compressionPredictor } from '../context/compressionPredictor'
 import { countTokens } from '@shared/utils/tokenCounter'
 import { MessageContent, ChatMessage } from '../types'
 
 // 从 ContextBuilder 导入已有的函数
-export { buildContextContent, buildUserContent, calculateContextStats } from './ContextBuilder'
+export { buildContextContent, buildUserContent } from './ContextBuilder'
 
 /**
  * 构建发送给 LLM 的消息列表
@@ -65,9 +66,13 @@ export async function buildLLMMessages(
     }
   }
 
-  // 动态压缩：从 L0 开始，逐步提升直到满足限制
-  // 不再从上次等级开始，而是每次重新评估
-  let currentLevel: CompressionLevel = 0
+  // 动态压缩：使用预测器确定起始等级
+  const predictedLevel = compressionPredictor.predictLevel(
+    historyMessages.length,
+    contextContent.length
+  )
+  
+  let currentLevel: CompressionLevel = predictedLevel
   let preparedMessages: ChatMessage[] = []
   let appliedLevel: CompressionLevel = 0
   let truncatedToolCalls = 0
@@ -98,6 +103,13 @@ export async function buildLLMMessages(
     currentLevel = (currentLevel + 1) as CompressionLevel
     logger.agent.info(`[MessageBuilder] Upgrading compression: L${currentLevel - 1} → L${currentLevel} (ratio: ${(ratio * 100).toFixed(1)}%)`)
   }
+
+  // 记录本次压缩结果到预测器
+  compressionPredictor.record(
+    historyMessages.length,
+    contextContent.length,
+    appliedLevel
+  )
 
   // 计算最终使用率
   const finalRatio = estimatedTokens / contextLimit

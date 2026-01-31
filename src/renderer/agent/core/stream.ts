@@ -183,6 +183,14 @@ export function createStreamProcessor(assistantId: string | null): StreamProcess
 
         streamingToolCalls.set(toolId, { id: toolId, name: toolName, argsString: '', lastUpdateTime: 0 })
 
+        // 关键修复：先结束当前文本输出，再添加工具调用
+        // 这样工具调用会出现在文本之后的正确位置
+        if (assistantId && content.length > 0) {
+          // 如果有未完成的文本，先 finalize 文本部分
+          // 这会确保工具调用出现在文本之后
+          store.finalizeTextBeforeToolCall(assistantId)
+        }
+
         // 立即添加到 UI（使用 streamingState 而非污染 arguments）
         if (assistantId) {
           store.addToolCallPart(assistantId, {

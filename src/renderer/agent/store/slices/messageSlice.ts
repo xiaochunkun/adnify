@@ -29,6 +29,7 @@ export interface MessageActions {
     addAssistantMessage: (content?: string) => string
     appendToAssistant: (messageId: string, content: string) => void
     finalizeAssistant: (messageId: string) => void
+    finalizeTextBeforeToolCall: (messageId: string) => void
     updateMessage: (messageId: string, updates: Partial<ChatMessage>) => void
     addToolResult: (toolCallId: string, name: string, content: string, type: ToolResultType, rawParams?: Record<string, unknown>) => string
     addCheckpoint: (type: 'user_message' | 'tool_edit', fileSnapshots: Record<string, FileSnapshot>) => string
@@ -175,16 +176,18 @@ export const createMessageSlice: StateCreator<
             let newParts: AssistantPart[]
             const lastPart = assistantMsg.parts[assistantMsg.parts.length - 1]
 
-            // 检查最后一个 part 是否是 text 类型
-            // 如果是，追加到该 part；否则创建新的 text part
-            if (lastPart && lastPart.type === 'text') {
+            // 检查是否有 _textFinalized 标记（表示文本已结束，工具调用即将开始）
+            const textFinalized = (assistantMsg as any)._textFinalized
+
+            // 如果文本已 finalized，或最后一个 part 不是 text，创建新的 text part
+            if (textFinalized || !lastPart || lastPart.type !== 'text') {
+                newParts = [...assistantMsg.parts, { type: 'text', content }]
+                // 清除 finalized 标记
+                delete (assistantMsg as any)._textFinalized
+            } else {
                 // 追加到现有的 text part
                 newParts = [...assistantMsg.parts]
                 newParts[newParts.length - 1] = { type: 'text', content: lastPart.content + content }
-            } else {
-                // 最后一个 part 不是 text（可能是 tool_call 或 reasoning）
-                // 创建新的 text part，确保文本在工具调用之后显示
-                newParts = [...assistantMsg.parts, { type: 'text', content }]
             }
 
             const newMessages = [...thread.messages]
@@ -225,6 +228,49 @@ export const createMessageSlice: StateCreator<
                     },
                 },
             }
+        })
+    },
+
+    /**
+     * 在工具调用前结束文本输出
+     * 确保工具调用出现在文本之后的正确位置
+     */
+    finalizeTextBeforeToolCall: (messageId) => {
+        const threadId = get().currentThreadId
+        if (!threadId) return
+
+        set(state => {
+            const thread = state.threads[threadId]
+            if (!thread) return state
+
+            const messageIdx = thread.messages.findIndex(
+                msg => msg.id === messageId && msg.role === 'assistant'
+            )
+            if (messageIdx === -1) return state
+
+            const assistantMsg = thread.messages[messageIdx] as AssistantMessage
+            const lastPart = assistantMsg.parts[assistantMsg.parts.length - 1]
+
+            // 如果最后一个 part 是 text 且正在流式输出，标记为已完成
+            // 这样后续的工具调用会作为新的 part 添加，而不是插入到文本中间
+            if (lastPart && lastPart.type === 'text') {
+                // 添加一个标记，表示这个文本 part 已经完成
+                // 后续的 appendToAssistant 会创建新的 text part
+                const newMessages = [...thread.messages]
+                newMessages[messageIdx] = {
+                    ...assistantMsg,
+                    _textFinalized: true, // 内部标记
+                }
+
+                return {
+                    threads: {
+                        ...state.threads,
+                        [threadId]: { ...thread, messages: newMessages },
+                    },
+                }
+            }
+
+            return state
         })
     },
 
