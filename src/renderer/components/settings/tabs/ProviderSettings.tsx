@@ -5,8 +5,9 @@
  * 使用内联表单添加自定义厂商，使用 AI SDK 原生配置
  */
 
-import { useState, useMemo, useEffect } from 'react'
-import { Plus, Trash, Eye, EyeOff, Check, AlertTriangle, X, Server, Sliders, Box } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { Plus, Trash, Eye, EyeOff, Check, AlertTriangle, X, Server, Sliders, Box, RefreshCw } from 'lucide-react'
 import { PROVIDERS, type ApiProtocol, getProviderDefaultHeaders } from '@/shared/config/providers'
 import { LLM_DEFAULTS } from '@/shared/config/defaults'
 import { toast } from '@components/common/ToastProvider'
@@ -58,7 +59,7 @@ function TestConnectionButton({ localConfig, language }: { localConfig: any; lan
   }
 
   return (
-    <div className="flex items-center gap-3 mt-2">
+    <div className="flex items-center gap-3">
       <Button variant="secondary" size="sm" onClick={handleTest} disabled={testing} className="h-9 px-4 text-xs font-medium">
         {testing ? (
           <span className="flex items-center gap-2">
@@ -85,6 +86,250 @@ function TestConnectionButton({ localConfig, language }: { localConfig: any; lan
   )
 }
 
+function TestModelButton({ localConfig, language }: { localConfig: any; language: 'en' | 'zh' }) {
+  const [testing, setTesting] = useState(false)
+
+  const handleTest = async () => {
+    if (!localConfig.apiKey && localConfig.provider !== 'ollama') {
+      toast.error(language === 'zh' ? '请先输入 API Key' : 'Please enter API Key first')
+      return
+    }
+    if (!localConfig.model) {
+      toast.error(language === 'zh' ? '请先选择或输入模型' : 'Please select or enter a model first')
+      return
+    }
+
+    setTesting(true)
+    try {
+      const { testModelCall } = await import('@/renderer/services/healthCheckService')
+      const result = await testModelCall(localConfig)
+      
+      if (result.success) {
+        const message = language === 'zh' 
+          ? `调用成功！延时: ${result.latency}ms, 结果: ${result.content}`
+          : `Call success! Latency: ${result.latency}ms, Result: ${result.content}`
+        toast.success(message)
+      } else {
+        const errorMsg = result.error || 'Test failed'
+        toast.error(language === 'zh' ? `调用失败: ${errorMsg}` : `Call failed: ${errorMsg}`)
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Test failed')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <Button variant="secondary" size="sm" onClick={handleTest} disabled={testing} className="h-9 px-4 text-xs font-medium">
+      {testing ? (
+        <span className="flex items-center gap-2">
+          <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          {language === 'zh' ? '调用中...' : 'Calling...'}
+        </span>
+      ) : (
+        language === 'zh' ? '测试模型调用' : 'Test Model Call'
+      )}
+    </Button>
+  )
+}
+
+function FetchModelsButton({ 
+  provider, 
+  apiKey, 
+  baseUrl, 
+  protocol, 
+  language, 
+  existingModels = [],
+  onModelsFetched,
+  onModelRemoved,
+  onBatchRemoved
+}: { 
+  provider: string; 
+  apiKey: string; 
+  baseUrl?: string; 
+  protocol?: string; 
+  language: 'en' | 'zh';
+  existingModels?: string[];
+  onModelsFetched: (models: string[]) => void;
+  onModelRemoved?: (model: string) => void;
+  onBatchRemoved?: (models: string[]) => void;
+}) {
+  const [fetching, setFetching] = useState(false)
+  const [showList, setShowList] = useState(false)
+  const [fetchedModels, setFetchedModels] = useState<string[]>([])
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 })
+  const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  const handleFetch = async () => {
+    if (!apiKey && provider !== 'ollama') {
+      toast.error(language === 'zh' ? '请先输入 API Key' : 'Please enter API Key first')
+      return
+    }
+
+    // 计算位置
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setCoords({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      })
+    }
+
+    setFetching(true)
+    try {
+      const { fetchModelsCall } = await import('@/renderer/services/healthCheckService')
+      const result = await fetchModelsCall(provider, apiKey, baseUrl, protocol)
+      if (result.success && result.models) {
+        setFetchedModels(result.models)
+        setShowList(true)
+        if (result.models.length === 0) {
+          toast.info(language === 'zh' ? '未找到可用模型' : 'No models found')
+        }
+      } else {
+        toast.error(language === 'zh' ? `获取失败: ${result.error}` : `Fetch failed: ${result.error}`)
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Fetch failed')
+    } finally {
+      setFetching(false)
+    }
+  }
+
+  // 点击外部关闭列表
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        // 还要检查是否点击了 portal 里的内容
+        const portal = document.getElementById('fetch-models-portal')
+        if (portal && portal.contains(event.target as Node)) return
+        setShowList(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // 监听滚动和调整大小以更新位置
+  useEffect(() => {
+    if (!showList) return
+
+    const updateCoords = () => {
+      if (buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect()
+        setCoords({
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX,
+          width: rect.width
+        })
+      }
+    }
+
+    window.addEventListener('scroll', updateCoords, true)
+    window.addEventListener('resize', updateCoords)
+    return () => {
+      window.removeEventListener('scroll', updateCoords, true)
+      window.removeEventListener('resize', updateCoords)
+    }
+  }, [showList])
+
+  const dropdownMenu = showList && fetchedModels.length > 0 && createPortal(
+    <div 
+      id="fetch-models-portal"
+      className="fixed z-[9999] mt-2 w-56 max-h-72 overflow-hidden bg-surface border border-border rounded-xl shadow-2xl animate-in fade-in zoom-in duration-200 flex flex-col"
+      style={{ 
+        top: coords.top, 
+        left: Math.max(10, coords.left + coords.width - 224) // 224 is w-56
+      }}
+    >
+      <div className="p-2 border-b border-border bg-background/50 flex-shrink-0">
+        <div className="text-[9px] font-bold text-text-muted uppercase tracking-wider px-2">
+          {language === 'zh' ? `找到 ${fetchedModels.length} 个模型` : `Found ${fetchedModels.length} models`}
+        </div>
+      </div>
+      <div className="overflow-y-auto flex-1 p-1 custom-scrollbar">
+        {fetchedModels.map(model => {
+          const isAdded = existingModels.includes(model)
+          return (
+            <button
+              key={model}
+              onClick={() => {
+                if (isAdded) {
+                  onModelRemoved?.(model)
+                } else {
+                  onModelsFetched([model])
+                }
+              }}
+              className={`w-full text-left px-3 py-1.5 text-[11px] rounded-lg transition-all flex items-center justify-between group mb-0.5 ${
+                isAdded 
+                  ? 'text-accent bg-accent/5 hover:bg-accent/10' 
+                  : 'text-text-secondary hover:text-accent hover:bg-accent/5 active:scale-[0.98]'
+              }`}
+            >
+              <span className="truncate mr-2 flex-1">{model}</span>
+              {isAdded ? (
+                <Check className="w-3 h-3" />
+              ) : (
+                <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-accent" />
+              )}
+            </button>
+          )
+        })}
+      </div>
+      <div className="p-1.5 border-t border-border bg-background/50 flex-shrink-0 flex gap-2">
+        <button
+          onClick={() => {
+            const addedModels = fetchedModels.filter(m => existingModels.includes(m))
+            if (addedModels.length > 0) {
+              onBatchRemoved?.(addedModels)
+            }
+            setShowList(false)
+          }}
+          className="flex-1 py-1.5 text-[10px] font-bold text-text-muted hover:text-red-400 hover:bg-red-400/5 rounded-lg transition-colors uppercase flex items-center justify-center gap-1.5 border border-transparent hover:border-red-400/20"
+        >
+          <Trash className="w-3 h-3" />
+          {language === 'zh' ? '全部清空' : 'Clear All'}
+        </button>
+        <button
+          onClick={() => {
+            const toAdd = fetchedModels.filter(m => !existingModels.includes(m))
+            if (toAdd.length > 0) {
+              onModelsFetched(toAdd)
+            }
+            setShowList(false)
+          }}
+          className="flex-1 py-1.5 text-[10px] font-bold bg-accent text-white hover:bg-accent-hover rounded-lg transition-colors uppercase flex items-center justify-center gap-1.5 shadow-lg shadow-accent/20"
+        >
+          <Check className="w-3 h-3" />
+          {language === 'zh' ? '全部添加' : 'Add All'}
+        </button>
+      </div>
+    </div>,
+    document.body
+  )
+
+  return (
+    <div className="relative inline-block" ref={containerRef}>
+      <Button 
+        ref={buttonRef}
+        variant="secondary" 
+        size="sm" 
+        onClick={handleFetch} 
+        disabled={fetching} 
+        className="h-8 px-2.5 flex items-center gap-1.5"
+        title={language === 'zh' ? '从 API 获取模型列表' : 'Fetch models from API'}
+      >
+        <RefreshCw className={`w-3 h-3 ${fetching ? 'animate-spin' : ''}`} />
+        <span className="text-[10px] font-semibold">{language === 'zh' ? '获取模型' : 'Fetch Models'}</span>
+      </Button>
+
+      {dropdownMenu}
+    </div>
+  )
+}
+
 // 内联的添加自定义 Provider 表单
 function InlineCustomProviderForm({
   language,
@@ -92,7 +337,7 @@ function InlineCustomProviderForm({
   onCancel
 }: {
   language: 'en' | 'zh'
-  onSave: (config: { displayName: string; baseUrl: string; apiKey: string; protocol: string; model: string }) => void
+  onSave: (config: { displayName: string; baseUrl: string; apiKey: string; protocol: string; model: string; customModels: string[] }) => void
   onCancel: () => void
 }) {
   const [displayName, setDisplayName] = useState('')
@@ -100,13 +345,41 @@ function InlineCustomProviderForm({
   const [apiKey, setApiKey] = useState('')
   const [protocol, setProtocol] = useState('openai')
   const [model, setModel] = useState('')
+  const [customModels, setCustomModels] = useState<string[]>([])
 
   const handleSubmit = () => {
     if (!displayName.trim() || !baseUrl.trim()) {
       toast.error(language === 'zh' ? '请填写名称和 API 端点' : 'Please enter name and API endpoint')
       return
     }
-    onSave({ displayName: displayName.trim(), baseUrl: baseUrl.trim(), apiKey, protocol, model: model.trim() })
+    onSave({ 
+      displayName: displayName.trim(), 
+      baseUrl: baseUrl.trim(), 
+      apiKey, 
+      protocol, 
+      model: model.trim() || customModels[0] || '',
+      customModels: [...new Set([...customModels, ...(model ? [model] : [])])]
+    })
+  }
+
+  const handleFetchModels = (models: string[]) => {
+    const newModels = models.filter(m => !customModels.includes(m))
+    if (newModels.length > 0) {
+      setCustomModels([...customModels, ...newModels])
+      if (!model && newModels.length > 0) {
+        setModel(newModels[0])
+      }
+      toast.success(language === 'zh' ? `已获取并添加 ${newModels.length} 个模型` : `Fetched and added ${newModels.length} models`)
+    }
+  }
+
+  const handleBatchRemoveModels = (models: string[]) => {
+    const remaining = customModels.filter(m => !models.includes(m))
+    setCustomModels(remaining)
+    if (models.includes(model)) {
+      setModel(remaining[0] || '')
+    }
+    toast.success(language === 'zh' ? `已清空 ${models.length} 个模型` : `Cleared ${models.length} models`)
   }
 
   return (
@@ -148,7 +421,7 @@ function InlineCustomProviderForm({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-text-secondary">API Key</label>
           <Input
@@ -160,17 +433,51 @@ function InlineCustomProviderForm({
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-text-secondary">
-            {language === 'zh' ? '默认模型' : 'Default Model'}
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-text-secondary">
+              {language === 'zh' ? '默认模型' : 'Default Model'}
+            </label>
+            <FetchModelsButton 
+                provider="custom"
+                apiKey={apiKey}
+                baseUrl={baseUrl}
+                protocol={protocol}
+                language={language}
+                existingModels={customModels}
+                onModelsFetched={handleFetchModels}
+                onModelRemoved={(m) => setCustomModels(customModels.filter(x => x !== m))}
+                onBatchRemoved={handleBatchRemoveModels}
+              />
+          </div>
           <Input
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder={language === 'zh' ? '例如: gpt-4' : 'e.g. gpt-4'}
+            placeholder={language === 'zh' ? '例如: gpt-4 (支持逗号分隔)' : 'e.g. gpt-4 (Supports comma)'}
             className="bg-background/50 border-border text-xs"
           />
         </div>
       </div>
+
+      {customModels.length > 0 && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-text-secondary">
+            {language === 'zh' ? `已添加模型 (${customModels.length})` : `Added Models (${customModels.length})`}
+          </label>
+          <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-2 bg-background/30 rounded-xl border border-border/50 custom-scrollbar">
+            {customModels.map(m => (
+              <div key={m} className="group flex items-center gap-1.5 px-2 py-1 bg-surface/50 rounded-md border border-border text-xs text-text-secondary hover:border-accent/30 transition-all">
+                <span className="truncate max-w-[150px]">{m}</span>
+                <button 
+                  onClick={() => setCustomModels(customModels.filter(x => x !== m))} 
+                  className="text-text-muted hover:text-red-400 opacity-50 group-hover:opacity-100 transition-all"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="ghost" size="sm" onClick={onCancel}>
@@ -231,31 +538,47 @@ export function ProviderSettings({
   // customHeaders 只用于额外的请求头，不包括默认请求头
   
   // 添加模型到本地配置
-  const handleAddModel = () => {
-    if (!newModelName.trim()) return
+  const handleAddModel = (name?: string) => {
+    const modelName = name || newModelName
+    if (!modelName.trim()) return
     
+    const namesToAdd = modelName.split(',').map(s => s.trim()).filter(Boolean)
+    handleBatchAddModels(namesToAdd)
+    if (!name) setNewModelName('')
+  }
+
+  // 批量添加模型
+  const handleBatchAddModels = (models: string[]) => {
+    if (models.length === 0) return
+
     const currentConfig = localProviderConfigs[localConfig.provider] || {}
     const currentModels = currentConfig.customModels || []
     
+    // 过滤掉已存在的
+    const newModels = models.filter(n => !currentModels.includes(n))
+    if (newModels.length === 0) return
+
     const updatedConfigs = {
       ...localProviderConfigs,
       [localConfig.provider]: {
         ...currentConfig,
-        customModels: [...currentModels, newModelName.trim()]
+        customModels: [...currentModels, ...newModels]
       }
     }
     
     setLocalProviderConfigs(updatedConfigs)
-    
-    // 立即同步到全局 store，使 ModelSelector 能看到更新
     setProvider(localConfig.provider, updatedConfigs[localConfig.provider])
     
-    setNewModelName('')
-    toast.success(language === 'zh' ? `已添加模型: ${newModelName.trim()}` : `Added model: ${newModelName.trim()}`)
+    toast.success(language === 'zh' ? `已添加 ${newModels.length} 个模型` : `Added ${newModels.length} models`)
   }
 
   // 删除模型从本地配置
   const handleRemoveModel = (model: string) => {
+    handleBatchRemoveModels([model])
+  }
+
+  // 批量删除模型
+  const handleBatchRemoveModels = (models: string[]) => {
     const currentConfig = localProviderConfigs[localConfig.provider]
     if (!currentConfig) return
     
@@ -263,16 +586,18 @@ export function ProviderSettings({
       ...localProviderConfigs,
       [localConfig.provider]: {
         ...currentConfig,
-        customModels: (currentConfig.customModels || []).filter(m => m !== model)
+        customModels: (currentConfig.customModels || []).filter(m => !models.includes(m))
       }
     }
     
     setLocalProviderConfigs(updatedConfigs)
-    
-    // 立即同步到全局 store，使 ModelSelector 能看到更新
     setProvider(localConfig.provider, updatedConfigs[localConfig.provider])
     
-    toast.success(language === 'zh' ? `已删除模型: ${model}` : `Removed model: ${model}`)
+    if (models.length === 1) {
+      toast.success(language === 'zh' ? `已删除模型: ${models[0]}` : `Removed model: ${models[0]}`)
+    } else {
+      toast.success(language === 'zh' ? `已清空 ${models.length} 个模型` : `Cleared ${models.length} models`)
+    }
   }
 
   // 选择内置 Provider
@@ -302,6 +627,7 @@ export function ProviderSettings({
       timeout: nextConfig.timeout || providerInfo?.defaults.timeout || 120000,
       model: nextConfig.model || providerInfo?.models[0] || '',
       headers: nextConfig.headers,  // 加载新 provider 的 headers
+      protocol: providerInfo?.protocol, // 增加协议同步
     })
     setIsAddingCustom(false)
   }
@@ -334,12 +660,13 @@ export function ProviderSettings({
       timeout: customConfig.timeout || 120000,
       model: customConfig.model || models[0] || '',
       headers: customConfig.headers,  // 加载新 provider 的 headers
+      protocol: customConfig.protocol, // 增加协议同步
     })
     setIsAddingCustom(false)
   }
 
   // 添加自定义 Provider（只更新本地状态）
-  const handleAddCustomProvider = (config: { displayName: string; baseUrl: string; apiKey: string; protocol: string; model: string }) => {
+  const handleAddCustomProvider = (config: { displayName: string; baseUrl: string; apiKey: string; protocol: string; model: string; customModels: string[] }) => {
     const id = `custom-${Date.now()}`
     const newConfig = {
       displayName: config.displayName,
@@ -347,7 +674,7 @@ export function ProviderSettings({
       apiKey: config.apiKey,
       protocol: config.protocol as ApiProtocol,
       model: config.model,
-      customModels: config.model ? [config.model] : [],
+      customModels: config.customModels || (config.model ? [config.model] : []),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
@@ -369,6 +696,7 @@ export function ProviderSettings({
       baseUrl: config.baseUrl,
       timeout: 120000,
       model: config.model,
+      protocol: config.protocol as ApiProtocol, // 增加协议同步
     })
   }
 
@@ -495,11 +823,36 @@ export function ProviderSettings({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 左列：模型配置 */}
             <section className="p-5 bg-surface/30 rounded-xl border border-border">
-              <div className="flex items-center gap-2 mb-4">
-                <Box className="w-4 h-4 text-accent" />
-                <h5 className="text-sm font-medium text-text-primary">
-                  {language === 'zh' ? '模型配置' : 'Model Configuration'}
-                </h5>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Box className="w-4 h-4 text-accent" />
+                  <h5 className="text-sm font-medium text-text-primary">
+                    {language === 'zh' ? '模型配置' : 'Model Configuration'}
+                  </h5>
+                </div>
+                <FetchModelsButton 
+                  provider={localConfig.provider}
+                  apiKey={localConfig.apiKey}
+                  baseUrl={localConfig.baseUrl}
+                  protocol={isCustomSelected ? selectedCustomConfig?.protocol : undefined}
+                  language={language}
+                  existingModels={(() => {
+                    const models = new Set<string>()
+                    if (isCustomSelected && selectedCustomConfig) {
+                      (selectedCustomConfig.customModels || []).forEach(m => models.add(m))
+                    } else if (selectedProvider) {
+                      selectedProvider.models.forEach(m => models.add(m))
+                    }
+                    const localCustomModels = localProviderConfigs[localConfig.provider]?.customModels || []
+                    localCustomModels.forEach(m => models.add(m))
+                    return Array.from(models)
+                  })()}
+                  onModelsFetched={(models) => {
+                    handleBatchAddModels(models)
+                  }}
+                  onModelRemoved={(m) => handleRemoveModel(m)}
+                  onBatchRemoved={(models) => handleBatchRemoveModels(models)}
+                />
               </div>
 
               <ScrollShadow maxHeight="500px" className="pr-2">
@@ -513,13 +866,23 @@ export function ProviderSettings({
                     onChange={(value) => setLocalConfig({ ...localConfig, model: value })}
                     options={(() => {
                       const modelsSet = new Set<string>()
+                      
+                      // 1. 获取当前 provider 的内置模型或自定义配置的基础模型
                       if (isCustomSelected && selectedCustomConfig) {
                         (selectedCustomConfig.customModels || []).forEach((m) => modelsSet.add(m))
                       } else if (selectedProvider) {
                         selectedProvider.models.forEach((m) => modelsSet.add(m))
                       }
-                      const customModels = localProviderConfigs[localConfig.provider]?.customModels || []
-                      customModels.forEach((m) => modelsSet.add(m))
+                      
+                      // 2. 获取本地存储的额外自定义模型
+                      const localCustomModels = localProviderConfigs[localConfig.provider]?.customModels || []
+                      localCustomModels.forEach((m) => modelsSet.add(m))
+                      
+                      // 3. 确保当前选中的模型也在列表中
+                      if (localConfig.model) {
+                        modelsSet.add(localConfig.model)
+                      }
+                      
                       return Array.from(modelsSet).map((m) => ({ value: m, label: m }))
                     })()}
                     className="w-full bg-background/50 border-border"
@@ -532,11 +895,11 @@ export function ProviderSettings({
                     <Input
                       value={newModelName}
                       onChange={(e) => setNewModelName(e.target.value)}
-                      placeholder={language === 'zh' ? '输入新模型名称...' : 'Enter new model name...'}
+                      placeholder={language === 'zh' ? '输入模型名称 (支持逗号分隔)...' : 'Enter model names (Supports comma)...'}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddModel()}
                       className="flex-1 h-9 text-xs bg-background/50 border-border"
                     />
-                    <Button variant="secondary" size="sm" onClick={handleAddModel} disabled={!newModelName.trim()} className="h-9 px-3">
+                    <Button variant="secondary" size="sm" onClick={() => handleAddModel()} disabled={!newModelName.trim()} className="h-9 px-3">
                       <Plus className="w-4 h-4" />
                     </Button>
                   </div>
@@ -1132,6 +1495,7 @@ export function ProviderSettings({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <TestConnectionButton localConfig={localConfig} language={language} />
+                <TestModelButton localConfig={localConfig} language={language} />
                 {!isCustomSelected && PROVIDERS[localConfig.provider]?.auth.helpUrl && (
                   <a
                     href={PROVIDERS[localConfig.provider]?.auth.helpUrl}

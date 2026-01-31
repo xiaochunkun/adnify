@@ -41,6 +41,7 @@ export type {
   LLMToolCall,
   LLMResult,
   LLMError,
+  LLMConfig,
   LLMSendMessageParams,
 } from '@shared/types/llm'
 
@@ -515,6 +516,17 @@ export interface ElectronAPI {
     latency?: number
     error?: string
     checkedAt: Date
+  }>
+  testModel: (config: LLMConfig) => Promise<{
+    success: boolean
+    content?: string
+    latency?: number
+    error?: string
+  }>
+  fetchModels: (provider: string, apiKey: string, baseUrl?: string, protocol?: string) => Promise<{
+    success: boolean
+    models?: string[]
+    error?: string
   }>
 
   // MCP

@@ -317,6 +317,17 @@ export interface ElectronAPI {
     error?: string
     checkedAt: Date
   }>
+  testModel: (config: LLMConfig) => Promise<{
+    success: boolean
+    content?: string
+    latency?: number
+    error?: string
+  }>
+  fetchModels: (provider: string, apiKey: string, baseUrl?: string, protocol?: string) => Promise<{
+    success: boolean
+    models?: string[]
+    error?: string
+  }>
 
   // MCP (Model Context Protocol)
   mcpInitialize: (workspaceRoots: string[]) => Promise<{ success: boolean; error?: string }>
@@ -572,6 +583,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Health Check API
   healthCheckProvider: (provider: string, apiKey: string, baseUrl?: string, timeout?: number) =>
     ipcRenderer.invoke('healthCheck:check', provider, apiKey, baseUrl, timeout),
+  testModel: (config: LLMConfig) =>
+    ipcRenderer.invoke('healthCheck:testModel', config),
+  fetchModels: (provider: string, apiKey: string, baseUrl?: string, protocol?: string) =>
+    ipcRenderer.invoke('healthCheck:fetchModels', provider, apiKey, baseUrl, protocol),
 
   // MCP API
   mcpInitialize: (workspaceRoots: string[]) => ipcRenderer.invoke('mcp:initialize', workspaceRoots),
