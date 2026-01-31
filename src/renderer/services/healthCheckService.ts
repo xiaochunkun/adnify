@@ -7,6 +7,7 @@ import { CacheService } from '@shared/utils/CacheService'
 import { toAppError } from '@shared/utils/errorHandler'
 import { getCacheConfig } from '@shared/config/agentConfig'
 import { getEditorConfig } from '@renderer/settings'
+import { LLMConfig } from '@shared/types/llm'
 
 export interface HealthCheckResult {
     provider: string
@@ -78,6 +79,36 @@ export function clearHealthCache() {
  */
 export function getAllHealthStatus(): HealthCheckResult[] {
     return healthCache.values()
+}
+
+/**
+ * 测试模型调用
+ */
+export async function testModelCall(config: LLMConfig) {
+    try {
+        const result = await window.electronAPI.testModel(config)
+        return result
+    } catch (err) {
+        return {
+            success: false,
+            error: toAppError(err).message || 'Test failed',
+        }
+    }
+}
+
+/**
+ * 拉取模型列表
+ */
+export async function fetchModelsCall(provider: string, apiKey: string, baseUrl?: string, protocol?: string) {
+    try {
+        const result = await window.electronAPI.fetchModels(provider, apiKey, baseUrl, protocol)
+        return result
+    } catch (err) {
+        return {
+            success: false,
+            error: toAppError(err).message || 'Fetch failed',
+        }
+    }
 }
 
 /**
