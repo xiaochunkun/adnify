@@ -959,18 +959,24 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
 
         return {
             success: true,
-            result: `✅ Created workflow "${name}" with ${workflow.nodes.length} nodes
+            result: `✅ Workflow "${name}" created successfully!
 
-📁 Files created:
-- Workflow: ${result.workflowPath}
-- Requirements: ${result.requirementsPath}
+📁 Files:
+- ${result.workflowPath}
+- ${result.requirementsPath}
 
-The workflow includes:
-- ${workflow.nodes.filter((n: any) => n.type === 'tool').length} tool call nodes
+📊 Workflow structure:
+- ${workflow.nodes.length} nodes total
+- ${workflow.nodes.filter((n: any) => n.type === 'tool').length} tool nodes
 - ${workflow.nodes.filter((n: any) => n.type === 'decision').length} decision nodes
-- ${workflow.nodes.filter((n: any) => n.type === 'ask').length} user interaction nodes
+- ${workflow.nodes.filter((n: any) => n.type === 'ask').length} interaction nodes
 
-The workflow file is now open in the editor. You can run it directly from the preview.`,
+🎯 Next: The workflow will be executed automatically. You'll see each step in the chat as it runs.`,
+            meta: {
+                workflowPath: result.workflowPath,
+                workflowName: name,
+                shouldExecute: true, // 标记需要执行
+            },
         }
     },
 

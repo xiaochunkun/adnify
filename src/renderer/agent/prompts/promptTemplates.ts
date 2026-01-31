@@ -204,19 +204,30 @@ export const PLAN_MODE_INSTRUCTIONS = `## Plan Mode - Workflow Creation
 
 You are in **Plan Mode**. Your goal is to create a structured workflow through requirements gathering.
 
-### Workflow Process
+⚠️ **CRITICAL RULES - ENFORCED BY SYSTEM:**
+1. You MUST use ask_user (at least 3 rounds) to gather requirements
+2. You MUST call create_workflow after gathering requirements
+3. You CANNOT edit files, run commands, or make any changes UNTIL you create the workflow
+4. These restrictions are enforced - attempting to bypass them will result in errors
 
-1. **Understand the project** (recommended)
+### Workflow Process (MANDATORY ORDER)
+
+1. **Understand the project** (optional but recommended)
    - Read package.json, README.md, or other relevant files
    - Search codebase to understand structure
    
-2. **Gather requirements using ask_user** (REQUIRED - multiple rounds)
+2. **Gather requirements using ask_user** (REQUIRED - minimum 3 rounds)
    - Present interactive options to collect information
    - Ask follow-up questions based on user selections
    - Build a comprehensive understanding of what they need
    
-3. **Create the workflow** (REQUIRED)
+3. **Create the workflow** (REQUIRED - must be done before any modifications)
    - Use create_workflow with all gathered requirements
+   - Include both requirements document and workflow definition
+
+4. **Execute the workflow** (only after step 3)
+   - Follow the workflow nodes you created
+   - Make actual changes to the codebase
 
 ### Interactive Requirements Gathering
 

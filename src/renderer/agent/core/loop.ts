@@ -630,6 +630,63 @@ Try again with the corrected tool call.`
           linesRemoved: (meta.linesRemoved as number) || 0,
         })
       }
+      
+      // Plan 模式：检查是否需要执行工作流
+      if (context.chatMode === 'plan' && toolCall.name === 'create_workflow' && meta?.shouldExecute) {
+        const workflowPath = meta.workflowPath as string
+        const workflowName = meta.workflowName as string
+        
+        logger.agent.info('[Loop] Plan mode: Executing workflow automatically:', workflowName)
+        
+        // 添加执行提示到聊天
+        store.appendToAssistant(assistantId, `\n\n🚀 **Executing workflow: ${workflowName}**\n\nI'll now execute each step of the workflow and show you the progress...`)
+        
+        // 执行工作流
+        try {
+          const { PlanEngine } = await import('@/renderer/plan/core/PlanEngine')
+          const workflowContent = await api.file.read(workflowPath)
+          if (workflowContent) {
+            const workflow = JSON.parse(workflowContent)
+            const engine = new PlanEngine(workflow)
+            
+            // 监听工作流事件并显示在聊天中
+            engine.on('*', (event) => {
+              const node = workflow.nodes?.find((n: any) => n.id === event.nodeId)
+              const nodeName = node?.label || event.nodeId
+              
+              let message = ''
+              switch (event.type) {
+                case 'node_start':
+                  message = `\n▶️ Starting: **${nodeName}**`
+                  break
+                case 'node_complete':
+                  message = `\n✅ Completed: **${nodeName}**`
+                  break
+                case 'node_error':
+                  message = `\n❌ Failed: **${nodeName}** - ${event.error}`
+                  break
+                case 'workflow_complete':
+                  message = `\n\n🎉 **Workflow completed successfully!**`
+                  break
+                case 'workflow_error':
+                  message = `\n\n❌ **Workflow failed:** ${event.error}`
+                  break
+              }
+              
+              if (message) {
+                store.appendToAssistant(assistantId, message)
+              }
+            })
+            
+            // 执行工作流
+            await engine.start()
+          }
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          logger.agent.error('[Loop] Failed to execute workflow:', errorMsg)
+          store.appendToAssistant(assistantId, `\n\n❌ **Failed to execute workflow:** ${errorMsg}`)
+        }
+      }
     }
 
     // Plan 模式特殊处理：在工具执行后检查是否需要提醒
@@ -721,25 +778,55 @@ Call ask_user again with relevant follow-up questions.`
 Call ask_user again to gather these details.`
           })
         } else if (askUserCount >= 3) {
-          // 第三轮后，可以创建工作流了
-          logger.agent.info('[Loop] Plan mode: Allowing create_workflow after 3+ rounds')
+          // 第三轮后，强制要求创建工作流
+          logger.agent.info('[Loop] Plan mode: FORCING create_workflow after 3+ rounds')
           llmMessages.push({
             role: 'user',
-            content: `Excellent! You've gathered comprehensive requirements through ${askUserCount} rounds.
+            content: `✅ Excellent! You've gathered comprehensive requirements through ${askUserCount} rounds.
 
-Now create a detailed workflow with create_workflow. Include:
+🚨 **MANDATORY NEXT STEP**: You MUST now call create_workflow.
 
-1. **Complete requirements document** with:
+DO NOT:
+- ❌ Run any commands (run_command)
+- ❌ Edit any files (edit_file, write_file)
+- ❌ Make any modifications
+- ❌ Ask more questions (you have enough info)
+
+DO THIS NOW (REQUIRED):
+Call create_workflow with:
+
+1. **name**: Short workflow name (e.g., "project-optimization")
+2. **description**: One-line summary
+3. **requirements**: Complete Markdown document with:
    - Overview and goals
-   - All information gathered from ask_user
+   - All information gathered from ${askUserCount} rounds of ask_user
    - Detailed acceptance criteria
    - Step-by-step implementation plan
    - Testing strategy
    - Documentation requirements
+4. **workflow**: JSON with nodes and edges containing actual tool calls
 
-2. **Workflow structure** should have meaningful nodes, not just start/end
+Example structure:
+\`\`\`json
+{
+  "name": "project-optimization",
+  "description": "Optimize project based on user requirements",
+  "requirements": "## Overview\\n\\n[All gathered info]\\n\\n## Acceptance Criteria\\n\\n- [ ] Item 1\\n- [ ] Item 2",
+  "workflow": {
+    "nodes": [
+      {"id": "start", "type": "start", "label": "Start"},
+      {"id": "analyze", "type": "tool", "label": "Analyze", "config": {"toolName": "read_file", "arguments": {"path": "package.json"}}},
+      {"id": "end", "type": "end", "label": "End"}
+    ],
+    "edges": [
+      {"id": "e1", "source": "start", "target": "analyze"},
+      {"id": "e2", "source": "analyze", "target": "end"}
+    ]
+  }
+}
+\`\`\`
 
-Call create_workflow NOW with a comprehensive requirements document.`
+Call create_workflow NOW. This is not optional.`
           })
         }
       }

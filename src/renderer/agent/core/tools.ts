@@ -334,8 +334,16 @@ export async function executeTools(
 
   // ===== Plan 模式工具拦截 =====
   if (context.chatMode === 'plan') {
-    // 检查是否已经创建了工作流
-    const hasCreatedWorkflow = toolCalls.some(tc => tc.name === 'create_workflow')
+    // 检查整个对话历史中是否已经创建过工作流
+    const thread = store.getCurrentThread()
+    const hasCreatedWorkflowInHistory = thread?.messages.some(msg => 
+      msg.role === 'assistant' && 
+      'toolCalls' in msg && 
+      msg.toolCalls?.some((tc: any) => tc.name === 'create_workflow')
+    ) || false
+    
+    // 当前这一轮是否正在创建工作流
+    const isCreatingWorkflowNow = toolCalls.some(tc => tc.name === 'create_workflow')
     
     // 定义只读工具（允许在创建工作流前使用）
     const readOnlyTools = [
@@ -360,8 +368,8 @@ export async function executeTools(
       'uiux_recommend',
     ]
     
-    // 如果还没创建工作流，检查是否有非只读工具
-    if (!hasCreatedWorkflow) {
+    // 如果历史中没有创建过工作流，且当前也不是在创建，则拦截修改操作
+    if (!hasCreatedWorkflowInHistory && !isCreatingWorkflowNow) {
       const forbiddenTools = toolCalls.filter(tc => !readOnlyTools.includes(tc.name))
       
       if (forbiddenTools.length > 0) {
