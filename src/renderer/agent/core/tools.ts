@@ -11,7 +11,6 @@
 
 import { api } from '@/renderer/services/electronAPI'
 import { logger } from '@utils/Logger'
-import { useAgentStore } from '../store/AgentStore'
 import { toolManager } from '../tools/providers'
 import { getToolApprovalType, isFileEditTool } from '@/shared/config/tools'
 import { pathStartsWith, joinPath } from '@shared/utils/pathUtils'
@@ -60,6 +59,8 @@ async function saveFileSnapshots(
   toolCalls: ToolCall[],
   context: ToolExecutionContext
 ): Promise<void> {
+  // Checkpoint 操作是全局的，不需要 threadStore
+  const { useAgentStore } = await import('../store/AgentStore')
   const store = useAgentStore.getState()
   const { workspacePath } = context
 
@@ -199,9 +200,9 @@ function analyzeToolDependencies(toolCalls: ToolCall[]): Map<string, Set<string>
  */
 async function executeSingle(
   toolCall: ToolCall,
-  context: ToolExecutionContext
+  context: ToolExecutionContext,
+  store: import('../store/AgentStore').ThreadBoundStore
 ): Promise<AgentToolExecutionResult> {
-  const store = useAgentStore.getState()
   const mainStore = useStore.getState()
   const { currentAssistantId, workspacePath } = context
   const startTime = Date.now()
@@ -322,9 +323,9 @@ async function executeSingle(
 export async function executeTools(
   toolCalls: ToolCall[],
   context: ToolExecutionContext,
+  store: import('../store/AgentStore').ThreadBoundStore,
   abortSignal?: AbortSignal
 ): Promise<{ results: AgentToolExecutionResult[]; userRejected: boolean }> {
-  const store = useAgentStore.getState()
   const results: AgentToolExecutionResult[] = []
   let userRejected = false
 
@@ -347,7 +348,7 @@ export async function executeTools(
 
   // 1. 先并行执行不需要审批的工具（使用动态并发限制）
   if (noApprovalRequired.length > 0) {
-    store.setStreamPhase('tool_running')
+    store.setStreamState({ phase: 'tool_running' })
 
     // 动态导入 p-limit
     const pLimit = (await import('p-limit')).default
@@ -359,7 +360,7 @@ export async function executeTools(
     const noApprovalPromises = noApprovalRequired.map((tc) =>
       limit(async () => {
         try {
-          const result = await executeSingle(tc, context)
+          const result = await executeSingle(tc, context, store)
           // 立即更新结果到数组（不等待其他工具）
           results.push(result)
           completed.add(result.toolCall.id)
@@ -411,7 +412,7 @@ export async function executeTools(
     }
 
     // 设置当前工具为待审批状态
-    store.setStreamPhase('tool_pending', tc)
+    store.setStreamState({ phase: 'tool_pending', currentToolCall: tc })
     if (context.currentAssistantId) {
       store.updateToolCall(context.currentAssistantId, tc.id, { status: 'awaiting' })
     }
@@ -436,8 +437,8 @@ export async function executeTools(
     }
 
     // 用户批准，执行工具
-    store.setStreamPhase('tool_running')
-    const result = await executeSingle(tc, context)
+    store.setStreamState({ phase: 'tool_running' })
+    const result = await executeSingle(tc, context, store)
     results.push(result)
     completed.add(tc.id)
     pending.delete(tc.id)
@@ -446,7 +447,7 @@ export async function executeTools(
   // 确保所有工具状态已更新并重置流状态
   if (!abortSignal?.aborted) {
     // 重置流状态为 streaming（移除 tool_running 状态）
-    store.setStreamPhase('streaming')
+    store.setStreamState({ phase: 'streaming' })
   }
 
   return { results, userRejected }

@@ -66,17 +66,19 @@ function executeModePostProcessHook(
  * @param messages - 消息历史
  * @param chatMode - 工作模式
  * @param assistantId - 助手消息 ID
+ * @param threadStore - 线程绑定的 Store
  * @returns LLM 调用结果
  */
 async function callLLM(
   config: LLMConfig,
   messages: LLMMessage[],
   chatMode: WorkMode,
-  assistantId: string | null
+  assistantId: string | null,
+  threadStore: import('../store/AgentStore').ThreadBoundStore
 ): Promise<LLMCallResult> {
   performanceMonitor.start(`llm:${config.model}`, 'llm', { provider: config.provider, messageCount: messages.length })
 
-  const processor = createStreamProcessor(assistantId)
+  const processor = createStreamProcessor(assistantId, threadStore)
 
   try {
     // 初始化工具
@@ -101,7 +103,8 @@ async function callLLM(
       // 场景3: Code 模式 - 根据压缩等级动态调整
 
       // 当上下文压缩等级较高时，限制工具以减少 token 使用
-      const compressionLevel = store.compressionStats?.level || 0
+      const currentThread = store.getCurrentThread()
+      const compressionLevel = currentThread?.compressionStats?.level || 0
       if (compressionLevel >= 3) {
         // L3/L4: 只保留核心工具，移除 AI 辅助工具（节省 token）
         const coreTools = allToolNames.filter(name =>
@@ -155,6 +158,7 @@ async function callLLMWithRetry(
   messages: LLMMessage[],
   chatMode: WorkMode,
   assistantId: string | null,
+  threadStore: import('../store/AgentStore').ThreadBoundStore,
   abortSignal?: AbortSignal
 ): Promise<LLMCallResult> {
   const retryConfig = getAgentConfig()
@@ -162,7 +166,7 @@ async function callLLMWithRetry(
     return await withRetry(
       async () => {
         if (abortSignal?.aborted) throw new Error('Aborted')
-        const result = await callLLM(config, messages, chatMode, assistantId)
+        const result = await callLLM(config, messages, chatMode, assistantId, threadStore)
 
         // 工具调用解析错误不应该导致重试，而是返回给 AI 让它反思
         // 只有真正的 LLM 错误（网络、API 等）才需要重试
@@ -263,6 +267,7 @@ async function checkAndHandleCompression(
   usage: { input: number; output: number },
   contextLimit: number,
   store: ReturnType<typeof useAgentStore.getState>,
+  threadStore: import('../store/AgentStore').ThreadBoundStore,
   context: ExecutionContext,
   assistantId: string,
   enableLLMSummary: boolean,
@@ -272,7 +277,7 @@ async function checkAndHandleCompression(
   const messageCount = thread?.messages.length || 0
 
   // 使用 CompressionManager 更新统计（使用真实 usage）
-  const previousStats = store.compressionStats
+  const previousStats = thread?.compressionStats || null
   const newStats = updateStats(
     { promptTokens: usage.input, completionTokens: usage.output },
     contextLimit,
@@ -289,9 +294,9 @@ async function checkAndHandleCompression(
     `tokens: ${newStats.inputTokens + newStats.outputTokens}/${contextLimit}`
   )
 
-  // 更新 store
-  store.setCompressionStats(newStats as import('../context/CompressionManager').CompressionStats)
-  store.setCompressionPhase('idle')
+  // 更新 store（使用 threadStore 确保线程隔离）
+  threadStore.setCompressionStats(newStats as import('../context/CompressionManager').CompressionStats)
+  threadStore.setCompressionPhase('idle')
 
   // L3 预警：提前通知用户上下文即将满
   if (calculatedLevel === 3 && (!previousStats || previousStats.level < 3)) {
@@ -306,11 +311,11 @@ async function checkAndHandleCompression(
 
   // L3: 生成 LLM 摘要
   if (calculatedLevel >= 3 && enableLLMSummary && thread) {
-    store.setCompressionPhase('summarizing')
+    threadStore.setCompressionPhase('summarizing')
     try {
       const userTurns = thread.messages.filter(m => m.role === 'user').length
       const summaryResult = await generateSummary(thread.messages, { type: 'detailed' })
-      store.setContextSummary({
+      threadStore.setContextSummary({
         objective: summaryResult.objective,
         completedSteps: summaryResult.completedSteps,
         pendingSteps: summaryResult.pendingSteps,
@@ -325,29 +330,29 @@ async function checkAndHandleCompression(
     } catch {
       // 摘要生成失败，不影响主流程
     }
-    store.setCompressionPhase('idle')
+    threadStore.setCompressionPhase('idle')
   }
 
   // L4: 生成 Handoff 文档
   if (calculatedLevel >= 4) {
     if (autoHandoff && thread && context.workspacePath) {
-      store.setCompressionPhase('summarizing')
+      threadStore.setCompressionPhase('summarizing')
       try {
         const handoff = await generateHandoffDocument(thread.id, thread.messages, context.workspacePath)
-        store.setHandoffDocument(handoff)
+        store.setHandoffDocument(handoff)  // handoffDocument 是全局状态，保持使用 store
         EventBus.emit({ type: 'context:handoff', document: handoff })
       } catch {
         // Handoff 生成失败，不影响主流程
       }
-      store.setCompressionPhase('idle')
+      threadStore.setCompressionPhase('idle')
     }
 
     const { language } = useStore.getState()
     const msg = language === 'zh'
       ? '⚠️ **上下文已满**\n\n当前对话已达到上下文限制。请开始新会话继续。'
       : '⚠️ **Context Limit Reached**\n\nPlease start a new session to continue.'
-    store.appendToAssistant(assistantId, msg)
-    store.setHandoffRequired(true)
+    threadStore.appendToAssistant(assistantId, msg)
+    threadStore.setHandoffRequired(true)
   }
 
   EventBus.emit({ type: 'context:level', level: calculatedLevel, tokens: newStats.inputTokens + newStats.outputTokens, ratio: newStats.ratio })
@@ -365,6 +370,14 @@ export async function runLoop(
 ): Promise<void> {
   const store = useAgentStore.getState()
   const mainStore = useStore.getState()
+
+  // 创建线程绑定的 Store（确保后台任务不会影响其他线程）
+  const threadId = context.threadId || store.currentThreadId
+  if (!threadId) {
+    logger.agent.error('[Loop] No thread ID available')
+    return
+  }
+  const threadStore = store.forThread(threadId)
 
   // 一次性获取所有配置，避免重复调用 getState()
   const agentConfig = getAgentConfig()
@@ -395,13 +408,13 @@ export async function runLoop(
 
     if (llmMessages.length === 0) {
       logger.agent.error('[Loop] No messages to send')
-      store.appendToAssistant(assistantId, '\n\n❌ Error: No messages to send')
+      threadStore.appendToAssistant(assistantId, '\n\n❌ Error: No messages to send')
       EventBus.emit({ type: 'loop:end', reason: 'no_messages' })
       break
     }
 
     // 调用 LLM
-    const result = await callLLMWithRetry(config, llmMessages, context.chatMode, assistantId, context.abortSignal)
+    const result = await callLLMWithRetry(config, llmMessages, context.chatMode, assistantId, threadStore, context.abortSignal)
 
     // 再次检查中止信号（LLM 调用后）
     if (context.abortSignal?.aborted) {
@@ -437,7 +450,7 @@ Try again with the corrected tool call.`
       } else {
         // 其他错误：中止循环
         logger.agent.error('[Loop] LLM error:', result.error)
-        store.appendToAssistant(assistantId, `\n\n❌ Error: ${result.error}`)
+        threadStore.appendToAssistant(assistantId, `\n\n❌ Error: ${result.error}`)
         EventBus.emit({ type: 'loop:end', reason: 'error' })
         break
       }
@@ -457,6 +470,7 @@ Try again with the corrected tool call.`
         usage,
         contextLimit,
         store,
+        threadStore,
         context,
         assistantId,
         enableLLMSummary,
@@ -495,6 +509,7 @@ Try again with the corrected tool call.`
         usage,
         contextLimit,
         store,
+        threadStore,
         context,
         assistantId,
         enableLLMSummary,
@@ -539,7 +554,7 @@ Try again with the corrected tool call.`
     if (loopCheck.isLoop) {
       logger.agent.warn(`[Loop] Loop detected: ${loopCheck.reason}`)
       const suggestion = loopCheck.suggestion ? `\n💡 ${loopCheck.suggestion}` : ''
-      store.appendToAssistant(assistantId, `\n\n⚠️ ${loopCheck.reason}${suggestion}`)
+      threadStore.appendToAssistant(assistantId, `\n\n⚠️ ${loopCheck.reason}${suggestion}`)
       EventBus.emit({ type: 'loop:warning', message: loopCheck.reason || 'Loop detected' })
       EventBus.emit({ type: 'loop:end', reason: 'loop_detected' })
       break
@@ -552,7 +567,7 @@ Try again with the corrected tool call.`
       const existing = assistantMsg.toolCalls || []
       for (const tc of result.toolCalls) {
         if (!existing.find((e) => e.id === tc.id)) {
-          store.addToolCallPart(assistantId, { id: tc.id, name: tc.name, arguments: tc.arguments })
+          threadStore.addToolCallPart(assistantId, { id: tc.id, name: tc.name, arguments: tc.arguments })
         }
       }
     }
@@ -572,6 +587,7 @@ Try again with the corrected tool call.`
     const { results: toolResults, userRejected } = await executeTools(
       result.toolCalls,
       { workspacePath: context.workspacePath, currentAssistantId: assistantId, chatMode: context.chatMode },
+      threadStore,
       context.abortSignal
     )
 
@@ -587,12 +603,12 @@ Try again with the corrected tool call.`
       // 从 meta 中提取 interactive 数据并设置到 store
       const interactive = waitingResult.result.meta?.interactive as import('../types').InteractiveContent | undefined
       if (interactive) {
-        store.setInteractive(assistantId, interactive)
+        threadStore.setInteractive(assistantId, interactive)
       } else {
         // 兜底：如果没有 interactive 数据，至少要 finalize
-        store.finalizeAssistant(assistantId)
+        threadStore.finalizeAssistant(assistantId)
       }
-      store.setStreamPhase('idle')
+      threadStore.setStreamPhase('idle')
       EventBus.emit({ type: 'loop:end', reason: 'waiting_for_user' })
       break
     }
@@ -643,13 +659,13 @@ Try again with the corrected tool call.`
     }
 
     shouldContinue = true
-    store.setStreamPhase('streaming')
+    threadStore.setStreamPhase('streaming')
   }
 
   // 达到最大迭代次数
   if (iteration >= maxIterations) {
     logger.agent.warn('[Loop] Reached maximum iterations')
-    store.appendToAssistant(assistantId, '\n\n⚠️ Reached maximum tool call limit.')
+    threadStore.appendToAssistant(assistantId, '\n\n⚠️ Reached maximum tool call limit.')
     EventBus.emit({ type: 'loop:warning', message: 'Max iterations reached' })
     EventBus.emit({ type: 'loop:end', reason: 'max_iterations' })
   }

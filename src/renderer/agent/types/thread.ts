@@ -6,42 +6,44 @@ import type { ToolCall } from '@/shared/types'
 import type { ChatMessage } from './messages'
 import type { ContextItem } from './context'
 import type { StructuredSummary } from '../context/types'
-
-/** 线程状态 */
-export interface ThreadState {
-  currentCheckpointIdx: number | null
-  isStreaming: boolean
-  pendingToolCall?: ToolCall
-  error?: string
-}
-
-/** 聊天线程 */
-export interface ChatThread {
-  id: string
-  createdAt: number
-  lastModified: number
-  messages: ChatMessage[]
-  contextItems: ContextItem[]
-  state: ThreadState
-  /** Handoff 上下文（从上一个会话继承，用于注入 system prompt） */
-  handoffContext?: string
-  /** 上下文压缩摘要 */
-  contextSummary?: StructuredSummary | null
-  /** 待完成的目标（从 Handoff 继承） */
-  pendingObjective?: string
-  /** 待完成的步骤（从 Handoff 继承） */
-  pendingSteps?: string[]
-  /** 压缩统计信息（每个线程独立） */
-  compressionStats?: import('../core/types').CompressionStats | null
-}
+import type { CompressionStats } from '../core/types'
 
 /** 流阶段 */
 export type StreamPhase = 'idle' | 'streaming' | 'tool_pending' | 'tool_running' | 'error'
 
-/** 流状态 */
+/** 压缩阶段 */
+export type CompressionPhase = 'idle' | 'analyzing' | 'compressing' | 'summarizing' | 'done'
+
+/** 流状态（线程级别） */
 export interface StreamState {
   phase: StreamPhase
   currentToolCall?: ToolCall
   error?: string
   statusText?: string
+}
+
+/** 聊天线程 - 包含所有线程相关状态 */
+export interface ChatThread {
+  id: string
+  createdAt: number
+  lastModified: number
+
+  // === 消息相关 ===
+  messages: ChatMessage[]
+  contextItems: ContextItem[]
+
+  // === 执行状态（每个线程独立） ===
+  streamState: StreamState
+
+  // === 压缩状态（每个线程独立） ===
+  compressionStats: CompressionStats | null
+  contextSummary: StructuredSummary | null
+  handoffRequired: boolean
+  isCompacting: boolean
+  compressionPhase: CompressionPhase
+
+  // === Handoff 相关 ===
+  handoffContext?: string
+  pendingObjective?: string
+  pendingSteps?: string[]
 }

@@ -9,7 +9,6 @@
 
 import { api } from '@/renderer/services/electronAPI'
 import { logger } from '@utils/Logger'
-import { useAgentStore } from '../store/AgentStore'
 import { useStore } from '@store'
 import { parseXMLToolCalls } from '../utils/XMLToolParser'
 import { EventBus } from './EventBus'
@@ -67,8 +66,10 @@ export interface StreamProcessor {
   cleanup: () => void
 }
 
-export function createStreamProcessor(assistantId: string | null): StreamProcessor {
-  const store = useAgentStore.getState()
+export function createStreamProcessor(
+  assistantId: string | null,
+  store: import('../store/AgentStore').ThreadBoundStore
+): StreamProcessor {
 
   let content = ''
   let reasoning = ''
@@ -81,7 +82,7 @@ export function createStreamProcessor(assistantId: string | null): StreamProcess
 
   // 工具调用流式状态
   const streamingToolCalls = new Map<string, { id: string; name: string; argsString: string; lastUpdateTime: number }>()
-  
+
   // 节流：工具参数更新（避免过于频繁的状态更新）
   const TOOL_UPDATE_THROTTLE_MS = 50 // 每 50ms 最多更新一次
 
@@ -91,7 +92,7 @@ export function createStreamProcessor(assistantId: string | null): StreamProcess
   const cleanup = () => {
     if (isCleanedUp) return
     isCleanedUp = true
-    
+
     for (const fn of cleanups) {
       try {
         fn()
@@ -216,12 +217,12 @@ export function createStreamProcessor(assistantId: string | null): StreamProcess
           if (tc) {
             if (argsDelta) {
               tc.argsString += argsDelta
-              
+
               // 节流更新：第一次立即更新，后续根据时间间隔节流
               if (assistantId) {
                 const now = Date.now()
                 const timeSinceLastUpdate = now - tc.lastUpdateTime
-                
+
                 // 第一次更新（lastUpdateTime === 0）或距离上次更新超过阈值时，立即更新
                 if (tc.lastUpdateTime === 0 || timeSinceLastUpdate >= TOOL_UPDATE_THROTTLE_MS) {
                   tc.lastUpdateTime = now
@@ -264,7 +265,7 @@ export function createStreamProcessor(assistantId: string | null): StreamProcess
                 streamingState: undefined,  // 清除流式状态
               })
             }
-            
+
             // 添加到 toolCalls 数组（用于返回给 loop.ts）
             const toolCall: ToolCall = {
               id: tc.id,
@@ -272,7 +273,7 @@ export function createStreamProcessor(assistantId: string | null): StreamProcess
               arguments: finalArgs || {},
               status: 'pending',
             }
-            
+
             // 检查是否已存在（避免重复）
             if (!toolCalls.find(t => t.id === tc.id)) {
               toolCalls.push(toolCall)
@@ -299,7 +300,7 @@ export function createStreamProcessor(assistantId: string | null): StreamProcess
           arguments: args,
           status: 'pending',
         }
-        
+
         // 检查是否已存在（避免重复）
         if (!toolCalls.find(tc => tc.id === tcId)) {
           toolCalls.push(toolCall)
@@ -351,12 +352,12 @@ export function createStreamProcessor(assistantId: string | null): StreamProcess
   const doResolve = (result: LLMCallResult) => {
     if (isResolved) return
     isResolved = true
-    
+
     // 先 resolve Promise，再 cleanup
     if (resolveWait) {
       resolveWait(result)
     }
-    
+
     // cleanup 放在最后
     cleanup()
   }
@@ -364,7 +365,7 @@ export function createStreamProcessor(assistantId: string | null): StreamProcess
   // 处理错误事件
   const handleError = (err: { message?: string; code?: string } | string) => {
     let errorMsg: string
-    
+
     if (typeof err === 'string') {
       errorMsg = err
     } else {
@@ -376,7 +377,7 @@ export function createStreamProcessor(assistantId: string | null): StreamProcess
         errorMsg = err.message || 'Unknown error'
       }
     }
-    
+
     logger.agent.error('[StreamProcessor] Error:', errorMsg)
     error = errorMsg
     finalizeReasoning()

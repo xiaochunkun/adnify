@@ -6,7 +6,7 @@
  */
 
 import { Layers, Coins, Zap, AlertTriangle, ChevronRight } from 'lucide-react'
-import { useAgentStore, selectCompressionStats, selectContextSummary } from '@/renderer/agent'
+import { useAgentStore, selectCompressionStats, selectContextSummary, selectHandoffRequired } from '@/renderer/agent'
 import { useMemo } from 'react'
 import type { CompressionLevel } from '@/renderer/agent/context/types'
 import type { TokenUsage } from '@renderer/agent/types'
@@ -40,7 +40,7 @@ export default function ContextStatsContent({
 }: ContextStatsContentProps) {
   const compressionStats = useAgentStore(selectCompressionStats)
   const contextSummary = useAgentStore(selectContextSummary)
-  const handoffRequired = useAgentStore(state => state.handoffRequired)
+  const handoffRequired = useAgentStore(selectHandoffRequired)
 
   const currentLevel = (compressionStats?.level ?? 0) as CompressionLevel
   const ratio = compressionStats?.ratio ?? 0
@@ -94,15 +94,15 @@ export default function ContextStatsContent({
               </span>
             </div>
           </div>
-          
+
           {/* 进度条 */}
           <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-            <div 
+            <div
               className={`h-full ${progressColor} transition-all duration-500 rounded-full`}
               style={{ width: `${Math.min(ratio * 100, 100)}%` }}
             />
           </div>
-          
+
           {/* 刻度标记 */}
           <div className="flex justify-between mt-1 text-[9px] text-text-muted/50 font-mono">
             <span>0</span>
@@ -196,8 +196,8 @@ export default function ContextStatsContent({
                 {language === 'zh' ? '上下文已满' : 'Context Full'}
               </h4>
               <p className="text-[10px] text-red-400/70">
-                {language === 'zh' 
-                  ? '请开始新会话继续' 
+                {language === 'zh'
+                  ? '请开始新会话继续'
                   : 'Please start a new session'}
               </p>
             </div>
@@ -210,11 +210,10 @@ export default function ContextStatsContent({
             {language === 'zh' ? '压缩策略' : 'Compression Strategy'}
           </div>
           {([0, 1, 2, 3, 4] as CompressionLevel[]).map((level) => (
-            <div 
-              key={level} 
-              className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
-                level === currentLevel ? 'bg-white/5 ring-1 ring-white/10' : 'opacity-50'
-              }`}
+            <div
+              key={level}
+              className={`flex items-center gap-2 p-2 rounded-lg transition-all ${level === currentLevel ? 'bg-white/5 ring-1 ring-white/10' : 'opacity-50'
+                }`}
             >
               <span className={`text-[9px] font-bold font-mono w-6 ${LEVEL_COLORS[level]}`}>
                 L{level}

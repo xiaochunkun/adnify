@@ -35,7 +35,7 @@ export default function StatusBar() {
   } = useStore()
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
   const [workerProgress, setWorkerProgress] = useState<IndexProgress | null>(null)
-  
+
   const diagnostics = useDiagnosticsStore(state => state.diagnostics)
   const version = useDiagnosticsStore(state => state.version)
 
@@ -48,44 +48,44 @@ export default function StatusBar() {
   const handoffRequired = useAgentStore(selectHandoffRequired)
   const compressionPhase = useAgentStore(selectCompressionPhase)
   const createHandoffSession = useAgentStore(state => state.createHandoffSession)
-  
+
   // L4 自动过渡 - 用 ref 追踪是否已经开始过渡，避免重复触发
   const transitionStartedRef = useRef(false)
-  
+
   useEffect(() => {
     // 当 handoffRequired 变为 false 时，重置 ref
     if (!handoffRequired) {
       transitionStartedRef.current = false
       return
     }
-    
+
     // 如果已经开始过渡，不重复触发
     if (transitionStartedRef.current) return
-    
+
     transitionStartedRef.current = true
-    
+
     // 短暂延迟后自动创建新会话
     const timer = setTimeout(() => {
       // 再次检查 handoffRequired，可能已被用户操作取消
-      if (!useAgentStore.getState().handoffRequired) {
+      if (!selectHandoffRequired(useAgentStore.getState())) {
         transitionStartedRef.current = false
         return
       }
-      
+
       const result = createHandoffSession()
-      
+
       // 如果有 autoResume，触发自动继续
       if (result && typeof result === 'object' && 'autoResume' in result) {
-        window.dispatchEvent(new CustomEvent('handoff-auto-resume', { 
-          detail: { 
+        window.dispatchEvent(new CustomEvent('handoff-auto-resume', {
+          detail: {
             objective: result.objective,
             pendingSteps: result.pendingSteps,
             fileChanges: result.fileChanges,
-          } 
+          }
         }))
       }
     }, 1500)
-    
+
     return () => clearTimeout(timer)
   }, [handoffRequired, createHandoffSession])
   const tokenStats = useMemo(() => {
@@ -145,7 +145,7 @@ export default function StatusBar() {
           </button>
         )}
 
-        <button 
+        <button
           onClick={handleDiagnosticsClick}
           className="flex items-center gap-3 px-2.5 py-1 rounded-full hover:bg-white/5 transition-all text-text-muted hover:text-text-primary border border-transparent hover:border-white/5"
         >
@@ -186,7 +186,7 @@ export default function StatusBar() {
 
       {/* Right Group - Clean & Minimal */}
       <div className="flex items-center gap-3 h-full">
-        
+
         {/* Stats Group */}
         <div className="flex items-center gap-2 h-full">
           {/* 上下文统计（合并 Token + 压缩） */}
@@ -222,7 +222,7 @@ export default function StatusBar() {
                     className="flex items-center gap-1.5 text-accent"
                   >
                     <motion.div
-                      animate={{ 
+                      animate={{
                         scale: [1, 1.2, 1],
                         opacity: [1, 0.7, 1]
                       }}
@@ -254,13 +254,12 @@ export default function StatusBar() {
                     className="flex items-center gap-2 px-2 py-1 rounded-full hover:bg-white/5 transition-all cursor-pointer group"
                   >
                     {/* 上下文使用率 */}
-                    <div className={`flex items-center gap-1.5 ${
-                      compressionStats?.level === 4 ? 'text-red-400' :
-                      compressionStats?.level === 3 ? 'text-orange-400' :
-                      compressionStats?.level === 2 ? 'text-yellow-400' :
-                      compressionStats?.level === 1 ? 'text-blue-400' : 
-                      'text-emerald-400'
-                    }`}>
+                    <div className={`flex items-center gap-1.5 ${compressionStats?.level === 4 ? 'text-red-400' :
+                        compressionStats?.level === 3 ? 'text-orange-400' :
+                          compressionStats?.level === 2 ? 'text-yellow-400' :
+                            compressionStats?.level === 1 ? 'text-blue-400' :
+                              'text-emerald-400'
+                      }`}>
                       <Layers className="w-3 h-3 group-hover:scale-110 transition-transform" />
                       <span className="text-[10px] font-bold font-mono">
                         {compressionStats ? `${(compressionStats.ratio * 100).toFixed(1)}%` : '0%'}
@@ -272,10 +271,10 @@ export default function StatusBar() {
             }
             width={340} height={480} language={language as 'en' | 'zh'}
           >
-            <ContextStatsContent 
-              totalUsage={tokenStats.totalUsage} 
-              lastUsage={tokenStats.lastUsage} 
-              language={language as 'en' | 'zh'} 
+            <ContextStatsContent
+              totalUsage={tokenStats.totalUsage}
+              lastUsage={tokenStats.lastUsage}
+              language={language as 'en' | 'zh'}
             />
           </BottomBarPopover>
 

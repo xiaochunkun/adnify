@@ -1,33 +1,40 @@
 /**
  * Agent 状态管理
  * 使用 Zustand slice 模式组织代码
+ * 
+ * 架构原则：
+ * - 所有线程相关状态只存于 ChatThread
+ * - 切换线程只改变 currentThreadId，无需同步状态
+ * - UI 通过 selector 从当前线程获取状态
  */
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { logger } from '@utils/Logger'
 import { agentStorage } from './agentStorage'
+import { streamingBuffer, flushStreamingBuffer } from './StreamingBuffer'
 import {
     createThreadSlice,
     createMessageSlice,
     createCheckpointSlice,
-    createStreamSlice,
     createBranchSlice,
     type ThreadSlice,
     type MessageSlice,
     type CheckpointSlice,
-    type StreamSlice,
     type BranchSlice,
     type Branch,
 } from './slices'
-import type { ChatMessage, ContextItem } from '../types'
+import type { ChatMessage, ContextItem, StreamState } from '../types'
 import type { CompressionStats } from '../core/types'
-import type { HandoffDocument } from '../context/types'
+import type { HandoffDocument, StructuredSummary } from '../context/types'
 import { buildHandoffContext } from '../context/HandoffManager'
+
+// 重新导出刷新函数供外部使用
+export { flushStreamingBuffer }
 
 // ===== Store 类型 =====
 
-// 上下文统计信息
+// 上下文统计信息（用于底部栏显示）
 export interface ContextStats {
     totalChars: number
     maxChars: number
@@ -39,16 +46,6 @@ export interface ContextStats {
     terminalChars: number
 }
 
-// UI 相关状态（从 chatSlice 迁移）
-interface UIState {
-    contextStats: ContextStats | null
-    inputPrompt: string
-    currentSessionId: string | null
-    setContextStats: (stats: ContextStats | null) => void
-    setInputPrompt: (prompt: string) => void
-    setCurrentSessionId: (id: string | null) => void
-}
-
 // Handoff 会话创建结果
 interface HandoffSessionResult {
     threadId: string
@@ -58,105 +55,57 @@ interface HandoffSessionResult {
     fileChanges: Array<{ action: string; path: string; summary: string }>
 }
 
-// 压缩阶段
-type CompressionPhase = 'idle' | 'analyzing' | 'compressing' | 'summarizing' | 'done'
-
-// 上下文压缩状态
-interface ContextCompressionState {
-    compressionStats: CompressionStats | null
-    handoffDocument: HandoffDocument | null
-    handoffRequired: boolean  // 是否需要强制 Handoff（L4 触发后为 true，阻止继续对话）
-    contextSummary: import('../context/types').StructuredSummary | null  // 上下文摘要
-    isCompacting: boolean  // 是否正在压缩
-    compressionPhase: CompressionPhase  // 压缩阶段
-    setCompressionStats: (stats: CompressionStats | null) => void
+// UI 相关状态（全局，非线程相关）
+interface UIState {
+    contextStats: ContextStats | null
+    inputPrompt: string
+    currentSessionId: string | null
+    handoffDocument: HandoffDocument | null  // Handoff 文档（临时状态）
+    setContextStats: (stats: ContextStats | null) => void
+    setInputPrompt: (prompt: string) => void
+    setCurrentSessionId: (id: string | null) => void
     setHandoffDocument: (doc: HandoffDocument | null) => void
-    setCompressionPhase: (phase: CompressionPhase) => void
-    setHandoffRequired: (required: boolean) => void
-    setContextSummary: (summary: import('../context/types').StructuredSummary | null) => void
-    setIsCompacting: (compacting: boolean) => void
     createHandoffSession: () => HandoffSessionResult | null
 }
 
-export type AgentStore = ThreadSlice & MessageSlice & CheckpointSlice & StreamSlice & BranchSlice & ContextCompressionState & UIState
+// 线程绑定的 Store 操作接口
+// 用于后台任务，确保操作不会影响其他线程
+export interface ThreadBoundStore {
+    readonly threadId: string
 
-// ===== 流式响应节流优化 =====
+    // 消息操作
+    addAssistantMessage: (content?: string) => string
+    appendToAssistant: (messageId: string, content: string) => void
+    finalizeAssistant: (messageId: string) => void
+    finalizeTextBeforeToolCall: (messageId: string) => void
+    updateMessage: (messageId: string, updates: Partial<import('../types').ChatMessage>) => void
+    addToolResult: (toolCallId: string, name: string, content: string, type: import('../types').ToolResultType, rawParams?: Record<string, unknown>) => string
 
-class StreamingBuffer {
-    private buffer: Map<string, string> = new Map()
-    private rafId: number | null = null
-    private flushCallback: ((messageId: string, content: string) => void) | null = null
-    private lastFlushTime = 0
-    private readonly FLUSH_INTERVAL = 16 // 约 60fps
+    // 工具调用操作
+    addToolCallPart: (messageId: string, toolCall: Omit<import('../types').ToolCall, 'status'>) => void
+    updateToolCall: (messageId: string, toolCallId: string, updates: Partial<import('../types').ToolCall>) => void
 
-    setFlushCallback(callback: (messageId: string, content: string) => void) {
-        this.flushCallback = callback
-    }
+    // 状态操作
+    setStreamState: (state: Partial<StreamState>) => void
+    setStreamPhase: (phase: StreamState['phase']) => void
+    setCompressionStats: (stats: CompressionStats | null) => void
+    setContextSummary: (summary: StructuredSummary | null) => void
+    setCompressionPhase: (phase: import('../types').CompressionPhase) => void
+    setHandoffRequired: (required: boolean) => void
+    setIsCompacting: (compacting: boolean) => void
 
-    append(messageId: string, content: string): void {
-        if (!content) return
-        const existing = this.buffer.get(messageId) || ''
-        this.buffer.set(messageId, existing + content)
-        this.scheduleFlush()
-    }
+    // Reasoning 操作
+    addReasoningPart: (messageId: string) => string
+    updateReasoningPart: (messageId: string, partId: string, content: string, isStreaming?: boolean) => void
+    finalizeReasoningPart: (messageId: string, partId: string) => void
 
-    private scheduleFlush(): void {
-        if (this.rafId !== null) return
-
-        const now = performance.now()
-        const elapsed = now - this.lastFlushTime
-
-        if (elapsed >= this.FLUSH_INTERVAL) {
-            this.rafId = requestAnimationFrame(() => {
-                this.rafId = null
-                this.flush()
-            })
-        } else {
-            // 使用 rAF 延迟执行
-            this.rafId = requestAnimationFrame(() => {
-                this.rafId = null
-                this.scheduleFlush()
-            })
-        }
-    }
-
-    private flush(): void {
-        if (!this.flushCallback || this.buffer.size === 0) return
-        this.lastFlushTime = performance.now()
-
-        // 取出并清空 buffer
-        const updates = new Map(this.buffer)
-        this.buffer.clear()
-
-        updates.forEach((content, messageId) => {
-            if (content) {
-                this.flushCallback!(messageId, content)
-            }
-        })
-    }
-
-    flushNow(): void {
-        if (this.rafId !== null) {
-            cancelAnimationFrame(this.rafId)
-            this.rafId = null
-        }
-        this.flush()
-    }
-
-    clear(): void {
-        if (this.rafId !== null) {
-            cancelAnimationFrame(this.rafId)
-            this.rafId = null
-        }
-        this.buffer.clear()
-    }
+    // 交互式内容操作
+    setInteractive: (messageId: string, interactive: import('../types').InteractiveContent) => void
 }
 
-const streamingBuffer = new StreamingBuffer()
-
-// 导出刷新函数，供外部在关键时刻调用
-export function flushStreamingBuffer(): void {
-    streamingBuffer.flushNow()
+export type AgentStore = ThreadSlice & MessageSlice & CheckpointSlice & BranchSlice & UIState & {
+    _flushTextBuffer: (messageId: string) => void
+    forThread: (threadId: string) => ThreadBoundStore
 }
 
 // ===== Store 实现 =====
@@ -168,37 +117,25 @@ export const useAgentStore = create<AgentStore>()(
             const threadSlice = createThreadSlice(...args)
             const messageSlice = createMessageSlice(...args)
             const checkpointSlice = createCheckpointSlice(...args)
-            const streamSlice = createStreamSlice(...args)
             const branchSlice = createBranchSlice(...args)
 
-            // 上下文压缩状态
             const [set, get] = args
-            const contextCompressionState: ContextCompressionState = {
-                compressionStats: null,
+
+            // 初始化 StreamingBuffer 的 callback（流式内容写入正确的线程）
+            streamingBuffer.setFlushCallback((messageId, content, threadId) => {
+                messageSlice._doAppendToAssistant(messageId, content, threadId)
+            })
+
+            // UI 状态（全局）
+            const uiState: UIState = {
+                contextStats: null,
+                inputPrompt: '',
+                currentSessionId: null,
                 handoffDocument: null,
-                handoffRequired: false,
-                contextSummary: null,
-                isCompacting: false,
-                compressionPhase: 'idle',
-                setCompressionStats: (stats) => {
-                    // 存储到当前线程
-                    const state = get()
-                    const threadId = state.currentThreadId
-                    if (threadId && state.threads[threadId]) {
-                        state.threads[threadId].compressionStats = stats
-                        set({
-                            compressionStats: stats,
-                            threads: { ...state.threads }
-                        })
-                    } else {
-                        set({ compressionStats: stats })
-                    }
-                },
+                setContextStats: (stats) => set({ contextStats: stats }),
+                setInputPrompt: (prompt) => set({ inputPrompt: prompt }),
+                setCurrentSessionId: (id) => set({ currentSessionId: id }),
                 setHandoffDocument: (doc) => set({ handoffDocument: doc }),
-                setHandoffRequired: (required) => set({ handoffRequired: required }),
-                setContextSummary: (summary) => set({ contextSummary: summary }),
-                setIsCompacting: (compacting) => set({ isCompacting: compacting }),
-                setCompressionPhase: (phase) => set({ compressionPhase: phase }),
                 createHandoffSession: () => {
                     const state = get()
                     const handoff = state.handoffDocument
@@ -208,36 +145,33 @@ export const useAgentStore = create<AgentStore>()(
                         return null
                     }
 
-                    // 创建新线程（会自动切换到新线程）
+                    // 创建新线程
                     const newThreadId = threadSlice.createThread()
 
-                    // 构建 handoff 上下文（用于注入到 system prompt）
+                    // 构建 handoff 上下文
                     const handoffContext = buildHandoffContext(handoff)
 
-                    // 不再显示欢迎消息，直接准备自动继续
-                    // 摘要信息会在底部栏的弹窗中显示
-
-                    // 清除 handoff 状态，但保留 compressionStats 用于 UI 显示
-                    set({
-                        handoffDocument: null,
-                        handoffRequired: false,
-                        // 保留 contextSummary 用于底部栏显示
-                        contextSummary: handoff.summary,
+                    // 更新新线程的元数据
+                    set(s => {
+                        const thread = s.threads[newThreadId]
+                        if (!thread) return s
+                        return {
+                            threads: {
+                                ...s.threads,
+                                [newThreadId]: {
+                                    ...thread,
+                                    handoffContext,
+                                    pendingObjective: handoff.summary.objective,
+                                    pendingSteps: handoff.summary.pendingSteps,
+                                    contextSummary: handoff.summary,
+                                }
+                            },
+                            handoffDocument: null,  // 清除 handoff 文档
+                        }
                     })
-
-                    // 存储 handoff 上下文到线程元数据
-                    const threads = get().threads
-                    if (threads[newThreadId]) {
-                        threads[newThreadId].handoffContext = handoffContext
-                        // 存储待完成任务，用于自动继续
-                        threads[newThreadId].pendingObjective = handoff.summary.objective
-                        threads[newThreadId].pendingSteps = handoff.summary.pendingSteps
-                        set({ threads: { ...threads } })
-                    }
 
                     logger.agent.info('[AgentStore] Created handoff session:', newThreadId)
 
-                    // 返回包含自动继续信息的对象
                     return {
                         threadId: newThreadId,
                         autoResume: true,
@@ -248,51 +182,74 @@ export const useAgentStore = create<AgentStore>()(
                 },
             }
 
-            // UI 状态（从 chatSlice 迁移）
-            const uiState: UIState = {
-                contextStats: null,
-                inputPrompt: '',
-                currentSessionId: null,
-                setContextStats: (stats) => set({ contextStats: stats }),
-                setInputPrompt: (prompt) => set({ inputPrompt: prompt }),
-                setCurrentSessionId: (id) => set({ currentSessionId: id }),
-            }
-
-            // 重写 appendToAssistant 使用 StreamingBuffer
-            messageSlice.appendToAssistant = (messageId: string, content: string) => {
-                streamingBuffer.append(messageId, content)
-            }
-
-            // 重写 finalizeAssistant 先刷新缓冲区
+            // 重写 finalizeAssistant 先刷新 StreamingBuffer
             const originalFinalizeAssistant = messageSlice.finalizeAssistant
-            messageSlice.finalizeAssistant = (messageId: string) => {
+            messageSlice.finalizeAssistant = (messageId: string, targetThreadId?: string) => {
                 streamingBuffer.flushNow()
-                originalFinalizeAssistant(messageId)
+                originalFinalizeAssistant(messageId, targetThreadId)
             }
 
-            // 添加内部方法：刷新指定消息的文本缓冲区
+            // 内部方法：刷新文本缓冲区
             const _flushTextBuffer = (_messageId: string) => {
                 streamingBuffer.flushNow()
             }
 
-            // 重写 switchThread：切换线程时重置 UI 状态
-            const originalSwitchThread = threadSlice.switchThread
-            threadSlice.switchThread = (targetThreadId: string) => {
-                originalSwitchThread(targetThreadId)
-                // 切换线程后重置流状态为 idle（新线程默认无运行中任务）
-                // 如果新线程有后台任务在运行，UI会通过其他机制更新
-                streamSlice.setStreamPhase('idle')
-            }
+            // 创建线程绑定的 Store（用于后台任务）
+            const forThread = (threadId: string): ThreadBoundStore => ({
+                threadId,
+
+                // 消息操作
+                addAssistantMessage: (content) =>
+                    messageSlice.addAssistantMessage(content, threadId),
+                appendToAssistant: (messageId, content) => {
+                    // 调用公开方法（经过 StreamingBuffer 缓冲），绑定 threadId
+                    messageSlice.appendToAssistant(messageId, content, threadId)
+                },
+                finalizeAssistant: (messageId) =>
+                    messageSlice.finalizeAssistant(messageId, threadId),
+                finalizeTextBeforeToolCall: (messageId) =>
+                    messageSlice.finalizeTextBeforeToolCall(messageId, threadId),
+                updateMessage: (messageId, updates) =>
+                    messageSlice.updateMessage(messageId, updates, threadId),
+                addToolResult: (toolCallId, name, content, type, rawParams) =>
+                    messageSlice.addToolResult(toolCallId, name, content, type, rawParams, threadId),
+
+                // 工具调用操作
+                addToolCallPart: (messageId, toolCall) =>
+                    messageSlice.addToolCallPart(messageId, toolCall, threadId),
+                updateToolCall: (messageId, toolCallId, updates) =>
+                    messageSlice.updateToolCall(messageId, toolCallId, updates, threadId),
+
+                // 状态操作
+                setStreamState: (state) => threadSlice.setStreamState(state, threadId),
+                setStreamPhase: (phase) => threadSlice.setStreamState({ phase }, threadId),
+                setCompressionStats: (stats) => threadSlice.setCompressionStats(stats, threadId),
+                setContextSummary: (summary) => threadSlice.setContextSummary(summary, threadId),
+                setCompressionPhase: (phase) => threadSlice.setCompressionPhase(phase, threadId),
+                setHandoffRequired: (required) => threadSlice.setHandoffRequired(required, threadId),
+                setIsCompacting: (compacting) => threadSlice.setIsCompacting(compacting, threadId),
+
+                // Reasoning 操作
+                addReasoningPart: (messageId) =>
+                    messageSlice.addReasoningPart(messageId, threadId),
+                updateReasoningPart: (messageId, partId, content, isStreaming) =>
+                    messageSlice.updateReasoningPart(messageId, partId, content, isStreaming, threadId),
+                finalizeReasoningPart: (messageId, partId) =>
+                    messageSlice.finalizeReasoningPart(messageId, partId, threadId),
+
+                // 交互式内容操作
+                setInteractive: (messageId, interactive) =>
+                    messageSlice.setInteractive(messageId, interactive, threadId),
+            })
 
             return {
                 ...threadSlice,
                 ...messageSlice,
                 ...checkpointSlice,
-                ...streamSlice,
                 ...branchSlice,
-                ...contextCompressionState,
                 ...uiState,
                 _flushTextBuffer,
+                forThread,
             }
         },
         {
@@ -304,7 +261,6 @@ export const useAgentStore = create<AgentStore>()(
                 branches: state.branches,
                 activeBranchId: state.activeBranchId,
                 messageCheckpoints: state.messageCheckpoints,
-                compressionStats: state.compressionStats,
             }),
         }
     )
@@ -314,6 +270,7 @@ export const useAgentStore = create<AgentStore>()(
 
 const EMPTY_MESSAGES: ChatMessage[] = []
 const EMPTY_CONTEXT_ITEMS: ContextItem[] = []
+const DEFAULT_STREAM_STATE: StreamState = { phase: 'idle' }
 
 export const selectCurrentThread = (state: AgentStore) => {
     if (!state.currentThreadId) return null
@@ -326,7 +283,11 @@ export const selectMessages = (state: AgentStore) => {
     return thread?.messages || EMPTY_MESSAGES
 }
 
-export const selectStreamState = (state: AgentStore) => state.streamState
+// 从当前线程获取流状态
+export const selectStreamState = (state: AgentStore) => {
+    const thread = selectCurrentThread(state)
+    return thread?.streamState || DEFAULT_STREAM_STATE
+}
 
 export const selectContextItems = (state: AgentStore) => {
     if (!state.currentThreadId) return EMPTY_CONTEXT_ITEMS
@@ -334,11 +295,15 @@ export const selectContextItems = (state: AgentStore) => {
     return thread?.contextItems || EMPTY_CONTEXT_ITEMS
 }
 
-export const selectIsStreaming = (state: AgentStore) =>
-    state.streamState.phase === 'streaming' || state.streamState.phase === 'tool_running'
+export const selectIsStreaming = (state: AgentStore) => {
+    const streamState = selectStreamState(state)
+    return streamState.phase === 'streaming' || streamState.phase === 'tool_running'
+}
 
-export const selectIsAwaitingApproval = (state: AgentStore) =>
-    state.streamState.phase === 'tool_pending'
+export const selectIsAwaitingApproval = (state: AgentStore) => {
+    const streamState = selectStreamState(state)
+    return streamState.phase === 'tool_pending'
+}
 
 export const selectPendingChanges = (state: AgentStore) => state.pendingChanges
 
@@ -350,7 +315,6 @@ export const selectMessageCheckpoints = (state: AgentStore) => state.messageChec
 const EMPTY_BRANCHES: Branch[] = []
 const MAINLINE_BRANCH_ID = '__mainline__'
 
-// 缓存：threadId -> 过滤后的分支数组
 const filteredBranchesCache = new Map<string, { branches: Branch[]; filtered: Branch[] }>()
 
 export const selectBranches = (state: AgentStore) => {
@@ -360,13 +324,11 @@ export const selectBranches = (state: AgentStore) => {
     const allBranches = state.branches[threadId]
     if (!allBranches || allBranches.length === 0) return EMPTY_BRANCHES
 
-    // 检查缓存
     const cached = filteredBranchesCache.get(threadId)
     if (cached && cached.branches === allBranches) {
         return cached.filtered
     }
 
-    // 过滤并缓存
     const filtered = allBranches.filter(b => b.id !== MAINLINE_BRANCH_ID)
     filteredBranchesCache.set(threadId, { branches: allBranches, filtered })
 
@@ -389,23 +351,37 @@ export const selectIsOnBranch = (state: AgentStore) => {
     return state.activeBranchId[threadId] != null
 }
 
+// 从当前线程获取压缩相关状态
 export const selectContextStats = (state: AgentStore) => state.contextStats
 export const selectInputPrompt = (state: AgentStore) => state.inputPrompt
 export const selectCurrentSessionId = (state: AgentStore) => state.currentSessionId
-export const selectCompressionStats = (state: AgentStore) => {
-    // 优先从当前线程读取
-    const threadId = state.currentThreadId
-    if (threadId && state.threads[threadId]?.compressionStats) {
-        return state.threads[threadId].compressionStats
-    }
-    // 降级到全局状态（兼容旧数据）
-    return state.compressionStats
+
+export const selectCompressionStats = (state: AgentStore): CompressionStats | null => {
+    const thread = selectCurrentThread(state)
+    return thread?.compressionStats ?? null
 }
+
 export const selectHandoffDocument = (state: AgentStore) => state.handoffDocument
-export const selectHandoffRequired = (state: AgentStore) => state.handoffRequired
-export const selectContextSummary = (state: AgentStore) => state.contextSummary
-export const selectCompressionPhase = (state: AgentStore) => state.compressionPhase
-export const selectIsCompacting = (state: AgentStore) => state.isCompacting
+
+export const selectHandoffRequired = (state: AgentStore): boolean => {
+    const thread = selectCurrentThread(state)
+    return thread?.handoffRequired ?? false
+}
+
+export const selectContextSummary = (state: AgentStore): StructuredSummary | null => {
+    const thread = selectCurrentThread(state)
+    return thread?.contextSummary ?? null
+}
+
+export const selectCompressionPhase = (state: AgentStore) => {
+    const thread = selectCurrentThread(state)
+    return thread?.compressionPhase ?? 'idle'
+}
+
+export const selectIsCompacting = (state: AgentStore): boolean => {
+    const thread = selectCurrentThread(state)
+    return thread?.isCompacting ?? false
+}
 
 // ===== StreamingBuffer 初始化 =====
 
@@ -418,7 +394,6 @@ streamingBuffer.setFlushCallback((messageId: string, content: string) => {
 
 export async function initializeAgentStore(): Promise<void> {
     try {
-        // 使用类型安全的方式访问 persist API
         const store = useAgentStore as typeof useAgentStore & {
             persist?: { rehydrate: () => Promise<void> }
         }
@@ -430,19 +405,6 @@ export async function initializeAgentStore(): Promise<void> {
         const { initializeTools } = await import('../tools')
         await initializeTools()
         logger.agent.info('[AgentStore] Tools initialized')
-
-        // 监听线程切换，重置压缩状态
-        let lastThreadId = useAgentStore.getState().currentThreadId
-
-        useAgentStore.subscribe((state) => {
-            if (state.currentThreadId !== lastThreadId) {
-                lastThreadId = state.currentThreadId
-                // 重置 handoff 状态（但不重置 compressionStats，它现在存储在线程中）
-                useAgentStore.getState().setHandoffRequired(false)
-                useAgentStore.getState().setHandoffDocument(null)
-                logger.agent.info('[AgentStore] Thread changed, handoff state reset')
-            }
-        })
     } catch (error) {
         logger.agent.error('[AgentStore] Failed to initialize:', error)
     }

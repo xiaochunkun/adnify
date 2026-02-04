@@ -1,47 +1,75 @@
 /**
  * 线程管理 Slice
  * 负责聊天线程的创建、切换、删除
+ * 
+ * 注意：所有线程相关状态都存储在 ChatThread 中，切换只需改变 currentThreadId
  */
 
 import type { StateCreator } from 'zustand'
-import type { ChatThread } from '../../types'
-// 注意：不再使用 contextManager，压缩逻辑在 loop.ts 中处理
+import type { ChatThread, StreamState, CompressionPhase } from '../../types'
+import type { CompressionStats } from '../../core/types'
+import type { StructuredSummary } from '../../context/types'
 
 // ===== 类型定义 =====
 
-export interface ThreadState {
+export interface ThreadStoreState {
     threads: Record<string, ChatThread>
     currentThreadId: string | null
 }
 
 export interface ThreadActions {
+    // 线程管理
     createThread: () => string
     switchThread: (threadId: string) => void
     deleteThread: (threadId: string) => void
     getCurrentThread: () => ChatThread | null
+
+    // 线程状态更新（操作当前或指定线程）
+    setStreamState: (state: Partial<StreamState>, threadId?: string) => void
+    setStreamPhase: (phase: StreamState['phase'], threadId?: string) => void
+    setCompressionStats: (stats: CompressionStats | null, threadId?: string) => void
+    setContextSummary: (summary: StructuredSummary | null, threadId?: string) => void
+    setCompressionPhase: (phase: CompressionPhase, threadId?: string) => void
+    setHandoffRequired: (required: boolean, threadId?: string) => void
+    setIsCompacting: (compacting: boolean, threadId?: string) => void
 }
 
-export type ThreadSlice = ThreadState & ThreadActions
+export type ThreadSlice = ThreadStoreState & ThreadActions
 
 // ===== 辅助函数 =====
 
 const generateId = () => crypto.randomUUID()
 
+/** 创建空线程 - 包含完整初始状态 */
 export const createEmptyThread = (): ChatThread => ({
     id: generateId(),
     createdAt: Date.now(),
     lastModified: Date.now(),
     messages: [],
     contextItems: [],
-    state: {
-        currentCheckpointIdx: null,
-        isStreaming: false,
-    },
+    // 执行状态
+    streamState: { phase: 'idle' },
+    // 压缩状态
+    compressionStats: null,
     contextSummary: null,
-    handoffContext: undefined,
-    pendingObjective: undefined,
-    pendingSteps: undefined,
+    handoffRequired: false,
+    isCompacting: false,
+    compressionPhase: 'idle',
 })
+
+/** 更新指定线程的部分字段 */
+const updateThread = (
+    threads: Record<string, ChatThread>,
+    threadId: string,
+    updates: Partial<ChatThread>
+): Record<string, ChatThread> => {
+    const thread = threads[threadId]
+    if (!thread) return threads
+    return {
+        ...threads,
+        [threadId]: { ...thread, ...updates, lastModified: Date.now() }
+    }
+}
 
 // ===== Slice 创建器 =====
 
@@ -57,69 +85,19 @@ export const createThreadSlice: StateCreator<
 
     // 创建线程
     createThread: () => {
-        const state = get()
-        const currentThreadId = state.currentThreadId
-        
-        // 保存当前线程的压缩状态
-        if (currentThreadId && state.threads[currentThreadId]) {
-            const stateWithCompression = state as ThreadSlice & { contextSummary?: unknown }
-            const currentSummary = stateWithCompression.contextSummary
-            if (currentSummary) {
-                set(s => ({
-                    threads: {
-                        ...s.threads,
-                        [currentThreadId]: {
-                            ...s.threads[currentThreadId],
-                            contextSummary: currentSummary as import('../../context/types').StructuredSummary,
-                        }
-                    }
-                }))
-            }
-        }
-        
-        // 新线程从空白开始
-        
         const thread = createEmptyThread()
-        set(s => ({
-            threads: { ...s.threads, [thread.id]: thread },
+        set(state => ({
+            threads: { ...state.threads, [thread.id]: thread },
             currentThreadId: thread.id,
-            // 新线程没有压缩状态
-            ...(('contextSummary' in s) ? { contextSummary: null, isCompacting: false } : {})
         }))
         return thread.id
     },
 
-    // 切换线程
+    // 切换线程 - 只改变 currentThreadId，无需同步任何状态
     switchThread: (threadId) => {
         const state = get()
-        const currentThreadId = state.currentThreadId
-        
         if (!state.threads[threadId]) return
-        
-        // 保存当前线程的压缩状态
-        if (currentThreadId && state.threads[currentThreadId]) {
-            const stateWithCompression = state as ThreadSlice & { contextSummary?: unknown }
-            const currentSummary = stateWithCompression.contextSummary
-            set(s => ({
-                threads: {
-                    ...s.threads,
-                    [currentThreadId]: {
-                        ...s.threads[currentThreadId],
-                        contextSummary: (currentSummary as import('../../context/types').StructuredSummary) || null,
-                    }
-                }
-            }))
-        }
-        
-        // 切换到目标线程，恢复其压缩状态
-        const targetThread = state.threads[threadId]
-        set({ 
-            currentThreadId: threadId,
-            ...(('contextSummary' in state) ? { 
-                contextSummary: targetThread.contextSummary || null,
-                isCompacting: false 
-            } : {})
-        })
+        set({ currentThreadId: threadId })
     },
 
     // 删除线程
@@ -141,5 +119,75 @@ export const createThreadSlice: StateCreator<
         const state = get()
         if (!state.currentThreadId) return null
         return state.threads[state.currentThreadId] || null
+    },
+
+    // === 线程状态更新方法 ===
+
+    setStreamState: (streamState, threadId) => {
+        const targetId = threadId ?? get().currentThreadId
+        if (!targetId) return
+        set(state => {
+            const thread = state.threads[targetId]
+            if (!thread) return state
+            return {
+                threads: updateThread(state.threads, targetId, {
+                    streamState: { ...thread.streamState, ...streamState }
+                })
+            }
+        })
+    },
+
+    setStreamPhase: (phase, threadId) => {
+        const targetId = threadId ?? get().currentThreadId
+        if (!targetId) return
+        set(state => {
+            const thread = state.threads[targetId]
+            if (!thread) return state
+            return {
+                threads: updateThread(state.threads, targetId, {
+                    streamState: { ...thread.streamState, phase }
+                })
+            }
+        })
+    },
+
+    setCompressionStats: (stats, threadId) => {
+        const targetId = threadId ?? get().currentThreadId
+        if (!targetId) return
+        set(state => ({
+            threads: updateThread(state.threads, targetId, { compressionStats: stats })
+        }))
+    },
+
+    setContextSummary: (summary, threadId) => {
+        const targetId = threadId ?? get().currentThreadId
+        if (!targetId) return
+        set(state => ({
+            threads: updateThread(state.threads, targetId, { contextSummary: summary })
+        }))
+    },
+
+    setCompressionPhase: (phase, threadId) => {
+        const targetId = threadId ?? get().currentThreadId
+        if (!targetId) return
+        set(state => ({
+            threads: updateThread(state.threads, targetId, { compressionPhase: phase })
+        }))
+    },
+
+    setHandoffRequired: (required, threadId) => {
+        const targetId = threadId ?? get().currentThreadId
+        if (!targetId) return
+        set(state => ({
+            threads: updateThread(state.threads, targetId, { handoffRequired: required })
+        }))
+    },
+
+    setIsCompacting: (compacting, threadId) => {
+        const targetId = threadId ?? get().currentThreadId
+        if (!targetId) return
+        set(state => ({
+            threads: updateThread(state.threads, targetId, { isCompacting: compacting })
+        }))
     },
 })

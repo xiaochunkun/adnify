@@ -107,12 +107,12 @@ class AgentClass {
       const llmMessages = await buildLLMMessages(userMessage, contextContent, systemPrompt)
 
       // 5. 创建助手消息并开始流式响应
-      const assistantId = store.addAssistantMessage()
+      const assistantId = store.addAssistantMessage(undefined, threadId || undefined)
       if (threadId) {
         const task = this.runningTasks.get(threadId)
         if (task) task.assistantId = assistantId
       }
-      store.setStreamPhase('streaming')
+      store.setStreamPhase('streaming', threadId || undefined)
 
       // 6. 运行主循环（传递 threadId 实现后台隔离）
       await runLoop(
@@ -347,16 +347,16 @@ class AgentClass {
 
     if (threadId && this.runningTasks.has(threadId)) {
       const task = this.runningTasks.get(threadId)!
-      // Finalize 助手消息
+      // Finalize 助手消息（传入 threadId 确保操作正确的线程）
       if (task.assistantId) {
-        store.finalizeAssistant(task.assistantId)
+        store.finalizeAssistant(task.assistantId, threadId)
       }
       this.runningTasks.delete(threadId)
     }
 
-    // 如果是当前线程，重置流状态
-    if (threadId === store.currentThreadId) {
-      store.setStreamPhase('idle')
+    // 重置该线程的流状态（无论是否是当前线程）
+    if (threadId) {
+      store.setStreamPhase('idle', threadId)
     }
   }
 

@@ -19,43 +19,44 @@ import type {
     ReasoningPart,
     InteractiveContent,
 } from '../../types'
-// 注意：不再使用 contextManager，压缩逻辑在 loop.ts 中处理
+import { streamingBuffer } from '../StreamingBuffer'
 import type { ThreadSlice } from './threadSlice'
 
 // ===== 类型定义 =====
 
 export interface MessageActions {
-    addUserMessage: (content: MessageContent, contextItems?: ContextItem[]) => string
-    addAssistantMessage: (content?: string) => string
-    appendToAssistant: (messageId: string, content: string) => void
-    finalizeAssistant: (messageId: string) => void
-    finalizeTextBeforeToolCall: (messageId: string) => void
-    updateMessage: (messageId: string, updates: Partial<ChatMessage>) => void
-    addToolResult: (toolCallId: string, name: string, content: string, type: ToolResultType, rawParams?: Record<string, unknown>) => string
-    addCheckpoint: (type: 'user_message' | 'tool_edit', fileSnapshots: Record<string, FileSnapshot>) => string
-    clearMessages: () => void
-    deleteMessagesAfter: (messageId: string) => void
-    getMessages: () => ChatMessage[]
+    // 消息操作（支持可选的 targetThreadId，默认使用 currentThreadId）
+    addUserMessage: (content: MessageContent, contextItems?: ContextItem[], targetThreadId?: string) => string
+    addAssistantMessage: (content?: string, targetThreadId?: string) => string
+    appendToAssistant: (messageId: string, content: string, targetThreadId?: string) => void
+    finalizeAssistant: (messageId: string, targetThreadId?: string) => void
+    finalizeTextBeforeToolCall: (messageId: string, targetThreadId?: string) => void
+    updateMessage: (messageId: string, updates: Partial<ChatMessage>, targetThreadId?: string) => void
+    addToolResult: (toolCallId: string, name: string, content: string, type: ToolResultType, rawParams?: Record<string, unknown>, targetThreadId?: string) => string
+    addCheckpoint: (type: 'user_message' | 'tool_edit', fileSnapshots: Record<string, FileSnapshot>, targetThreadId?: string) => string
+    clearMessages: (targetThreadId?: string) => void
+    deleteMessagesAfter: (messageId: string, targetThreadId?: string) => void
+    getMessages: (targetThreadId?: string) => ChatMessage[]
 
     // 工具调用操作
-    addToolCallPart: (messageId: string, toolCall: Omit<ToolCall, 'status'>) => void
-    updateToolCall: (messageId: string, toolCallId: string, updates: Partial<ToolCall>) => void
+    addToolCallPart: (messageId: string, toolCall: Omit<ToolCall, 'status'>, targetThreadId?: string) => void
+    updateToolCall: (messageId: string, toolCallId: string, updates: Partial<ToolCall>, targetThreadId?: string) => void
 
     // Reasoning 操作
-    addReasoningPart: (messageId: string) => string
-    updateReasoningPart: (messageId: string, partId: string, content: string, isStreaming?: boolean) => void
-    finalizeReasoningPart: (messageId: string, partId: string) => void
+    addReasoningPart: (messageId: string, targetThreadId?: string) => string
+    updateReasoningPart: (messageId: string, partId: string, content: string, isStreaming?: boolean, targetThreadId?: string) => void
+    finalizeReasoningPart: (messageId: string, partId: string, targetThreadId?: string) => void
 
     // 交互式内容操作
-    setInteractive: (messageId: string, interactive: InteractiveContent) => void
+    setInteractive: (messageId: string, interactive: InteractiveContent, targetThreadId?: string) => void
 
     // 上下文操作
-    addContextItem: (item: ContextItem) => void
-    removeContextItem: (index: number) => void
-    clearContextItems: () => void
+    addContextItem: (item: ContextItem, targetThreadId?: string) => void
+    removeContextItem: (index: number, targetThreadId?: string) => void
+    clearContextItems: (targetThreadId?: string) => void
 
     // 内部方法
-    _doAppendToAssistant: (messageId: string, content: string) => void
+    _doAppendToAssistant: (messageId: string, content: string, targetThreadId?: string) => void
 }
 
 export type MessageSlice = MessageActions
@@ -133,7 +134,7 @@ export const createMessageSlice: StateCreator<
                         ...thread,
                         messages: [...thread.messages, message],
                         lastModified: Date.now(),
-                        state: { ...thread.state, isStreaming: true },
+                        streamState: { ...thread.streamState, phase: 'streaming' },
                     },
                 },
             }
@@ -145,20 +146,16 @@ export const createMessageSlice: StateCreator<
     /**
      * 追加内容到助手消息
      * 
-     * 注意：此方法在 AgentStore.ts 中被重写，使用 StreamingBuffer 进行节流优化。
+     * 通过 StreamingBuffer 进行节流优化，减少 React 渲染次数。
      * StreamingBuffer 会批量收集内容，然后调用 _doAppendToAssistant 执行实际更新。
-     * 
-     * @see AgentStore.ts - StreamingBuffer 实现
-     * @see _doAppendToAssistant - 实际执行内容追加的方法
      */
-    appendToAssistant: (_messageId, _content) => {
-        // 占位实现 - 在 AgentStore.ts 中被 StreamingBuffer 重写
-        // 直接调用此方法不会有任何效果
+    appendToAssistant: (messageId, content, targetThreadId) => {
+        streamingBuffer.append(messageId, content, targetThreadId)
     },
 
     // 内部方法：实际执行内容追加（由 StreamingBuffer 调用）
-    _doAppendToAssistant: (messageId: string, content: string) => {
-        const threadId = get().currentThreadId
+    _doAppendToAssistant: (messageId: string, content: string, targetThreadId?: string) => {
+        const threadId = targetThreadId || get().currentThreadId
         if (!threadId) return
 
         set(state => {
@@ -203,8 +200,8 @@ export const createMessageSlice: StateCreator<
     },
 
     // 完成助手消息
-    finalizeAssistant: (messageId) => {
-        const threadId = get().currentThreadId
+    finalizeAssistant: (messageId, targetThreadId) => {
+        const threadId = targetThreadId || get().currentThreadId
         if (!threadId) return
 
         set(state => {
@@ -224,7 +221,7 @@ export const createMessageSlice: StateCreator<
                     [threadId]: {
                         ...thread,
                         messages,
-                        state: { ...thread.state, isStreaming: false },
+                        streamState: { ...thread.streamState, phase: 'idle' },
                     },
                 },
             }
@@ -235,8 +232,8 @@ export const createMessageSlice: StateCreator<
      * 在工具调用前结束文本输出
      * 确保工具调用出现在文本之后的正确位置
      */
-    finalizeTextBeforeToolCall: (messageId) => {
-        const threadId = get().currentThreadId
+    finalizeTextBeforeToolCall: (messageId, targetThreadId) => {
+        const threadId = targetThreadId || get().currentThreadId
         if (!threadId) return
 
         set(state => {
@@ -352,7 +349,6 @@ export const createMessageSlice: StateCreator<
             if (!thread) return state
 
             const newMessages = [...thread.messages, message]
-            const checkpointIdx = newMessages.length - 1
 
             return {
                 threads: {
@@ -360,7 +356,6 @@ export const createMessageSlice: StateCreator<
                     [threadId]: {
                         ...thread,
                         messages: newMessages,
-                        state: { ...thread.state, currentCheckpointIdx: checkpointIdx },
                     },
                 },
             }
@@ -396,7 +391,7 @@ export const createMessageSlice: StateCreator<
                 pendingChanges: [],
             }
         })
-        
+
         // 清理工具调用日志（在 useStore 中）
         // 注意：这里需要导入 useStore，但为了避免循环依赖，我们在调用处处理
     },
@@ -494,22 +489,22 @@ export const createMessageSlice: StateCreator<
             const messages = thread.messages.map(msg => {
                 if (msg.id === messageId && msg.role === 'assistant') {
                     const assistantMsg = msg as AssistantMessage
-                    
+
                     // 检查工具调用是否已存在
                     const existingToolCall = assistantMsg.toolCalls?.find(tc => tc.id === toolCallId)
-                    
+
                     if (existingToolCall) {
                         // 更新已存在的工具调用
                         updated = true
-                        
+
                         // 只合并非 undefined 的字段
                         const cleanUpdates = Object.fromEntries(
                             Object.entries(updates).filter(([_, v]) => v !== undefined)
                         ) as Partial<ToolCall>
-                        
+
                         // 创建新的 toolCall 对象（确保引用变化）
                         const updatedToolCall = { ...existingToolCall, ...cleanUpdates }
-                        
+
                         const newParts = assistantMsg.parts.map(part => {
                             if (part.type === 'tool_call' && part.toolCall.id === toolCallId) {
                                 return { ...part, toolCall: updatedToolCall }
@@ -525,7 +520,7 @@ export const createMessageSlice: StateCreator<
                     } else {
                         // 工具调用不存在，添加新的
                         updated = true
-                        
+
                         const newToolCall: ToolCall = {
                             id: toolCallId,
                             name: (updates.name as string) || '',
@@ -682,7 +677,7 @@ export const createMessageSlice: StateCreator<
                     [threadId]: {
                         ...thread,
                         messages,
-                        state: { ...thread.state, isStreaming: false },
+                        streamState: { ...thread.streamState, phase: 'idle' },
                         lastModified: Date.now(),
                     },
                 },
