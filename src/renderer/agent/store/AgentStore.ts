@@ -102,10 +102,10 @@ class StreamingBuffer {
 
     private scheduleFlush(): void {
         if (this.rafId !== null) return
-        
+
         const now = performance.now()
         const elapsed = now - this.lastFlushTime
-        
+
         if (elapsed >= this.FLUSH_INTERVAL) {
             this.rafId = requestAnimationFrame(() => {
                 this.rafId = null
@@ -123,11 +123,11 @@ class StreamingBuffer {
     private flush(): void {
         if (!this.flushCallback || this.buffer.size === 0) return
         this.lastFlushTime = performance.now()
-        
+
         // 取出并清空 buffer
         const updates = new Map(this.buffer)
         this.buffer.clear()
-        
+
         updates.forEach((content, messageId) => {
             if (content) {
                 this.flushCallback!(messageId, content)
@@ -186,7 +186,7 @@ export const useAgentStore = create<AgentStore>()(
                     const threadId = state.currentThreadId
                     if (threadId && state.threads[threadId]) {
                         state.threads[threadId].compressionStats = stats
-                        set({ 
+                        set({
                             compressionStats: stats,
                             threads: { ...state.threads }
                         })
@@ -202,29 +202,29 @@ export const useAgentStore = create<AgentStore>()(
                 createHandoffSession: () => {
                     const state = get()
                     const handoff = state.handoffDocument
-                    
+
                     if (!handoff) {
                         logger.agent.warn('[AgentStore] No handoff document to create session from')
                         return null
                     }
-                    
+
                     // 创建新线程（会自动切换到新线程）
                     const newThreadId = threadSlice.createThread()
-                    
+
                     // 构建 handoff 上下文（用于注入到 system prompt）
                     const handoffContext = buildHandoffContext(handoff)
-                    
+
                     // 不再显示欢迎消息，直接准备自动继续
                     // 摘要信息会在底部栏的弹窗中显示
-                    
+
                     // 清除 handoff 状态，但保留 compressionStats 用于 UI 显示
-                    set({ 
-                        handoffDocument: null, 
+                    set({
+                        handoffDocument: null,
                         handoffRequired: false,
                         // 保留 contextSummary 用于底部栏显示
                         contextSummary: handoff.summary,
                     })
-                    
+
                     // 存储 handoff 上下文到线程元数据
                     const threads = get().threads
                     if (threads[newThreadId]) {
@@ -234,9 +234,9 @@ export const useAgentStore = create<AgentStore>()(
                         threads[newThreadId].pendingSteps = handoff.summary.pendingSteps
                         set({ threads: { ...threads } })
                     }
-                    
+
                     logger.agent.info('[AgentStore] Created handoff session:', newThreadId)
-                    
+
                     // 返回包含自动继续信息的对象
                     return {
                         threadId: newThreadId,
@@ -273,6 +273,15 @@ export const useAgentStore = create<AgentStore>()(
             // 添加内部方法：刷新指定消息的文本缓冲区
             const _flushTextBuffer = (_messageId: string) => {
                 streamingBuffer.flushNow()
+            }
+
+            // 重写 switchThread：切换线程时重置 UI 状态
+            const originalSwitchThread = threadSlice.switchThread
+            threadSlice.switchThread = (targetThreadId: string) => {
+                originalSwitchThread(targetThreadId)
+                // 切换线程后重置流状态为 idle（新线程默认无运行中任务）
+                // 如果新线程有后台任务在运行，UI会通过其他机制更新
+                streamSlice.setStreamPhase('idle')
             }
 
             return {
@@ -347,20 +356,20 @@ const filteredBranchesCache = new Map<string, { branches: Branch[]; filtered: Br
 export const selectBranches = (state: AgentStore) => {
     const threadId = state.currentThreadId
     if (!threadId) return EMPTY_BRANCHES
-    
+
     const allBranches = state.branches[threadId]
     if (!allBranches || allBranches.length === 0) return EMPTY_BRANCHES
-    
+
     // 检查缓存
     const cached = filteredBranchesCache.get(threadId)
     if (cached && cached.branches === allBranches) {
         return cached.filtered
     }
-    
+
     // 过滤并缓存
     const filtered = allBranches.filter(b => b.id !== MAINLINE_BRANCH_ID)
     filteredBranchesCache.set(threadId, { branches: allBranches, filtered })
-    
+
     return filtered
 }
 
@@ -421,10 +430,10 @@ export async function initializeAgentStore(): Promise<void> {
         const { initializeTools } = await import('../tools')
         await initializeTools()
         logger.agent.info('[AgentStore] Tools initialized')
-        
+
         // 监听线程切换，重置压缩状态
         let lastThreadId = useAgentStore.getState().currentThreadId
-        
+
         useAgentStore.subscribe((state) => {
             if (state.currentThreadId !== lastThreadId) {
                 lastThreadId = state.currentThreadId

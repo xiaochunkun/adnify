@@ -42,9 +42,11 @@ const fileCache = new CacheService<string>('AgentFileCache', {
 })
 
 class AgentClass {
-  private abortController: AbortController | null = null
-  private currentAssistantId: string | null = null
-  private isRunning = false
+  /** 运行中的任务（按线程追踪） */
+  private runningTasks: Map<string, {
+    abortController: AbortController
+    assistantId: string
+  }> = new Map()
 
   // ===== 公共 API =====
 
@@ -64,13 +66,14 @@ class AgentClass {
     systemPrompt: string,
     chatMode: WorkMode = 'agent'
   ): Promise<void> {
-    // 防止重复运行
-    if (this.isRunning) {
-      logger.agent.warn('[Agent] Already running, ignoring new request')
+    const store = useAgentStore.getState()
+    const threadId = store.currentThreadId
+
+    // 防止同一线程重复运行
+    if (threadId && this.runningTasks.has(threadId)) {
+      logger.agent.warn('[Agent] Thread already running, ignoring new request')
       return
     }
-
-    const store = useAgentStore.getState()
 
     // 验证 API Key
     if (!config.apiKey) {
@@ -78,8 +81,12 @@ class AgentClass {
       return
     }
 
-    this.isRunning = true
-    this.abortController = new AbortController()
+    const abortController = new AbortController()
+
+    // 记录当前任务
+    if (threadId) {
+      this.runningTasks.set(threadId, { abortController, assistantId: '' })
+    }
 
     try {
       // 1. 准备上下文
@@ -100,19 +107,24 @@ class AgentClass {
       const llmMessages = await buildLLMMessages(userMessage, contextContent, systemPrompt)
 
       // 5. 创建助手消息并开始流式响应
-      this.currentAssistantId = store.addAssistantMessage()
+      const assistantId = store.addAssistantMessage()
+      if (threadId) {
+        const task = this.runningTasks.get(threadId)
+        if (task) task.assistantId = assistantId
+      }
       store.setStreamPhase('streaming')
 
-      // 6. 运行主循环
+      // 6. 运行主循环（传递 threadId 实现后台隔离）
       await runLoop(
         config,
         llmMessages,
         {
           workspacePath,
           chatMode,
-          abortSignal: this.abortController.signal,
+          abortSignal: abortController.signal,
+          threadId,
         },
-        this.currentAssistantId
+        assistantId
       )
     } catch (error) {
       // 统一错误处理
@@ -121,7 +133,7 @@ class AgentClass {
       this.showError(formatErrorMessage(appError))
     } finally {
       // 确保清理资源
-      this.cleanup()
+      this.cleanupTask(threadId)
     }
   }
 
@@ -135,33 +147,39 @@ class AgentClass {
    * - 清理资源
    */
   abort(): void {
-    if (this.abortController) {
-      this.abortController.abort()
-    }
-    api.llm.abort()
-    approvalService.reject()
-
     const store = useAgentStore.getState()
+    const currentThreadId = store.currentThreadId
 
-    // 更新所有运行中的工具状态
-    if (this.currentAssistantId) {
-      const thread = store.getCurrentThread()
-      if (thread) {
-        const msg = thread.messages.find(m => m.id === this.currentAssistantId)
-        if (msg?.role === 'assistant') {
-          const assistantMsg = msg as import('../types').AssistantMessage
-          for (const tc of assistantMsg.toolCalls || []) {
-            if (['running', 'awaiting', 'pending'].includes(tc.status)) {
-              store.updateToolCall(this.currentAssistantId, tc.id, {
-                status: 'error',
-                error: 'Aborted by user',
-              })
+    // 中止当前线程的任务
+    if (currentThreadId && this.runningTasks.has(currentThreadId)) {
+      const task = this.runningTasks.get(currentThreadId)!
+      task.abortController.abort()
+
+      // 更新所有运行中的工具状态
+      if (task.assistantId) {
+        const thread = store.getCurrentThread()
+        if (thread) {
+          const msg = thread.messages.find(m => m.id === task.assistantId)
+          if (msg?.role === 'assistant') {
+            const assistantMsg = msg as import('../types').AssistantMessage
+            for (const tc of assistantMsg.toolCalls || []) {
+              if (['running', 'awaiting', 'pending'].includes(tc.status)) {
+                store.updateToolCall(task.assistantId, tc.id, {
+                  status: 'error',
+                  error: 'Aborted by user',
+                })
+              }
             }
           }
         }
+        store.finalizeAssistant(task.assistantId)
       }
-      store.finalizeAssistant(this.currentAssistantId)
+
+      this.runningTasks.delete(currentThreadId)
     }
+
+    api.llm.abort()
+    approvalService.reject()
 
     // 确保所有流式消息都被终止
     const thread = store.getCurrentThread()
@@ -176,7 +194,7 @@ class AgentClass {
       }
     }
 
-    this.cleanup()
+    store.setStreamPhase('idle')
   }
 
   /**
@@ -212,19 +230,25 @@ class AgentClass {
   getDiagnostics() {
     const { getActiveListenerCount } = require('./stream')
     return {
-      isRunning: this.isRunning,
-      hasAbortController: !!this.abortController,
-      currentAssistantId: this.currentAssistantId,
+      runningTaskCount: this.runningTasks.size,
+      runningThreadIds: Array.from(this.runningTasks.keys()),
       activeListeners: getActiveListenerCount(),
       cacheStats: fileCache.getStats(),
     }
   }
 
   /**
-   * 检查是否正在运行
+   * 检查是否有任务正在运行
    */
   get running(): boolean {
-    return this.isRunning
+    return this.runningTasks.size > 0
+  }
+
+  /**
+   * 检查指定线程是否正在运行
+   */
+  isThreadRunning(threadId: string): boolean {
+    return this.runningTasks.has(threadId)
   }
 
   /**
@@ -315,21 +339,25 @@ class AgentClass {
    * - 用户中止（abort 方法）
    * - 发生错误（finally 块）
    */
-  private cleanup(): void {
+  /**
+   * 清理指定线程的任务资源
+   */
+  private cleanupTask(threadId: string | null): void {
     const store = useAgentStore.getState()
-    
-    // Finalize 当前助手消息
-    if (this.currentAssistantId) {
-      store.finalizeAssistant(this.currentAssistantId)
+
+    if (threadId && this.runningTasks.has(threadId)) {
+      const task = this.runningTasks.get(threadId)!
+      // Finalize 助手消息
+      if (task.assistantId) {
+        store.finalizeAssistant(task.assistantId)
+      }
+      this.runningTasks.delete(threadId)
     }
-    
-    // 重置流状态
-    store.setStreamPhase('idle')
-    
-    // 清理内部状态
-    this.currentAssistantId = null
-    this.abortController = null
-    this.isRunning = false
+
+    // 如果是当前线程，重置流状态
+    if (threadId === store.currentThreadId) {
+      store.setStreamPhase('idle')
+    }
   }
 
   /**
@@ -340,17 +368,17 @@ class AgentClass {
     let h2 = 0x811c9dc5
     const len = str.length
     const mid = len >> 1
-    
+
     for (let i = 0; i < mid; i++) {
       h1 ^= str.charCodeAt(i)
       h1 = Math.imul(h1, 0x01000193)
     }
-    
+
     for (let i = mid; i < len; i++) {
       h2 ^= str.charCodeAt(i)
       h2 = Math.imul(h2, 0x01000193)
     }
-    
+
     return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36)
   }
 }

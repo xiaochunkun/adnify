@@ -19,6 +19,8 @@ export interface ExecutionContext {
   workspacePath: string | null
   chatMode: WorkMode
   abortSignal?: AbortSignal
+  /** 绑定的线程 ID（用于后台任务隔离） */
+  threadId?: string | null
 }
 
 // ===== 工具执行上下文（重新导出 shared 定义） =====
