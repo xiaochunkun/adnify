@@ -1,126 +1,194 @@
 /**
- * 情绪上下文分析器
- * 分析代码上下文、AI交互模式等，提供更智能的情绪检测
+ * 情绪上下文分析器（v2 — 接入真实数据源）
+ *
+ * 从以下来源获取实时数据：
+ *  - useStore           → activeFilePath / openFiles / gitStatus / toolCallLogs / cursorPosition
+ *  - useDiagnosticsStore → errorCount / warningCount / diagnostics Map
+ *  - useAgentStore       → AI 消息历史（thread messages）
+ *  - EventBus           → tool:error / tool:completed / llm:done 等实时事件
  */
 
-import type { CodeContext, BehaviorMetrics, EmotionState } from '../types/emotion'
+import type { CodeContext, EmotionState } from '../types/emotion'
 import { EventBus } from '../core/EventBus'
+import { useStore } from '@/renderer/store'
+import { useDiagnosticsStore } from '@/renderer/services/diagnosticsStore'
+import { useAgentStore, selectMessages } from '@/renderer/agent/store/AgentStore'
+
+// ===== 内部统计结构 =====
+interface AIInteractionRecord {
+  timestamp: number
+  type: 'user_message' | 'assistant_reply' | 'tool_call' | 'tool_error' | 'tool_success'
+  durationMs?: number  // 对话回合用时
+}
+
+interface ErrorRecord {
+  timestamp: number
+  severity: 'error' | 'warning'
+  source: 'diagnostics' | 'tool' | 'llm'
+}
 
 class EmotionContextAnalyzer {
-  private recentFiles: string[] = []
-  private searchHistory: number[] = []
-  private aiInteractionHistory: Array<{
-    timestamp: number
-    type: 'question' | 'suggestion_accepted' | 'suggestion_rejected' | 'command'
-    complexity: 'simple' | 'medium' | 'complex'
-  }> = []
-  private gitActivityHistory: Array<{ timestamp: number; type: 'commit' | 'push' | 'pull' }> = []
-  private errorHistory: Array<{ timestamp: number; type: 'syntax' | 'type' | 'runtime' | 'test' }> = []
+  // ===== 自动采集的历史 =====
+  private aiHistory: AIInteractionRecord[] = []
+  private errorHistory: ErrorRecord[] = []
+  private fileSwitchTimestamps: number[] = []
+
+  // ===== LLM 回合计时 =====
+  private llmStartTime: number | null = null
+
+  // ===== Store 快照缓存（每次 analyzeContext 刷新） =====
+  private lastDiagErrorCount = 0
+  private lastDiagWarnCount = 0
+
+  // ===== 订阅清理 =====
+  private unsubscribers: Array<() => void> = []
+  private initialized = false
+
+  // ===== 初始化：订阅 EventBus + Store 变化 =====
+  init(): void {
+    if (this.initialized) return
+    this.initialized = true
+
+    // 1. 监听 EventBus 的工具/LLM 事件
+    this.unsubscribers.push(
+      EventBus.on('tool:completed', () => {
+        this.recordAI({ type: 'tool_success' })
+      }),
+      EventBus.on('tool:error', () => {
+        this.recordAI({ type: 'tool_error' })
+        this.recordError('tool')
+      }),
+      EventBus.on('llm:start', () => {
+        this.llmStartTime = Date.now()
+      }),
+      EventBus.on('llm:done', () => {
+        const duration = this.llmStartTime ? Date.now() - this.llmStartTime : undefined
+        this.recordAI({ type: 'assistant_reply', durationMs: duration })
+        this.llmStartTime = null
+      }),
+      EventBus.on('llm:error', () => {
+        this.recordError('llm')
+        this.llmStartTime = null
+      }),
+    )
+
+    // 2. 监听主 Store — 文件切换
+    let prevFile = useStore.getState().activeFilePath
+    this.unsubscribers.push(
+      useStore.subscribe((state) => {
+        if (state.activeFilePath && state.activeFilePath !== prevFile) {
+          prevFile = state.activeFilePath
+          this.fileSwitchTimestamps.push(Date.now())
+          // 裁剪旧时间戳
+          const cutoff = Date.now() - 60 * 60 * 1000
+          while (this.fileSwitchTimestamps.length > 0 && this.fileSwitchTimestamps[0] < cutoff) {
+            this.fileSwitchTimestamps.shift()
+          }
+        }
+      }),
+    )
+
+    // 3. 监听诊断 Store — 错误/警告变化
+    this.unsubscribers.push(
+      useDiagnosticsStore.subscribe((state) => {
+        const { errorCount, warningCount } = state
+        // 新增错误时记录
+        if (errorCount > this.lastDiagErrorCount) {
+          const newErrors = errorCount - this.lastDiagErrorCount
+          for (let i = 0; i < newErrors; i++) {
+            this.recordError('diagnostics', 'error')
+          }
+        }
+        if (warningCount > this.lastDiagWarnCount) {
+          const newWarns = warningCount - this.lastDiagWarnCount
+          for (let i = 0; i < newWarns; i++) {
+            this.recordError('diagnostics', 'warning')
+          }
+        }
+        this.lastDiagErrorCount = errorCount
+        this.lastDiagWarnCount = warningCount
+      }),
+    )
+
+    // 4. 监听 AgentStore — 用户发送消息
+    let prevMsgCount = 0
+    this.unsubscribers.push(
+      useAgentStore.subscribe((state) => {
+        const messages = selectMessages(state)
+        if (messages.length > prevMsgCount) {
+          // 新增的消息
+          const newMessages = messages.slice(prevMsgCount)
+          for (const msg of newMessages) {
+            if (msg.role === 'user') {
+              this.recordAI({ type: 'user_message' })
+            }
+          }
+          prevMsgCount = messages.length
+        }
+      }),
+    )
+  }
 
   /**
-   * 分析代码上下文
+   * 清理所有订阅
    */
-  async analyzeContext(metrics: BehaviorMetrics): Promise<CodeContext | null> {
+  destroy(): void {
+    for (const unsub of this.unsubscribers) unsub()
+    this.unsubscribers = []
+    this.initialized = false
+  }
+
+  // ===== 核心分析方法 =====
+
+  /**
+   * 分析当前代码上下文（从真实数据源读取）
+   */
+  analyzeContext(): CodeContext | null {
     try {
-      const currentFile = this.getCurrentFile()
+      const mainState = useStore.getState()
+      const diagState = useDiagnosticsStore.getState()
+
+      // 当前文件
+      const currentFile = mainState.activeFilePath || ''
       if (!currentFile) return null
 
-      const fileType = this.getFileType(currentFile)
-      const projectType = await this.detectProjectType()
-      
-      // 分析代码复杂度（简化实现）
-      const codeComplexity = await this.analyzeCodeComplexity(currentFile)
-      
-      // 检查错误
-      const { hasErrors, errorType } = await this.checkErrors()
-      
-      // Git状态
-      const gitStatus = await this.getGitStatus()
-      const recentCommits = this.getRecentCommits(60 * 60 * 1000) // 1小时
-      
-      // 搜索模式
-      const searchQueries = this.getRecentSearchCount(60 * 60 * 1000)
-      
-      // AI交互模式
-      const aiInteractions = this.analyzeAIInteractions(60 * 60 * 1000)
+      const fileType = this.classifyFile(currentFile)
+      const projectType = this.detectProjectType(mainState.openFiles)
+
+      // 代码复杂度 — 基于打开文件数量 + 文件内容长度
+      const codeComplexity = this.estimateComplexity(mainState)
+
+      // 诊断错误
+      const hasErrors = diagState.errorCount > 0 || diagState.warningCount > 0
+      const errorType = this.classifyErrorType(diagState.diagnostics, currentFile)
+
+      // Git 状态
+      const gitStatus = this.readGitStatus(mainState.gitStatus)
+      const recentCommits = 0 // TODO: 可从 git log 获取，暂不阻塞
+
+      // 文件切换频率（最近15分钟）
+      const recentSwitches = this.countRecent(this.fileSwitchTimestamps, 15 * 60 * 1000)
+
+      // AI 交互分析
+      const aiInteractions = this.summarizeAIInteractions(30 * 60 * 1000) // 最近30分钟
 
       return {
         currentFile,
         fileType,
         projectType,
-        recentFiles: this.recentFiles.slice(-10),
+        recentFiles: (mainState.openFiles || []).map((f: { path: string }) => f.path).slice(0, 10),
         codeComplexity,
         hasErrors,
         errorType,
         gitStatus,
         recentCommits,
-        searchQueries,
+        searchQueries: recentSwitches, // 用文件切换数代替搜索次数（相关性高）
         aiInteractions,
       }
     } catch (error) {
       console.warn('[EmotionContextAnalyzer] Failed to analyze context:', error)
       return null
     }
-  }
-
-  /**
-   * 记录文件切换
-   */
-  recordFileSwitch(filePath: string): void {
-    this.recentFiles.push(filePath)
-    if (this.recentFiles.length > 20) {
-      this.recentFiles.shift()
-    }
-  }
-
-  /**
-   * 记录搜索
-   */
-  recordSearch(): void {
-    this.searchHistory.push(Date.now())
-    // 只保留最近1小时
-    const oneHourAgo = Date.now() - 60 * 60 * 1000
-    this.searchHistory = this.searchHistory.filter(t => t > oneHourAgo)
-  }
-
-  /**
-   * 记录AI交互
-   */
-  recordAIInteraction(type: 'question' | 'suggestion_accepted' | 'suggestion_rejected' | 'command', complexity: 'simple' | 'medium' | 'complex' = 'medium'): void {
-    this.aiInteractionHistory.push({
-      timestamp: Date.now(),
-      type,
-      complexity,
-    })
-    // 只保留最近2小时
-    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000
-    this.aiInteractionHistory = this.aiInteractionHistory.filter(h => h.timestamp > twoHoursAgo)
-  }
-
-  /**
-   * 记录Git活动
-   */
-  recordGitActivity(type: 'commit' | 'push' | 'pull'): void {
-    this.gitActivityHistory.push({
-      timestamp: Date.now(),
-      type,
-    })
-    // 只保留最近24小时
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000
-    this.gitActivityHistory = this.gitActivityHistory.filter(h => h.timestamp > oneDayAgo)
-  }
-
-  /**
-   * 记录错误
-   */
-  recordError(type: 'syntax' | 'type' | 'runtime' | 'test'): void {
-    this.errorHistory.push({
-      timestamp: Date.now(),
-      type,
-    })
-    // 只保留最近1小时
-    const oneHourAgo = Date.now() - 60 * 60 * 1000
-    this.errorHistory = this.errorHistory.filter(e => e.timestamp > oneHourAgo)
   }
 
   /**
@@ -132,173 +200,248 @@ class EmotionContextAnalyzer {
     context: CodeContext | null
   ): { state: EmotionState; intensity: number; confidence: number; suggestions: string[] } {
     if (!context) {
-      return { state: baseState, intensity: baseIntensity, confidence: 0.7, suggestions: [] }
+      return { state: baseState, intensity: baseIntensity, confidence: 0.5, suggestions: [] }
     }
 
     let adjustedState = baseState
     let adjustedIntensity = baseIntensity
-    let confidence = 0.8
+    let confidence = 0.75
     const suggestions: string[] = []
 
-    // 1. AI交互模式分析
-    if (context.aiInteractions.count > 5 && context.aiInteractions.rejectionRate > 0.5) {
-      // 频繁拒绝AI建议 = 可能困惑或沮丧
-      if (baseState === 'focused') adjustedState = 'frustrated'
-      adjustedIntensity = Math.min(adjustedIntensity + 0.2, 1)
-      suggestions.push('看起来你在尝试不同的方法，需要我帮你梳理一下思路吗？')
-    } else if (context.aiInteractions.count > 3 && context.aiInteractions.rejectionRate < 0.2) {
-      // 频繁接受AI建议 = 流畅状态
-      if (baseState === 'focused') adjustedState = 'flow'
-      adjustedIntensity = Math.min(adjustedIntensity + 0.15, 1)
-    }
-
-    // 2. 错误类型分析
+    // —————— 1. 诊断错误信号（来自真实 LSP 数据） ——————
     if (context.hasErrors) {
+      const errorBoost = context.errorType === 'syntax' ? 0.35 : 0.25
       if (context.errorType === 'syntax') {
-        // 语法错误 = 可能沮丧
-        if (baseState !== 'frustrated') adjustedState = 'frustrated'
-        adjustedIntensity = Math.min(adjustedIntensity + 0.3, 1)
-        suggestions.push('语法错误通常很容易解决，让我帮你检查一下？')
+        adjustedState = this.nudgeState(adjustedState, 'frustrated', 0.6)
+        adjustedIntensity = Math.min(adjustedIntensity + errorBoost, 1)
+        suggestions.push('检测到语法错误，让 AI 帮你快速定位？')
       } else if (context.errorType === 'type') {
-        // 类型错误 = 可能在思考
-        if (baseState === 'focused') adjustedState = 'stressed'
+        adjustedState = this.nudgeState(adjustedState, 'stressed', 0.5)
+        adjustedIntensity = Math.min(adjustedIntensity + errorBoost, 1)
+        suggestions.push('类型错误有时候很烦人，需要帮忙梳理一下类型关系吗？')
+      }
+      confidence += 0.1
+    }
+
+    // —————— 2. AI 交互模式（来自真实消息历史） ——————
+    const ai = context.aiInteractions
+    if (ai.count > 0) {
+      const toolErrorRate = this.getRecentToolErrorRate(30 * 60 * 1000)
+      
+      if (toolErrorRate > 0.4) {
+        // 工具频繁失败 = 环境不顺
+        adjustedState = this.nudgeState(adjustedState, 'frustrated', 0.5)
         adjustedIntensity = Math.min(adjustedIntensity + 0.2, 1)
-      } else if (context.errorType === 'test') {
-        // 测试失败 = 可能专注调试
-        if (baseState === 'neutral') adjustedState = 'focused'
-        suggestions.push('测试失败是发现问题的好机会，需要我帮你分析吗？')
+        suggestions.push('AI 工具执行遇到一些困难，要检查一下工具配置吗？')
       }
-    }
-
-    // 3. 文件类型模式
-    if (context.fileType === 'test') {
-      // 写测试 = 通常更自信
-      if (baseState === 'focused') adjustedIntensity = Math.min(adjustedIntensity + 0.1, 1)
-    } else if (context.fileType === 'config') {
-      // 配置文件 = 可能更谨慎
-      if (baseState === 'neutral') adjustedState = 'focused'
-    }
-
-    // 4. Git活动模式
-    if (context.recentCommits > 3) {
-      // 频繁提交 = 兴奋或专注
-      if (baseState === 'focused' || baseState === 'excited') {
+      
+      if (ai.count > 8 && ai.avgResponseTime > 5000) {
+        // 高频对话 + 回复慢 = 可能在复杂问题上挣扎
+        adjustedState = this.nudgeState(adjustedState, 'stressed', 0.4)
         adjustedIntensity = Math.min(adjustedIntensity + 0.15, 1)
+      } else if (ai.count > 5 && ai.avgResponseTime < 2000) {
+        // 高频对话 + 快速回复 = 流畅状态
+        adjustedState = this.nudgeState(adjustedState, 'flow', 0.3)
       }
-      suggestions.push('频繁提交说明进展顺利，继续保持！')
-    } else if (context.recentCommits === 0 && context.gitStatus === 'modified') {
-      // 有修改但没提交 = 可能卡住
-      if (baseState === 'focused') adjustedState = 'stressed'
-      suggestions.push('代码修改很多但还没提交？需要我帮你review一下吗？')
+
+      confidence += 0.08
     }
 
-    // 5. 搜索模式
-    if (context.searchQueries > 10) {
-      // 频繁搜索 = 可能困惑
-      if (baseState === 'focused') adjustedState = 'frustrated'
-      adjustedIntensity = Math.min(adjustedIntensity + 0.2, 1)
-      suggestions.push('频繁搜索可能说明遇到了问题，需要我帮你找答案吗？')
+    // —————— 3. Git 状态（来自真实 git 数据） ——————
+    if (context.gitStatus === 'conflict') {
+      adjustedState = this.nudgeState(adjustedState, 'stressed', 0.7)
+      adjustedIntensity = Math.min(adjustedIntensity + 0.3, 1)
+      suggestions.push('检测到 Git 冲突，需要帮忙解决吗？')
+      confidence += 0.1
+    } else if (context.gitStatus === 'modified') {
+      // 有修改但状态正常，不强制改变
+      confidence += 0.05
     }
 
-    // 6. 代码复杂度
-    if (context.codeComplexity > 0.8) {
-      // 高复杂度 = 可能压力大
-      if (baseState === 'focused') adjustedState = 'stressed'
+    // —————— 4. 文件类型影响 ——————
+    if (context.fileType === 'test') {
+      // 写测试文件时往往更有条理
+      adjustedState = this.nudgeState(adjustedState, 'focused', 0.2)
+    } else if (context.fileType === 'config') {
+      // 配置文件 = 可能在排查问题
+      if (adjustedState === 'neutral') adjustedState = 'focused'
+    }
+
+    // —————— 5. 代码复杂度 ——————
+    if (context.codeComplexity > 0.7) {
+      adjustedState = this.nudgeState(adjustedState, 'stressed', 0.3)
+      adjustedIntensity = Math.min(adjustedIntensity + 0.1, 1)
+      suggestions.push('当前工作负载较高，适当休息可以提高效率')
+    }
+
+    // —————— 6. 频繁切换文件（来自真实 store 订阅） ——————
+    if (context.searchQueries > 8) {
+      adjustedState = this.nudgeState(adjustedState, 'stressed', 0.4)
       adjustedIntensity = Math.min(adjustedIntensity + 0.15, 1)
-      suggestions.push('这段代码复杂度较高，考虑拆分成更小的函数？')
+      suggestions.push('频繁切换文件？试试让 AI 帮你跨文件搜索')
     }
 
-    // 提高置信度（有上下文信息）
-    confidence = Math.min(confidence + 0.1, 0.95)
+    confidence = Math.min(confidence, 0.95)
 
     return {
       state: adjustedState,
-      intensity: adjustedIntensity,
+      intensity: Math.max(adjustedIntensity, 0),
       confidence,
-      suggestions: suggestions.slice(0, 3), // 最多3条建议
+      suggestions: suggestions.slice(0, 3),
     }
   }
 
-  // ===== 私有辅助方法 =====
+  // ===== 数据统计辅助 =====
 
-  private getCurrentFile(): string {
-    // 从编辑器获取当前文件（简化实现）
-    // 实际应该从编辑器API获取
-    return ''
+  /**
+   * 获取最近时间窗口内的工具错误率
+   */
+  getRecentToolErrorRate(windowMs: number): number {
+    const cutoff = Date.now() - windowMs
+    const recentAI = this.aiHistory.filter(r => r.timestamp > cutoff)
+    const toolCalls = recentAI.filter(r => r.type === 'tool_success' || r.type === 'tool_error')
+    if (toolCalls.length === 0) return 0
+    const errors = toolCalls.filter(r => r.type === 'tool_error').length
+    return errors / toolCalls.length
   }
 
-  private getFileType(filePath: string): string {
-    const ext = filePath.split('.').pop()?.toLowerCase() || ''
-    if (ext.includes('test') || ext.includes('spec')) return 'test'
-    if (['json', 'yaml', 'yml', 'toml', 'ini'].includes(ext)) return 'config'
-    if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) return 'code'
-    return 'other'
-  }
-
-  private async detectProjectType(): Promise<string> {
-    // 检测项目类型（简化实现）
-    // 实际应该检查package.json、requirements.txt等
-    return 'unknown'
-  }
-
-  private async analyzeCodeComplexity(filePath: string): Promise<number> {
-    // 分析代码复杂度（简化实现）
-    // 实际可以使用AST分析、圈复杂度等
-    return 0.5
-  }
-
-  private async checkErrors(): Promise<{ hasErrors: boolean; errorType?: 'syntax' | 'type' | 'runtime' | 'test' }> {
-    // 检查当前是否有错误（简化实现）
-    // 实际应该从LSP或编辑器获取
-    return { hasErrors: false }
-  }
-
-  private async getGitStatus(): Promise<'clean' | 'modified' | 'conflict'> {
-    // 获取Git状态（简化实现）
-    return 'clean'
-  }
-
-  private getRecentCommits(timeWindow: number): number {
-    const cutoff = Date.now() - timeWindow
-    return this.gitActivityHistory.filter(h => h.timestamp > cutoff && h.type === 'commit').length
-  }
-
-  private getRecentSearchCount(timeWindow: number): number {
-    const cutoff = Date.now() - timeWindow
-    return this.searchHistory.filter(t => t > cutoff).length
-  }
-
-  private analyzeAIInteractions(timeWindow: number): CodeContext['aiInteractions'] {
-    const cutoff = Date.now() - timeWindow
-    const recent = this.aiInteractionHistory.filter(h => h.timestamp > cutoff)
-    
-    const count = recent.length
-    const accepted = recent.filter(h => h.type === 'suggestion_accepted').length
-    const rejected = recent.filter(h => h.type === 'suggestion_rejected').length
-    const rejectionRate = count > 0 ? rejected / count : 0
-    
-    // 计算平均复杂度
-    const complexities = recent.map(h => {
-      if (h.complexity === 'simple') return 1
-      if (h.complexity === 'medium') return 2
-      return 3
-    })
-    const avgComplexity = complexities.length > 0
-      ? complexities.reduce((a, b) => a + b, 0) / complexities.length
-      : 2
-    
-    const questionComplexity: 'simple' | 'medium' | 'complex' =
-      avgComplexity < 1.5 ? 'simple' : avgComplexity < 2.5 ? 'medium' : 'complex'
-
-    // 计算平均响应时间（简化，实际应该记录）
-    const avgResponseTime = 2000
-
+  /**
+   * 获取最近时间窗口内的诊断错误数
+   */
+  getRecentDiagnosticErrors(windowMs: number): { errors: number; warnings: number } {
+    const cutoff = Date.now() - windowMs
+    const recent = this.errorHistory.filter(r => r.timestamp > cutoff && r.source === 'diagnostics')
     return {
-      count,
-      avgResponseTime,
-      rejectionRate,
-      questionComplexity,
+      errors: recent.filter(r => r.severity === 'error').length,
+      warnings: recent.filter(r => r.severity === 'warning').length,
     }
+  }
+
+  /**
+   * 获取最近的 AI 交互摘要
+   */
+  private summarizeAIInteractions(windowMs: number): CodeContext['aiInteractions'] {
+    const cutoff = Date.now() - windowMs
+    const recent = this.aiHistory.filter(r => r.timestamp > cutoff)
+
+    const count = recent.length
+    const replies = recent.filter(r => r.type === 'assistant_reply')
+    const avgResponseTime = replies.length > 0
+      ? replies.reduce((sum, r) => sum + (r.durationMs || 0), 0) / replies.length
+      : 0
+
+    const toolErrors = recent.filter(r => r.type === 'tool_error').length
+    const toolTotal = recent.filter(r => r.type === 'tool_error' || r.type === 'tool_success').length
+    const rejectionRate = toolTotal > 0 ? toolErrors / toolTotal : 0
+
+    // 根据消息量推断复杂度
+    const userMsgs = recent.filter(r => r.type === 'user_message').length
+    const questionComplexity: 'simple' | 'medium' | 'complex' =
+      userMsgs > 10 ? 'complex' : userMsgs > 4 ? 'medium' : 'simple'
+
+    return { count, avgResponseTime, rejectionRate, questionComplexity }
+  }
+
+  // ===== 数据分类辅助 =====
+
+  private classifyFile(filePath: string): string {
+    const lower = filePath.toLowerCase()
+    if (lower.includes('.test.') || lower.includes('.spec.') || lower.includes('__tests__'))
+      return 'test'
+    if (lower.endsWith('.json') || lower.endsWith('.yaml') || lower.endsWith('.yml') ||
+        lower.endsWith('.toml') || lower.endsWith('.env') || lower.includes('config'))
+      return 'config'
+    if (lower.endsWith('.md') || lower.endsWith('.txt')) return 'doc'
+    if (lower.endsWith('.css') || lower.endsWith('.scss') || lower.endsWith('.less')) return 'style'
+    return 'code'
+  }
+
+  private detectProjectType(openFiles: Array<{ path: string }> | undefined): string {
+    if (!openFiles || openFiles.length === 0) return 'unknown'
+    const paths = openFiles.map(f => f.path.toLowerCase())
+    if (paths.some(p => p.includes('.tsx') || p.includes('.jsx'))) return 'react'
+    if (paths.some(p => p.includes('.vue'))) return 'vue'
+    if (paths.some(p => p.includes('.py'))) return 'python'
+    if (paths.some(p => p.includes('.go'))) return 'go'
+    if (paths.some(p => p.includes('.rs'))) return 'rust'
+    return 'typescript'
+  }
+
+  private estimateComplexity(state: { openFiles?: Array<{ path: string; content?: string }> }): number {
+    const files = state.openFiles || []
+    // 综合：打开文件数 + 文件内容长度
+    const fileCountScore = Math.min(files.length / 15, 1) // 15个文件 = 满分
+    const totalSize = files.reduce((sum, f) => sum + ((f as { content?: string }).content?.length || 0), 0)
+    const sizeScore = Math.min(totalSize / 50000, 1) // 50K字符 = 满分
+    return fileCountScore * 0.4 + sizeScore * 0.6
+  }
+
+  private classifyErrorType(
+    diagnostics: Map<string, Array<{ severity?: number }>>,
+    currentFile: string
+  ): 'syntax' | 'type' | 'runtime' | 'test' | undefined {
+    // 优先看当前文件的诊断
+    const fileDiags = diagnostics.get(currentFile) || diagnostics.get(`file://${currentFile}`) || []
+    if (fileDiags.length === 0) {
+      // 任何文件有错误
+      let hasAny = false
+      diagnostics.forEach(diags => { if (diags.some(d => d.severity === 1)) hasAny = true })
+      return hasAny ? 'type' : undefined
+    }
+
+    const errors = fileDiags.filter(d => d.severity === 1)
+    if (errors.length === 0) return undefined
+
+    // 简单分类：当前文件是测试文件就标记为 test，否则默认 type
+    if (currentFile.toLowerCase().includes('.test.') || currentFile.toLowerCase().includes('.spec.'))
+      return 'test'
+    return 'type'
+  }
+
+  private readGitStatus(
+    gitStatus: { hasConflicts?: boolean; unstaged?: unknown[]; staged?: unknown[] } | null | undefined
+  ): 'clean' | 'modified' | 'conflict' {
+    if (!gitStatus) return 'clean'
+    if (gitStatus.hasConflicts) return 'conflict'
+    const hasChanges =
+      (Array.isArray(gitStatus.unstaged) && gitStatus.unstaged.length > 0) ||
+      (Array.isArray(gitStatus.staged) && gitStatus.staged.length > 0)
+    return hasChanges ? 'modified' : 'clean'
+  }
+
+  // ===== 记录辅助 =====
+
+  private recordAI(record: Omit<AIInteractionRecord, 'timestamp'>): void {
+    this.aiHistory.push({ ...record, timestamp: Date.now() })
+    this.pruneByTime(this.aiHistory, 2 * 60 * 60 * 1000) // 保留2小时
+  }
+
+  private recordError(source: ErrorRecord['source'], severity: ErrorRecord['severity'] = 'error'): void {
+    this.errorHistory.push({ timestamp: Date.now(), severity, source })
+    this.pruneByTime(this.errorHistory, 60 * 60 * 1000) // 保留1小时
+  }
+
+  private pruneByTime<T extends { timestamp: number }>(arr: T[], windowMs: number): void {
+    const cutoff = Date.now() - windowMs
+    while (arr.length > 0 && arr[0].timestamp < cutoff) arr.shift()
+  }
+
+  private countRecent(timestamps: number[], windowMs: number): number {
+    const cutoff = Date.now() - windowMs
+    return timestamps.filter(t => t > cutoff).length
+  }
+
+  /**
+   * 柔性推动状态转换 —— 只在优势足够时切换
+   */
+  private nudgeState(
+    current: EmotionState,
+    target: EmotionState,
+    strength: number
+  ): EmotionState {
+    if (current === target) return current
+    // strength > 0.5 才强制切换，否则保持原状态
+    return strength > 0.5 ? target : current
   }
 }
 

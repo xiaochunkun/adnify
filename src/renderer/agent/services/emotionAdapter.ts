@@ -345,7 +345,7 @@ class EmotionAdapter {
     // 应用各项适配
     this.applyThemeAdaptation(adaptation.theme)
     this.applyUIAdaptation(adaptation.ui)
-    this.applyAIAdaptation(adaptation.ai, detection.state)
+    this.applyAIAdaptation(adaptation.ai, detection)
     this.applySoundAdaptation(adaptation.sound)
     this.setupBreakReminders(adaptation.break, detection.state)
 
@@ -410,29 +410,39 @@ class EmotionAdapter {
 
   private applyAIAdaptation(
     _ai: EnvironmentAdaptation['ai'],
-    state: EmotionState
+    detection: EmotionDetection
   ): void {
-    // 更新 AI 配置（简化实现）
-    // 未来可以在这里根据 ai.proactivity, ai.tone, ai.suggestionFrequency 调整 AI 行为
-    // const aiConfig = { proactivity, tone, suggestionFrequency }
+    const state = detection.state
 
-    // 发送情绪感知消息（如果是需要鼓励的状态）
-    if (state !== 'neutral' && state !== 'flow') {
-      const messages = EMOTION_MESSAGES[state]
-      if (messages.length > 0) {
-        // 随机选择一条消息，避免重复
-        const randomIndex = Math.floor(Math.random() * messages.length)
-        const message = messages[randomIndex]
-        
-        // 延迟显示，避免打断工作
-        setTimeout(() => {
-          EventBus.emit({
-            type: 'emotion:message',
-            message,
-            state,
-          })
-        }, 3000)
-      }
+    // 心流 / 中性状态不发消息
+    if (state === 'neutral' || state === 'flow') return
+
+    // 优先使用上下文分析器产生的真实建议
+    const contextSuggestions = detection.suggestions || []
+    if (contextSuggestions.length > 0) {
+      // 延迟显示，避免打断工作
+      setTimeout(() => {
+        EventBus.emit({
+          type: 'emotion:message',
+          message: contextSuggestions[0],
+          state,
+        })
+      }, 2000)
+      return
+    }
+
+    // 没有上下文建议时退回到通用消息
+    const messages = EMOTION_MESSAGES[state]
+    if (messages.length > 0) {
+      const randomIndex = Math.floor(Math.random() * messages.length)
+      const message = messages[randomIndex]
+      setTimeout(() => {
+        EventBus.emit({
+          type: 'emotion:message',
+          message,
+          state,
+        })
+      }, 3000)
     }
   }
 

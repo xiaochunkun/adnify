@@ -1,10 +1,15 @@
 /**
- * 情绪检测引擎
- * 通过分析开发者行为模式检测情绪状态
+ * 情绪检测引擎 v2
+ *
+ * 变化：
+ *  - 每次分析周期从 emotionContextAnalyzer 获取真实上下文（诊断、Git、AI对话）
+ *  - 基础行为指标 + 上下文信号混合打分
+ *  - context.suggestions 直接附加到检测结果
  */
 
 import { logger } from '@utils/Logger'
 import { EventBus } from '../core/EventBus'
+import { emotionContextAnalyzer } from './emotionContextAnalyzer'
 import type {
   EmotionState,
   EmotionDetection,
@@ -14,8 +19,8 @@ import type {
 } from '../types/emotion'
 
 // 检测窗口配置
-const DETECTION_WINDOW = 15000   // 15秒分析窗口（原来30秒太慢）
-const SAMPLE_INTERVAL = 5000     // 每5秒采样一次指标
+const DETECTION_WINDOW = 12000   // 12秒分析窗口（比15s更快响应）
+const SAMPLE_INTERVAL = 4000     // 每4秒采样一次指标
 const METRICS_BUFFER_SIZE = 100
 const HISTORY_LIMIT = 1440       // 保存24小时的历史
 
@@ -62,14 +67,17 @@ class EmotionDetectionEngine {
     if (this.isRunning) return
     this.isRunning = true
 
+    // 初始化上下文分析器（订阅 Store / EventBus）
+    emotionContextAnalyzer.init()
+
     this.setupEventListeners()
     this.startSampling()
     this.startPeriodicAnalysis()
 
-    // 立即发射初始状态，不让 UI 等 15 秒
+    // 立即发射初始状态，不让 UI 等
     this.emitInitialState()
 
-    logger.agent.info('[EmotionEngine] Started')
+    logger.agent.info('[EmotionEngine] Started (v2 — real data)')
   }
 
   /**
@@ -79,6 +87,7 @@ class EmotionDetectionEngine {
     if (!this.isRunning) return
     this.isRunning = false
     this.cleanup()
+    emotionContextAnalyzer.destroy()
     logger.agent.info('[EmotionEngine] Stopped')
   }
 
@@ -182,11 +191,9 @@ class EmotionDetectionEngine {
   }
 
   /**
-   * 定期采样（每5秒创建一个指标快照）
-   * 这是关键！确保分析窗口内有足够的数据点
+   * 定期采样（每4秒创建一个指标快照）
    */
   private startSampling(): void {
-    // 立即创建第一个指标块
     this.flushCountersToMetrics()
 
     this.samplingTimer = setInterval(() => {
@@ -200,8 +207,8 @@ class EmotionDetectionEngine {
   private flushCountersToMetrics(): void {
     const metrics: BehaviorMetrics = {
       timestamp: Date.now(),
-      typingSpeed: 0,  // 在聚合时计算
-      errorRate: 0,     // 在聚合时计算
+      typingSpeed: 0,
+      errorRate: 0,
       activeTypingTime: this.isTyping ? Date.now() : 0,
       pauseDuration: this.getCurrentPauseDuration(),
       keystrokes: this.liveCounters.keystrokes,
@@ -238,12 +245,10 @@ class EmotionDetectionEngine {
 
   private handleTypingStart(): void {
     this.isTyping = true
-    this.pauseStartTime = null  // 停止暂停计时
+    this.pauseStartTime = null
 
-    // 清除之前的打字停止检测
     if (this.typingTimer) clearTimeout(this.typingTimer)
 
-    // 2秒无输入 → 视为停顿
     this.typingTimer = setTimeout(() => {
       this.isTyping = false
       this.handlePause()
@@ -278,6 +283,7 @@ class EmotionDetectionEngine {
         value: 0,
         description: 'Session just started',
       }],
+      suggestions: ['欢迎回来！准备好开始高效编码了吗？'],
     }
 
     this.currentState = detection
@@ -287,17 +293,44 @@ class EmotionDetectionEngine {
     EventBus.emit({ type: 'emotion:changed', emotion: detection })
   }
 
+  /**
+   * 核心分析流程 — 行为指标 + 真实上下文混合
+   */
   private analyzeAndDetect(): void {
     const windowStart = Date.now() - DETECTION_WINDOW
     const recentMetrics = this.metricsBuffer.filter(m => m.timestamp > windowStart)
 
-    // 至少需要1个指标点（不再要求2个）
     if (recentMetrics.length === 0) return
 
     const aggregated = this.aggregateMetrics(recentMetrics)
-    const detection = this.detectEmotion(aggregated)
 
-    // 始终更新 currentState（但只在变化时广播事件）
+    // —— 第1步：基于行为指标的基础检测 ——
+    const baseDetection = this.detectEmotionFromBehavior(aggregated)
+
+    // —— 第2步：从上下文分析器获取真实数据，增强检测 ——
+    const context = emotionContextAnalyzer.analyzeContext()
+    const enhanced = emotionContextAnalyzer.enhanceEmotionDetection(
+      baseDetection.state,
+      baseDetection.intensity,
+      context
+    )
+
+    // —— 合并因子 ——
+    const contextFactors = this.buildContextFactors(context)
+    const allFactors = [...baseDetection.factors, ...contextFactors]
+
+    const detection: EmotionDetection = {
+      state: enhanced.state,
+      intensity: enhanced.intensity,
+      confidence: enhanced.confidence,
+      triggeredAt: Date.now(),
+      duration: Date.now() - this.stateStartTime,
+      factors: allFactors,
+      context: context || undefined,
+      suggestions: enhanced.suggestions.length > 0 ? enhanced.suggestions : undefined,
+    }
+
+    // 始终更新 currentState
     const shouldBroadcast = this.shouldNotifyStateChange(detection)
     this.currentState = detection
 
@@ -309,9 +342,81 @@ class EmotionDetectionEngine {
       logger.agent.info('[EmotionEngine] State:', detection.state,
         `intensity=${detection.intensity.toFixed(2)}`,
         `confidence=${detection.confidence.toFixed(2)}`,
-        `metrics=${recentMetrics.length} samples`
+        `factors=${allFactors.length}`,
+        `ctx=${context ? 'yes' : 'no'}`,
+        context?.hasErrors ? `errors!` : '',
+        context?.gitStatus === 'conflict' ? 'git-conflict!' : '',
       )
     }
+  }
+
+  /**
+   * 根据真实上下文生成额外的 EmotionFactor
+   */
+  private buildContextFactors(context: ReturnType<typeof emotionContextAnalyzer.analyzeContext>): EmotionFactor[] {
+    if (!context) return []
+    const factors: EmotionFactor[] = []
+
+    // 诊断错误因子
+    if (context.hasErrors) {
+      const diagErrors = emotionContextAnalyzer.getRecentDiagnosticErrors(15 * 60 * 1000)
+      factors.push({
+        type: 'error_context',
+        weight: 0.3,
+        value: Math.min(diagErrors.errors / 5, 1),
+        description: `${diagErrors.errors} errors, ${diagErrors.warnings} warnings (LSP)`,
+      })
+    }
+
+    // AI 交互因子
+    if (context.aiInteractions.count > 0) {
+      factors.push({
+        type: 'ai_interaction_pattern',
+        weight: 0.2,
+        value: Math.min(context.aiInteractions.count / 10, 1),
+        description: `${context.aiInteractions.count} AI interactions, avg ${(context.aiInteractions.avgResponseTime / 1000).toFixed(1)}s`,
+      })
+    }
+
+    // Git 状态因子
+    if (context.gitStatus && context.gitStatus !== 'clean') {
+      factors.push({
+        type: 'git_activity',
+        weight: context.gitStatus === 'conflict' ? 0.35 : 0.15,
+        value: context.gitStatus === 'conflict' ? 1.0 : 0.5,
+        description: `Git: ${context.gitStatus}`,
+      })
+    }
+
+    // 文件类型因子
+    factors.push({
+      type: 'file_type_pattern',
+      weight: 0.1,
+      value: context.fileType === 'test' ? 0.7 : context.fileType === 'config' ? 0.5 : 0.3,
+      description: `File: ${context.fileType} (${context.currentFile.split('/').pop()})`,
+    })
+
+    // 文件切换/搜索因子
+    if (context.searchQueries > 3) {
+      factors.push({
+        type: 'search_pattern',
+        weight: 0.15,
+        value: Math.min(context.searchQueries / 10, 1),
+        description: `${context.searchQueries} file switches (15min)`,
+      })
+    }
+
+    // 代码复杂度因子
+    if (context.codeComplexity > 0.3) {
+      factors.push({
+        type: 'code_complexity',
+        weight: 0.15,
+        value: context.codeComplexity,
+        description: `Complexity: ${(context.codeComplexity * 100).toFixed(0)}%`,
+      })
+    }
+
+    return factors
   }
 
   private aggregateMetrics(metrics: BehaviorMetrics[]): BehaviorMetrics {
@@ -322,7 +427,6 @@ class EmotionDetectionEngine {
     const sum = (key: keyof BehaviorMetrics) =>
       metrics.reduce((acc, m) => acc + (m[key] as number), 0)
 
-    // 计算打字速度 (WPM)
     const totalKeystrokes = sum('keystrokes')
     const timeSpanMs = metrics.length > 1
       ? metrics[metrics.length - 1].timestamp - metrics[0].timestamp
@@ -330,11 +434,9 @@ class EmotionDetectionEngine {
     const timeSpanMin = Math.max(timeSpanMs / 1000 / 60, 0.01)
     const typingSpeed = (totalKeystrokes / 5) / timeSpanMin
 
-    // 计算错误率
     const totalBackspaces = sum('backspaceRate')
     const errorRate = totalKeystrokes > 0 ? totalBackspaces / totalKeystrokes : 0
 
-    // 停顿时间取最后一个采样的值
     const lastPause = metrics[metrics.length - 1].pauseDuration
 
     return {
@@ -362,11 +464,14 @@ class EmotionDetectionEngine {
     }
   }
 
-  private detectEmotion(metrics: BehaviorMetrics): EmotionDetection {
+  /**
+   * 基于行为指标的基础情绪检测
+   */
+  private detectEmotionFromBehavior(metrics: BehaviorMetrics): EmotionDetection {
     const factors: EmotionFactor[] = []
     const scores: Record<EmotionState, number> = {
       focused: 0, frustrated: 0, tired: 0, excited: 0,
-      bored: 0, stressed: 0, flow: 0, neutral: 0.3,
+      bored: 0, stressed: 0, flow: 0, neutral: 0.25,
     }
 
     // 1. 打字速度
@@ -381,11 +486,11 @@ class EmotionDetectionEngine {
     scores.tired     -= typingSpeedScore * 0.5
     scores.bored     -= typingSpeedScore * 0.6
 
-    // 2. 错误率
+    // 2. 错误率（退格）
     const errorRateScore = metrics.errorRate
     factors.push({
       type: 'error_rate', weight: 0.25, value: errorRateScore,
-      description: `Errors: ${(errorRateScore * 100).toFixed(0)}%`,
+      description: `Backspace: ${(errorRateScore * 100).toFixed(0)}%`,
     })
     scores.frustrated += errorRateScore * 0.8
     scores.tired      += errorRateScore * 0.4
@@ -407,7 +512,7 @@ class EmotionDetectionEngine {
     const tabSwitchScore = Math.min(metrics.fileSwitches / 3, 1)
     factors.push({
       type: 'tab_switching', weight: 0.15, value: tabSwitchScore,
-      description: `Switches: ${metrics.fileSwitches}`,
+      description: `Tab switches: ${metrics.fileSwitches}`,
     })
     scores.stressed += tabSwitchScore * 0.7
     scores.focused  -= tabSwitchScore * 0.5
@@ -433,10 +538,9 @@ class EmotionDetectionEngine {
     })
     scores.tired += timeScore * 0.5
 
-    // 7. 活跃度（有没有在操作）
+    // 7. 活跃度
     const idleDuration = Date.now() - this._lastActivityTime
     if (idleDuration > 60000) {
-      // 超过1分钟无活动
       scores.bored += 0.4
       scores.tired += 0.3
       scores.focused -= 0.3
@@ -454,7 +558,7 @@ class EmotionDetectionEngine {
     }
 
     const intensity = Math.min(Math.max(maxScore, 0), 1)
-    const confidence = Math.min(factors.length / 4, 1) * (0.5 + intensity * 0.5)
+    const confidence = Math.min(factors.length / 4, 1) * (0.4 + intensity * 0.4)
 
     return {
       state: detectedState,
@@ -478,8 +582,8 @@ class EmotionDetectionEngine {
   private shouldNotifyStateChange(newDetection: EmotionDetection): boolean {
     if (!this.currentState) return true
     if (this.currentState.state !== newDetection.state) return true
-    // 同一状态下，强度变化超过 0.15 也通知（原来0.3太迟钝）
-    return Math.abs(this.currentState.intensity - newDetection.intensity) > 0.15
+    // 同一状态下，强度变化超过 0.12 也通知
+    return Math.abs(this.currentState.intensity - newDetection.intensity) > 0.12
   }
 
   private recordHistory(detection: EmotionDetection): void {
