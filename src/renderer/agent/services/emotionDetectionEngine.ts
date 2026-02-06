@@ -1,15 +1,19 @@
 /**
- * 情绪检测引擎 v2
+ * 情绪检测引擎 v3
  *
- * 变化：
- *  - 每次分析周期从 emotionContextAnalyzer 获取真实上下文（诊断、Git、AI对话）
- *  - 基础行为指标 + 上下文信号混合打分
- *  - context.suggestions 直接附加到检测结果
+ * 三层检测架构：
+ *  1. 行为指标（键盘/鼠标/停顿） → 基础评分
+ *  2. 真实上下文（诊断/Git/AI 对话）→ 增强评分
+ *  3. LLM 辅助分析（定期调用）→ 高置信度校准
+ *
+ * LLM 不会每个周期都调（太贵），但一旦有结果会混合进最终判断。
  */
 
 import { logger } from '@utils/Logger'
 import { EventBus } from '../core/EventBus'
 import { emotionContextAnalyzer } from './emotionContextAnalyzer'
+import { emotionLLMAnalyzer } from './emotionLLMAnalyzer'
+import type { LLMEmotionResult, BehaviorSummary } from './emotionLLMAnalyzer'
 import type {
   EmotionState,
   EmotionDetection,
@@ -294,7 +298,7 @@ class EmotionDetectionEngine {
   }
 
   /**
-   * 核心分析流程 — 行为指标 + 真实上下文混合
+   * 核心分析流程 — 三层架构：行为 → 上下文 → LLM
    */
   private analyzeAndDetect(): void {
     const windowStart = Date.now() - DETECTION_WINDOW
@@ -304,10 +308,10 @@ class EmotionDetectionEngine {
 
     const aggregated = this.aggregateMetrics(recentMetrics)
 
-    // —— 第1步：基于行为指标的基础检测 ——
+    // —— 第 1 层：基于行为指标的基础检测 ——
     const baseDetection = this.detectEmotionFromBehavior(aggregated)
 
-    // —— 第2步：从上下文分析器获取真实数据，增强检测 ——
+    // —— 第 2 层：从上下文分析器获取真实数据，增强检测 ——
     const context = emotionContextAnalyzer.analyzeContext()
     const enhanced = emotionContextAnalyzer.enhanceEmotionDetection(
       baseDetection.state,
@@ -319,15 +323,38 @@ class EmotionDetectionEngine {
     const contextFactors = this.buildContextFactors(context)
     const allFactors = [...baseDetection.factors, ...contextFactors]
 
+    let finalState = enhanced.state
+    let finalIntensity = enhanced.intensity
+    let finalConfidence = enhanced.confidence
+    let finalSuggestions = enhanced.suggestions
+
+    // —— 第 3 层：LLM 辅助（异步，不阻塞当前周期） ——
+    // 构建行为摘要
+    const behaviorSummary = this.buildBehaviorSummary(aggregated)
+
+    // 先用上一次 LLM 结果混合（如果有）
+    const lastLLM = emotionLLMAnalyzer.getLastResult()
+    if (lastLLM) {
+      const merged = this.mergeWithLLM(
+        finalState, finalIntensity, finalConfidence, finalSuggestions,
+        lastLLM,
+      )
+      finalState = merged.state
+      finalIntensity = merged.intensity
+      finalConfidence = merged.confidence
+      finalSuggestions = merged.suggestions
+    }
+
     const detection: EmotionDetection = {
-      state: enhanced.state,
-      intensity: enhanced.intensity,
-      confidence: enhanced.confidence,
+      state: finalState,
+      intensity: finalIntensity,
+      confidence: finalConfidence,
       triggeredAt: Date.now(),
       duration: Date.now() - this.stateStartTime,
       factors: allFactors,
       context: context || undefined,
-      suggestions: enhanced.suggestions.length > 0 ? enhanced.suggestions : undefined,
+      suggestions: finalSuggestions.length > 0 ? finalSuggestions : undefined,
+      llmReasoning: lastLLM?.reasoning,
     }
 
     // 始终更新 currentState
@@ -344,9 +371,120 @@ class EmotionDetectionEngine {
         `confidence=${detection.confidence.toFixed(2)}`,
         `factors=${allFactors.length}`,
         `ctx=${context ? 'yes' : 'no'}`,
-        context?.hasErrors ? `errors!` : '',
-        context?.gitStatus === 'conflict' ? 'git-conflict!' : '',
+        lastLLM ? `llm=${lastLLM.state}` : 'llm=pending',
       )
+    }
+
+    // 异步触发 LLM 分析（不阻塞，结果在下一个周期生效）
+    this.triggerLLMAnalysis(detection, context, behaviorSummary)
+  }
+
+  /**
+   * 异步触发 LLM 分析（fire-and-forget）
+   * LLM 结果会缓存在 emotionLLMAnalyzer 中，下一个分析周期会读到
+   */
+  private triggerLLMAnalysis(
+    detection: EmotionDetection,
+    context: ReturnType<typeof emotionContextAnalyzer.analyzeContext>,
+    summary: BehaviorSummary,
+  ): void {
+    emotionLLMAnalyzer.analyze(detection, context, summary).then((result) => {
+      if (result && this.isRunning) {
+        // LLM 返回了新结果，立即用它修正当前状态并广播
+        const merged = this.mergeWithLLM(
+          this.currentState?.state || 'neutral',
+          this.currentState?.intensity || 0.5,
+          this.currentState?.confidence || 0.5,
+          this.currentState?.suggestions || [],
+          result,
+        )
+
+        const llmDetection: EmotionDetection = {
+          ...this.currentState!,
+          state: merged.state,
+          intensity: merged.intensity,
+          confidence: merged.confidence,
+          suggestions: merged.suggestions.length > 0 ? merged.suggestions : undefined,
+          triggeredAt: Date.now(),
+        }
+
+        const shouldBroadcast = this.shouldNotifyStateChange(llmDetection)
+        this.currentState = llmDetection
+
+        if (shouldBroadcast) {
+          this.stateStartTime = Date.now()
+          this.recordHistory(llmDetection)
+          EventBus.emit({ type: 'emotion:changed', emotion: llmDetection })
+          logger.agent.info('[EmotionEngine] LLM override →', merged.state,
+            `conf=${merged.confidence.toFixed(2)}`,
+            `reason: ${result.reasoning}`,
+          )
+        }
+      }
+    }).catch(() => {
+      // 静默失败 — LLM 不可用不影响基础功能
+    })
+  }
+
+  /**
+   * 混合规则引擎结果与 LLM 结果
+   *
+   * 策略：
+   *  - LLM 置信度高 → 以 LLM 为主
+   *  - LLM 和规则引擎一致 → 提高整体置信度
+   *  - LLM 和规则引擎不一致 → 选置信度更高的那个
+   *  - LLM 的建议优先（更智能更具体）
+   */
+  private mergeWithLLM(
+    ruleState: EmotionState,
+    ruleIntensity: number,
+    ruleConfidence: number,
+    ruleSuggestions: string[],
+    llm: LLMEmotionResult,
+  ): { state: EmotionState; intensity: number; confidence: number; suggestions: string[] } {
+    // 如果 LLM 和规则一致 → 信心大增
+    if (llm.state === ruleState) {
+      return {
+        state: ruleState,
+        intensity: (ruleIntensity * 0.4 + llm.intensity * 0.6),
+        confidence: Math.min((ruleConfidence + llm.confidence) / 2 + 0.15, 0.98),
+        suggestions: llm.suggestion ? [llm.suggestion] : ruleSuggestions,
+      }
+    }
+
+    // 不一致 — 看谁置信度更高
+    if (llm.confidence > ruleConfidence + 0.1) {
+      // LLM 明显更有信心 → 采用 LLM
+      return {
+        state: llm.state,
+        intensity: llm.intensity,
+        confidence: llm.confidence,
+        suggestions: llm.suggestion ? [llm.suggestion] : ruleSuggestions,
+      }
+    }
+
+    // 规则引擎信心更高或差不多 → 保持规则结果，但用 LLM 的建议
+    return {
+      state: ruleState,
+      intensity: (ruleIntensity * 0.6 + llm.intensity * 0.4),
+      confidence: ruleConfidence,
+      suggestions: llm.suggestion ? [llm.suggestion, ...ruleSuggestions.slice(0, 1)] : ruleSuggestions,
+    }
+  }
+
+  /**
+   * 从聚合指标构建 LLM 需要的行为摘要
+   */
+  private buildBehaviorSummary(aggregated: BehaviorMetrics): BehaviorSummary {
+    return {
+      windowMinutes: DETECTION_WINDOW / 1000 / 60,
+      avgTypingSpeed: aggregated.typingSpeed,
+      backspaceRate: aggregated.errorRate,
+      totalKeystrokes: aggregated.keystrokes,
+      pauseDurationSec: aggregated.pauseDuration / 1000,
+      fileSwitches: aggregated.fileSwitches,
+      sessionMinutes: (Date.now() - this.stateStartTime) / 1000 / 60,
+      copyPasteCount: aggregated.copyPasteCount,
     }
   }
 

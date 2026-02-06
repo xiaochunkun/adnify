@@ -26,6 +26,7 @@ export interface EmotionDetection {
   factors: EmotionFactor[]
   context?: CodeContext  // 检测时的代码上下文
   suggestions?: string[]  // 基于当前状态的建议
+  llmReasoning?: string  // LLM 分析的推理过程
   similarPatterns?: {  // 相似的历史模式
     timestamp: number
     state: EmotionState

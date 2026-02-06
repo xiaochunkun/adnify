@@ -158,9 +158,8 @@ class EmotionContextAnalyzer {
       // 代码复杂度 — 基于打开文件数量 + 文件内容长度
       const codeComplexity = this.estimateComplexity(mainState)
 
-      // 诊断错误
-      const hasErrors = diagState.errorCount > 0 || diagState.warningCount > 0
-      const errorType = this.classifyErrorType(diagState.diagnostics, currentFile)
+      // 诊断错误 — 只看当前文件是否有真正的 error（severity === 1），不看全局 warnings
+      const { hasErrors, errorType } = this.checkCurrentFileErrors(diagState.diagnostics, currentFile)
 
       // Git 状态
       const gitStatus = this.readGitStatus(mainState.gitStatus)
@@ -376,26 +375,40 @@ class EmotionContextAnalyzer {
     return fileCountScore * 0.4 + sizeScore * 0.6
   }
 
-  private classifyErrorType(
-    diagnostics: Map<string, Array<{ severity?: number }>>,
+  /**
+   * 只检查当前文件的诊断错误（severity 1 = error）
+   * 不扫描全局，避免切换文件时误报
+   */
+  private checkCurrentFileErrors(
+    diagnostics: Map<string, Array<{ severity?: number; message?: string }>>,
     currentFile: string
-  ): 'syntax' | 'type' | 'runtime' | 'test' | undefined {
-    // 优先看当前文件的诊断
-    const fileDiags = diagnostics.get(currentFile) || diagnostics.get(`file://${currentFile}`) || []
-    if (fileDiags.length === 0) {
-      // 任何文件有错误
-      let hasAny = false
-      diagnostics.forEach(diags => { if (diags.some(d => d.severity === 1)) hasAny = true })
-      return hasAny ? 'type' : undefined
-    }
+  ): { hasErrors: boolean; errorType?: 'syntax' | 'type' | 'runtime' | 'test' } {
+    // 尝试多种 URI 格式匹配
+    const fileDiags =
+      diagnostics.get(currentFile) ||
+      diagnostics.get(`file://${currentFile}`) ||
+      []
 
     const errors = fileDiags.filter(d => d.severity === 1)
-    if (errors.length === 0) return undefined
+    if (errors.length === 0) return { hasErrors: false }
 
-    // 简单分类：当前文件是测试文件就标记为 test，否则默认 type
-    if (currentFile.toLowerCase().includes('.test.') || currentFile.toLowerCase().includes('.spec.'))
-      return 'test'
-    return 'type'
+    // 根据文件类型和错误内容分类
+    const lower = currentFile.toLowerCase()
+    if (lower.includes('.test.') || lower.includes('.spec.')) {
+      return { hasErrors: true, errorType: 'test' }
+    }
+
+    // 检查错误消息内容做更精细的分类
+    const messages = errors.map(e => (e.message || '').toLowerCase())
+    const hasSyntaxKeywords = messages.some(m =>
+      m.includes('unexpected token') || m.includes('parsing error') ||
+      m.includes('expression expected') || m.includes('declaration or statement')
+    )
+    if (hasSyntaxKeywords) {
+      return { hasErrors: true, errorType: 'syntax' }
+    }
+
+    return { hasErrors: true, errorType: 'type' }
   }
 
   private readGitStatus(
