@@ -198,7 +198,8 @@ class EmotionDetectionEngine {
         hourlyProductivity[hour]++
       }
     }
-    const mostProductiveHour = hourlyProductivity.indexOf(Math.max(...hourlyProductivity))
+    const maxCount = Math.max(...hourlyProductivity)
+    const mostProductiveHour = maxCount > 0 ? hourlyProductivity.indexOf(maxCount) : -1
 
     return { focusTime, flowSessions, frustrationEpisodes, breakRecommendations, mostProductiveHour }
   }
