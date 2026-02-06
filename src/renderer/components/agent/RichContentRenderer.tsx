@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import type { ToolRichContent } from '@/shared/types'
 import { JsonHighlight } from '@utils/jsonHighlight'
 import { getFileName } from '@shared/utils/pathUtils'
+import { SafeMarkdownHTML, SafeHTML } from '@components/common/SafeHTML'
 
 interface RichContentRendererProps {
   content: ToolRichContent[]
@@ -265,7 +266,7 @@ function MarkdownContent({ item, maxHeight }: { item: ToolRichContent; maxHeight
   return (
     <ContentCard title="Markdown" icon={FileText} noPadding>
       <div className={`p-4 bg-black/20 ${maxHeight} overflow-auto custom-scrollbar prose prose-invert prose-sm max-w-none`}>
-        <div dangerouslySetInnerHTML={{ __html: item.text || '' }} />
+        <SafeMarkdownHTML html={item.text} />
       </div>
     </ContentCard>
   )
@@ -274,9 +275,10 @@ function MarkdownContent({ item, maxHeight }: { item: ToolRichContent; maxHeight
 function HtmlContent({ item, maxHeight }: { item: ToolRichContent; maxHeight: string }) {
   return (
     <ContentCard title="HTML Preview" icon={Code} noPadding>
-      <div className={`p-4 bg-white/5 ${maxHeight} overflow-auto custom-scrollbar`}>
-        <div dangerouslySetInnerHTML={{ __html: item.text || '' }} />
-      </div>
+      <SafeHTML 
+        html={item.text}
+        className={`p-4 bg-white/5 ${maxHeight} overflow-auto custom-scrollbar`}
+      />
     </ContentCard>
   )
 }
