@@ -21,12 +21,10 @@
 
 import { api } from '@/renderer/services/electronAPI'
 import { logger } from '@utils/Logger'
-import { CacheService } from '@shared/utils'
 import { AppError, formatErrorMessage } from '@/shared/errors'
-import { normalizePath } from '@shared/utils/pathUtils'
 import { useAgentStore } from '../store/AgentStore'
 import { buildLLMMessages, buildContextContent } from '../llm/MessageBuilder'
-import { runLoop } from './loop'
+import { fileCacheService } from '../services/fileCacheService'
 import { approvalService } from './tools'
 import { EventBus } from './EventBus'
 import type { WorkMode } from '@/renderer/modes/types'
@@ -34,12 +32,8 @@ import type { MessageContent, TextContent, ImageContent } from '../types'
 import type { CheckpointImage } from '../types'
 import type { LLMConfig } from './types'
 
-// 文件缓存：避免重复读取相同文件
-const fileCache = new CacheService<string>('AgentFileCache', {
-  maxSize: 200,
-  maxMemory: 30 * 1024 * 1024,
-  defaultTTL: 10 * 60 * 1000,
-})
+// 动态导入 runLoop 避免循环依赖
+const importRunLoop = () => import('./loop').then(m => m.runLoop)
 
 class AgentClass {
   /** 运行中的任务（按线程追踪） */
@@ -120,6 +114,7 @@ class AgentClass {
       store.setStreamPhase('streaming', threadId)
 
       // 7. 运行主循环（传递 threadId 实现后台隔离）
+      const runLoop = await importRunLoop()
       await runLoop(
         config,
         llmMessages,
@@ -224,7 +219,7 @@ class AgentClass {
    * - 手动刷新时清除缓存
    */
   clearSession(): void {
-    fileCache.clear()
+    fileCacheService.clear()
     EventBus.clear()
     logger.agent.info('[Agent] Session cleared')
   }
@@ -238,7 +233,7 @@ class AgentClass {
       runningTaskCount: this.runningTasks.size,
       runningThreadIds: Array.from(this.runningTasks.keys()),
       activeListeners: getActiveListenerCount(),
-      cacheStats: fileCache.getStats(),
+      cacheStats: fileCacheService.getStats(),
     }
   }
 
@@ -269,28 +264,28 @@ class AgentClass {
    * 检查文件是否有有效缓存
    */
   hasValidFileCache(filePath: string): boolean {
-    return fileCache.has(normalizePath(filePath))
+    return fileCacheService.hasValidCache(filePath)
   }
 
   /**
    * 标记文件已读取（用于缓存）
    */
   markFileAsRead(filePath: string, content: string): void {
-    fileCache.set(normalizePath(filePath), this.fnvHash(content))
+    fileCacheService.markFileAsRead(filePath, content)
   }
 
   /**
    * 获取文件缓存哈希
    */
   getFileCacheHash(filePath: string): string | null {
-    return fileCache.get(normalizePath(filePath)) ?? null
+    return fileCacheService.getFileHash(filePath)
   }
 
   /**
    * 获取缓存统计信息
    */
   getCacheStats() {
-    return fileCache.getStats()
+    return fileCacheService.getStats()
   }
 
   // ===== 私有方法 =====
@@ -369,27 +364,6 @@ class AgentClass {
     }
   }
 
-  /**
-   * FNV-1a 哈希算法（用于文件内容哈希）
-   */
-  private fnvHash(str: string): string {
-    let h1 = 0x811c9dc5
-    let h2 = 0x811c9dc5
-    const len = str.length
-    const mid = len >> 1
-
-    for (let i = 0; i < mid; i++) {
-      h1 ^= str.charCodeAt(i)
-      h1 = Math.imul(h1, 0x01000193)
-    }
-
-    for (let i = mid; i < len; i++) {
-      h2 ^= str.charCodeAt(i)
-      h2 = Math.imul(h2, 0x01000193)
-    }
-
-    return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36)
-  }
 }
 
 // 导出单例
