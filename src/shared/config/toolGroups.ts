@@ -31,6 +31,8 @@ export interface ToolLoadingContext {
   mode: WorkMode
   /** 角色模板 ID（可选） */
   templateId?: string
+  /** Orchestrator 阶段：planning = 只有编排工具, executing = 所有工具 */
+  orchestratorPhase?: 'planning' | 'executing'
 }
 
 /** 角色工具配置 */
@@ -87,6 +89,8 @@ const UIUX_TOOLS: string[] = [
 const ORCHESTRATOR_TOOLS: string[] = [
   'ask_user',
   'create_task_plan',
+  'update_task_plan',
+  'start_task_execution',
 ]
 
 /** 工具组注册表 */
@@ -148,8 +152,20 @@ export function getToolsForContext(context: ToolLoadingContext): string[] {
   // 收集工具（使用 Set 去重）
   const tools = new Set<string>()
 
-  // orchestrator 模式：使用专属工具组
+  // orchestrator 模式：根据阶段加载不同工具
   if (context.mode === 'orchestrator') {
+    // 执行阶段：加载所有工具（core + orchestrator）
+    if (context.orchestratorPhase === 'executing') {
+      for (const tool of CORE_TOOLS) {
+        tools.add(tool)
+      }
+      for (const tool of TOOL_GROUPS['orchestrator'] || []) {
+        tools.add(tool)
+      }
+      return Array.from(tools)
+    }
+
+    // 规划阶段（默认）：只使用编排工具
     for (const tool of TOOL_GROUPS['orchestrator'] || []) {
       tools.add(tool)
     }

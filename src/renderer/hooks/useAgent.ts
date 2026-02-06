@@ -48,6 +48,7 @@ export function useAgent() {
   // 获取线程相关状态
   const threads = useAgentStore(state => state.threads)
   const currentThreadId = useAgentStore(state => state.currentThreadId)
+  const orchestratorPhase = useAgentStore(state => state.phase)
 
   // 确保有一个默认线程（首次加载时）
   const createThreadAction = useAgentStore(state => state.createThread)
@@ -106,6 +107,7 @@ export function useAgent() {
       activeFile,
       customInstructions: aiInstructions,
       promptTemplateId,
+      orchestratorPhase: chatMode === 'orchestrator' ? orchestratorPhase : undefined,
     })
 
     // 获取 agent 配置中的 contextLimit
