@@ -1,47 +1,48 @@
 /**
- * 情绪伙伴（Companion）v2
- * 在编辑器右下角浮动的智能助手气泡
+ * 情绪伙伴（Companion）v3
  *
- * v2 变化：
+ * 变化：
  *  - 直接订阅 emotion:changed，捕获 LLM 推理和上下文建议
- *  - 新增 'insight' 消息类型，展示 AI 推理过程 + 建议
- *  - LLM 洞察有独立冷却规则（2分钟），优先级更高
- *  - 消息体支持双行：推理（sub-text）+ 建议（main-text）
- *
- * 行为规则：
- *  - 平时隐藏，只在有话要说时出现
- *  - 心流状态下完全沉默
- *  - LLM 洞察可以打断普通消息
+ *  - insight 消息展示 AI 推理过程 + 建议 + 可操作按钮
+ *  - 每条消息底部有 👍/👎 反馈按钮（存储到 emotionFeedback）
+ *  - LLM 推荐的 action 直接变成可点击按钮
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ThumbsUp, ThumbsDown, Coffee, Sparkles, AlertTriangle, Brain } from 'lucide-react'
 import { EventBus } from '@/renderer/agent/core/EventBus'
+import { emotionFeedback } from '@/renderer/agent/services/emotionFeedback'
+import { getRecommendedActions, getActionByType } from '@/renderer/agent/services/emotionActions'
+import { emotionLLMAnalyzer } from '@/renderer/agent/services/emotionLLMAnalyzer'
 import type { EmotionState, EmotionDetection } from '@/renderer/agent/types/emotion'
+import type { EmotionActionDef } from '@/renderer/agent/services/emotionActions'
 
 interface CompanionMessage {
   id: string
   text: string
-  subText?: string          // 推理过程 / 附加说明
+  subText?: string
   type: 'encouragement' | 'suggestion' | 'warning' | 'break' | 'insight'
   state: EmotionState
-  priority: number          // 0-10，越高越重要
+  priority: number
   dismissable: boolean
   actions?: Array<{
     label: string
+    emoji?: string
     icon?: React.ReactNode
     onClick: () => void
   }>
+  /** 是否显示反馈按钮 */
+  showFeedback?: boolean
 }
 
-// 冷却时间配置（毫秒）
+// 冷却时间
 const COOLDOWN: Record<CompanionMessage['type'], number> = {
-  encouragement: 10 * 60 * 1000,  // 10分钟
-  suggestion: 5 * 60 * 1000,      // 5分钟
-  warning: 2 * 60 * 1000,         // 2分钟
-  break: 20 * 60 * 1000,          // 20分钟
-  insight: 2 * 60 * 1000,         // 2分钟 — LLM 洞察更频繁
+  encouragement: 10 * 60 * 1000,
+  suggestion: 5 * 60 * 1000,
+  warning: 2 * 60 * 1000,
+  break: 20 * 60 * 1000,
+  insight: 2 * 60 * 1000,
 }
 
 // 自动消失时间
@@ -50,7 +51,7 @@ const AUTO_DISMISS: Record<CompanionMessage['type'], number> = {
   suggestion: 10000,
   warning: 15000,
   break: 20000,
-  insight: 12000,     // LLM 洞察多给点阅读时间
+  insight: 14000,
 }
 
 const TYPE_STYLES: Record<CompanionMessage['type'], {
@@ -94,6 +95,7 @@ const TYPE_STYLES: Record<CompanionMessage['type'], {
 export const EmotionCompanion: React.FC = () => {
   const [activeMessage, setActiveMessage] = useState<CompanionMessage | null>(null)
   const [isVisible, setIsVisible] = useState(false)
+  const [feedbackGiven, setFeedbackGiven] = useState(false)
   const lastMessageTimeRef = useRef<Record<string, number>>({})
   const dismissTimerRef = useRef<NodeJS.Timeout | null>(null)
   const shownMessagesRef = useRef<Set<string>>(new Set())
@@ -101,7 +103,10 @@ export const EmotionCompanion: React.FC = () => {
 
   const dismiss = useCallback(() => {
     setIsVisible(false)
-    setTimeout(() => setActiveMessage(null), 300)
+    setTimeout(() => {
+      setActiveMessage(null)
+      setFeedbackGiven(false)
+    }, 300)
     if (dismissTimerRef.current) {
       clearTimeout(dismissTimerRef.current)
       dismissTimerRef.current = null
@@ -109,56 +114,80 @@ export const EmotionCompanion: React.FC = () => {
   }, [])
 
   const showMessage = useCallback((msg: CompanionMessage) => {
-    // 检查冷却时间
     const lastTime = lastMessageTimeRef.current[msg.type] || 0
     const cooldown = COOLDOWN[msg.type]
     if (Date.now() - lastTime < cooldown) return
 
-    // insight 类型用 state+type 做唯一键（允许不同推理出现）
     const msgKey = msg.type === 'insight'
       ? `${msg.state}:insight:${msg.text.slice(0, 30)}`
       : `${msg.state}:${msg.text}`
     if (shownMessagesRef.current.has(msgKey)) return
 
-    // insight 可以打断普通消息；同级别比较优先级
     if (activeMessage) {
       if (msg.type === 'insight' && activeMessage.type !== 'insight') {
-        // insight 打断非 insight
+        // insight can interrupt non-insight
       } else if (activeMessage.priority > msg.priority) {
-        return // 当前消息优先级更高，不替换
+        return
       }
     }
 
-    // 显示消息
     setActiveMessage(msg)
     setIsVisible(true)
+    setFeedbackGiven(false)
     lastMessageTimeRef.current[msg.type] = Date.now()
     shownMessagesRef.current.add(msgKey)
 
-    // 限制记录大小
     if (shownMessagesRef.current.size > 50) {
       const entries = Array.from(shownMessagesRef.current)
       shownMessagesRef.current = new Set(entries.slice(-25))
     }
 
-    // 设置自动消失
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
     dismissTimerRef.current = setTimeout(dismiss, AUTO_DISMISS[msg.type])
   }, [activeMessage, dismiss])
 
+  /**
+   * 把 EmotionActionDef 转换成 CompanionMessage action
+   */
+  const buildActionButtons = useCallback((
+    emotionActions: EmotionActionDef[],
+    onDismiss: () => void,
+  ): CompanionMessage['actions'] => {
+    return emotionActions.map(a => ({
+      label: a.label,
+      emoji: a.emoji,
+      onClick: () => {
+        a.execute()
+        onDismiss()
+      },
+    }))
+  }, [])
+
   useEffect(() => {
-    // ===== 1. 直接订阅 emotion:changed — 捕获 LLM 洞察 =====
+    // ===== 1. 订阅 emotion:changed — LLM 洞察 + 可操作建议 =====
     const unsubChanged = EventBus.on('emotion:changed', (event) => {
       const detection: EmotionDetection = event.emotion
-      if (!detection) return
-
-      // 心流状态不打扰
-      if (detection.state === 'flow') return
+      if (!detection || detection.state === 'flow') return
 
       const prevState = prevEmotionStateRef.current
       prevEmotionStateRef.current = detection.state
 
-      // 有 LLM 推理 → 显示 insight 消息
+      // 获取可操作按钮
+      let emotionActions: EmotionActionDef[] = []
+
+      // 优先用 LLM 推荐的 action
+      const llmResult = emotionLLMAnalyzer.getLastResult()
+      if (llmResult?.action && llmResult.action !== 'none') {
+        const llmAction = getActionByType(llmResult.action)
+        if (llmAction) emotionActions = [llmAction]
+      }
+
+      // LLM 没推荐 action → 用规则推荐
+      if (emotionActions.length === 0) {
+        emotionActions = getRecommendedActions(detection)
+      }
+
+      // 有 LLM 推理 → insight 消息
       if (detection.llmReasoning && detection.suggestions && detection.suggestions.length > 0) {
         showMessage({
           id: `insight-${Date.now()}`,
@@ -166,29 +195,32 @@ export const EmotionCompanion: React.FC = () => {
           subText: detection.llmReasoning,
           type: 'insight',
           state: detection.state,
-          priority: 8,  // 高优先级
+          priority: 8,
           dismissable: true,
+          showFeedback: true,
+          actions: buildActionButtons(emotionActions, dismiss),
         })
-        return // LLM insight 已经包含了建议，不再发普通消息
+        return
       }
 
-      // 有上下文建议但没有 LLM 推理 → 走 suggestion 通道
+      // 有上下文建议 + 状态变化 → suggestion 消息
       if (detection.suggestions && detection.suggestions.length > 0 && prevState !== detection.state) {
         showMessage({
-          id: `ctx-suggestion-${Date.now()}`,
+          id: `ctx-${Date.now()}`,
           text: detection.suggestions[0],
           type: detection.state === 'frustrated' || detection.state === 'stressed' ? 'warning' : 'suggestion',
           state: detection.state,
           priority: 5,
           dismissable: true,
+          showFeedback: true,
+          actions: buildActionButtons(emotionActions, dismiss),
         })
       }
     })
 
-    // ===== 2. 订阅 emotion:message — 通用情绪消息（来自 adapter） =====
+    // ===== 2. emotion:message =====
     const unsubMessage = EventBus.on('emotion:message', (event) => {
       if (event.state === 'flow') return
-
       showMessage({
         id: `emotion-${Date.now()}`,
         text: event.message,
@@ -196,10 +228,11 @@ export const EmotionCompanion: React.FC = () => {
         state: event.state,
         priority: event.state === 'frustrated' ? 6 : 3,
         dismissable: true,
+        showFeedback: true,
       })
     })
 
-    // ===== 3. 订阅休息提醒 =====
+    // ===== 3. 休息提醒 =====
     const unsubBreakMicro = EventBus.on('break:micro', (event) => {
       showMessage({
         id: `break-micro-${Date.now()}`,
@@ -225,16 +258,8 @@ export const EmotionCompanion: React.FC = () => {
         priority: 7,
         dismissable: true,
         actions: [
-          {
-            label: '休息一下',
-            icon: <Coffee className="w-3 h-3" />,
-            onClick: dismiss,
-          },
-          {
-            label: '稍后',
-            icon: <ThumbsDown className="w-3 h-3" />,
-            onClick: dismiss,
-          },
+          { label: '休息一下', icon: <Coffee className="w-3 h-3" />, onClick: dismiss },
+          { label: '稍后', icon: <ThumbsDown className="w-3 h-3" />, onClick: dismiss },
         ],
       })
     })
@@ -246,7 +271,20 @@ export const EmotionCompanion: React.FC = () => {
       unsubBreakSuggested()
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
     }
-  }, [showMessage, dismiss])
+  }, [showMessage, dismiss, buildActionButtons])
+
+  // ===== 反馈处理 =====
+  const handleFeedback = useCallback((accurate: boolean) => {
+    if (!activeMessage || feedbackGiven) return
+    emotionFeedback.recordFeedback(
+      activeMessage.state,
+      accurate ? 'accurate' : 'inaccurate',
+    )
+    setFeedbackGiven(true)
+    // 给 2 秒看反馈确认，然后消失
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+    dismissTimerRef.current = setTimeout(dismiss, 2000)
+  }, [activeMessage, feedbackGiven, dismiss])
 
   const style = activeMessage ? TYPE_STYLES[activeMessage.type] : TYPE_STYLES.encouragement
 
@@ -258,7 +296,7 @@ export const EmotionCompanion: React.FC = () => {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 10, scale: 0.95 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className="fixed bottom-14 right-6 z-[200] max-w-[340px]"
+          className="fixed bottom-14 right-6 z-[200] max-w-[360px]"
         >
           <div className={`
             bg-background-secondary/95 backdrop-blur-xl
@@ -266,7 +304,6 @@ export const EmotionCompanion: React.FC = () => {
             rounded-2xl shadow-2xl
             overflow-hidden
           `}>
-            {/* 内容 */}
             <div className="p-4">
               <div className="flex items-start gap-3">
                 {/* 图标 */}
@@ -276,9 +313,9 @@ export const EmotionCompanion: React.FC = () => {
 
                 {/* 文字内容 */}
                 <div className="flex-1 min-w-0">
-                  {/* LLM 推理（sub-text，如果有） */}
+                  {/* LLM 推理 */}
                   {activeMessage.subText && (
-                    <div className={`mb-2 px-2.5 py-2 rounded-lg ${style.bgAccent}`}>
+                    <div className={`mb-2.5 px-2.5 py-2 rounded-lg ${style.bgAccent}`}>
                       <div className="flex items-center gap-1.5 mb-1">
                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                         <span className="text-[10px] text-indigo-400 font-semibold tracking-wide uppercase">
@@ -297,7 +334,7 @@ export const EmotionCompanion: React.FC = () => {
                   </p>
                 </div>
 
-                {/* 关闭按钮 */}
+                {/* 关闭 */}
                 {activeMessage.dismissable && (
                   <button
                     onClick={dismiss}
@@ -308,7 +345,7 @@ export const EmotionCompanion: React.FC = () => {
                 )}
               </div>
 
-              {/* 操作按钮 */}
+              {/* 操作按钮行 */}
               {activeMessage.actions && activeMessage.actions.length > 0 && (
                 <div className="flex items-center gap-2 mt-3 pl-7">
                   {activeMessage.actions.map((action, i) => (
@@ -317,17 +354,51 @@ export const EmotionCompanion: React.FC = () => {
                       onClick={action.onClick}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
                         bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-primary
-                        transition-all"
+                        transition-all border border-white/5 hover:border-white/10"
                     >
+                      {action.emoji && <span>{action.emoji}</span>}
                       {action.icon}
                       {action.label}
                     </button>
                   ))}
                 </div>
               )}
+
+              {/* 反馈行 */}
+              {activeMessage.showFeedback && (
+                <div className="flex items-center gap-2 mt-3 pl-7 pt-2 border-t border-white/5">
+                  {feedbackGiven ? (
+                    <span className="text-[10px] text-text-muted">
+                      感谢反馈，会帮助我更准确 ✓
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-[10px] text-text-muted mr-1">判断准确吗？</span>
+                      <button
+                        onClick={() => handleFeedback(true)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px]
+                          bg-white/5 hover:bg-green-500/10 text-text-muted hover:text-green-400
+                          transition-all"
+                      >
+                        <ThumbsUp className="w-3 h-3" />
+                        准确
+                      </button>
+                      <button
+                        onClick={() => handleFeedback(false)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px]
+                          bg-white/5 hover:bg-red-500/10 text-text-muted hover:text-red-400
+                          transition-all"
+                      >
+                        <ThumbsDown className="w-3 h-3" />
+                        不准
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* 底部进度条（自动消失倒计时） */}
+            {/* 进度条 */}
             <motion.div
               className={`h-0.5 ${activeMessage.type === 'insight' ? 'bg-indigo-500/30' : 'bg-white/10'}`}
               initial={{ width: '100%' }}

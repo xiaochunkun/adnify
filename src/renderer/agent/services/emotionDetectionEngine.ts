@@ -13,6 +13,7 @@ import { logger } from '@utils/Logger'
 import { EventBus } from '../core/EventBus'
 import { emotionContextAnalyzer } from './emotionContextAnalyzer'
 import { emotionLLMAnalyzer } from './emotionLLMAnalyzer'
+import { emotionBaseline } from './emotionBaseline'
 import type { LLMEmotionResult, BehaviorSummary } from './emotionLLMAnalyzer'
 import type {
   EmotionState,
@@ -612,11 +613,34 @@ class EmotionDetectionEngine {
       bored: 0, stressed: 0, flow: 0, neutral: 0.25,
     }
 
-    // 1. 打字速度
-    const typingSpeedScore = this.normalizeTypingSpeed(metrics.typingSpeed)
+    // 记录基线样本（持续学习）
+    const windowMin = DETECTION_WINDOW / 1000 / 60
+    emotionBaseline.recordSample(
+      metrics.typingSpeed,
+      metrics.errorRate,
+      metrics.fileSwitches / Math.max(windowMin, 0.1),
+    )
+
+    // 获取相对于个人基线的偏差
+    const relative = emotionBaseline.getRelativeMetrics(
+      metrics.typingSpeed,
+      metrics.errorRate,
+      metrics.fileSwitches / Math.max(windowMin, 0.1),
+    )
+
+    // 1. 打字速度 — 如果有基线，用偏差；否则用绝对值
+    let typingSpeedScore: number
+    if (relative.calibrated) {
+      // 偏差越大越显著：>1σ 快=兴奋/专注, <-1σ 慢=疲劳/沮丧
+      typingSpeedScore = clampScore((relative.typingSpeedDeviation + 1) / 2) // 映射到 0-1
+    } else {
+      typingSpeedScore = this.normalizeTypingSpeed(metrics.typingSpeed)
+    }
     factors.push({
       type: 'typing_speed', weight: 0.3, value: typingSpeedScore,
-      description: `${metrics.typingSpeed.toFixed(0)} WPM`,
+      description: relative.calibrated
+        ? `${metrics.typingSpeed.toFixed(0)} WPM (${relative.typingSpeedDeviation > 0 ? '+' : ''}${relative.typingSpeedDeviation.toFixed(1)}σ)`
+        : `${metrics.typingSpeed.toFixed(0)} WPM`,
     })
     scores.focused   += typingSpeedScore * 0.7
     scores.excited   += typingSpeedScore * 0.9
@@ -624,11 +648,25 @@ class EmotionDetectionEngine {
     scores.tired     -= typingSpeedScore * 0.5
     scores.bored     -= typingSpeedScore * 0.6
 
-    // 2. 错误率（退格）
-    const errorRateScore = metrics.errorRate
+    // 个性化加成：打字速度比自己平时慢很多 → 更倾向 frustrated/tired
+    if (relative.calibrated && relative.typingSpeedDeviation < -1.5) {
+      scores.frustrated += 0.3
+      scores.tired += 0.2
+    }
+
+    // 2. 错误率（退格）— 同样用偏差
+    let errorRateScore: number
+    if (relative.calibrated && relative.backspaceRateDeviation > 0.5) {
+      // 退格率比平时高 → 更可能沮丧
+      errorRateScore = clampScore(metrics.errorRate + relative.backspaceRateDeviation * 0.15)
+    } else {
+      errorRateScore = metrics.errorRate
+    }
     factors.push({
       type: 'error_rate', weight: 0.25, value: errorRateScore,
-      description: `Backspace: ${(errorRateScore * 100).toFixed(0)}%`,
+      description: relative.calibrated
+        ? `Backspace: ${(metrics.errorRate * 100).toFixed(0)}% (${relative.backspaceRateDeviation > 0 ? '↑' : '→'})`
+        : `Backspace: ${(metrics.errorRate * 100).toFixed(0)}%`,
     })
     scores.frustrated += errorRateScore * 0.8
     scores.tired      += errorRateScore * 0.4
@@ -646,8 +684,14 @@ class EmotionDetectionEngine {
     scores.bored  += pauseScore * 0.5
     scores.flow   -= pauseScore * 0.6
 
-    // 4. 文件切换
-    const tabSwitchScore = Math.min(metrics.fileSwitches / 3, 1)
+    // 4. 文件切换 — 用偏差判断
+    let tabSwitchScore: number
+    if (relative.calibrated && relative.fileSwitchDeviation > 1) {
+      // 比平时切换文件频繁很多 → 压力
+      tabSwitchScore = clampScore(Math.min(metrics.fileSwitches / 3, 1) + relative.fileSwitchDeviation * 0.1)
+    } else {
+      tabSwitchScore = Math.min(metrics.fileSwitches / 3, 1)
+    }
     factors.push({
       type: 'tab_switching', weight: 0.15, value: tabSwitchScore,
       description: `Tab switches: ${metrics.fileSwitches}`,
@@ -666,13 +710,15 @@ class EmotionDetectionEngine {
     scores.tired += sessionScore * 0.5
     scores.flow  += sessionScore * 0.3
 
-    // 6. 时间段
+    // 6. 时间段 — 用基线的活跃时段替代硬编码
     const hour = new Date().getHours()
-    const isLate = hour < 6 || hour > 22
-    const timeScore = isLate ? 0.8 : 0.2
+    const isUnusualHour = relative.calibrated ? !relative.isActiveHour : (hour < 6 || hour > 22)
+    const timeScore = isUnusualHour ? 0.8 : 0.2
     factors.push({
       type: 'time_of_day', weight: 0.1, value: timeScore,
-      description: `${hour}:00`,
+      description: relative.calibrated
+        ? `${hour}:00 ${isUnusualHour ? '(非常用时段)' : ''}`
+        : `${hour}:00`,
     })
     scores.tired += timeScore * 0.5
 
@@ -748,6 +794,10 @@ class EmotionDetectionEngine {
     if (this.blurHandler) { window.removeEventListener('blur', this.blurHandler); this.blurHandler = null }
     if (this.focusHandler) { window.removeEventListener('focus', this.focusHandler); this.focusHandler = null }
   }
+}
+
+function clampScore(v: number): number {
+  return Math.max(0, Math.min(1, v))
 }
 
 export const emotionDetectionEngine = new EmotionDetectionEngine()

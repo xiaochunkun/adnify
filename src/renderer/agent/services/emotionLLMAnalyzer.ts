@@ -21,6 +21,8 @@ const LLM_TIMEOUT = 15_000              // 15 秒超时
 const MAX_TOKENS = 200                  // 回复最多 200 tokens，够了
 const TEMPERATURE = 0.1                 // 低随机性，稳定分类
 
+import type { EmotionActionType } from './emotionActions'
+
 // ===== LLM 返回的结构化结果 =====
 export interface LLMEmotionResult {
   /** 判断的情绪状态 */
@@ -33,6 +35,8 @@ export interface LLMEmotionResult {
   reasoning: string
   /** 给开发者的智能建议（中文，1条） */
   suggestion: string
+  /** 推荐的操作类型 */
+  action: EmotionActionType
 }
 
 // generateObject 的 JSON Schema
@@ -60,8 +64,13 @@ const EMOTION_SCHEMA = {
       type: 'string' as const,
       description: 'One actionable suggestion for the developer in Chinese, based on their current state',
     },
+    action: {
+      type: 'string' as const,
+      enum: ['ai_fix', 'ask_ai', 'take_break', 'focus_mode', 'switch_theme', 'none'],
+      description: 'Recommended action: ai_fix (fix errors via AI), ask_ai (open chat), take_break (rest), focus_mode (hide distractions), switch_theme (change theme), none (no action)',
+    },
   },
-  required: ['state', 'intensity', 'confidence', 'reasoning', 'suggestion'],
+  required: ['state', 'intensity', 'confidence', 'reasoning', 'suggestion', 'action'],
 }
 
 const SYSTEM_PROMPT = `你是一个嵌入在 AI 代码编辑器中的开发者情绪感知引擎。
@@ -82,7 +91,15 @@ const SYSTEM_PROMPT = `你是一个嵌入在 AI 代码编辑器中的开发者�
 2. 行为变化比绝对值更重要（速度突然下降 vs 一直很慢）
 3. 上下文很关键：有 LSP 错误 + 打字速度下降 = frustrated，而不是 tired
 4. 建议要具体、可操作，不要空洞的鼓励
-5. 回答简洁，reasoning 一句话，suggestion 一句话`
+5. 回答简洁，reasoning 一句话，suggestion 一句话
+
+可用操作（action 字段）：
+- ai_fix: 有代码错误时推荐，会调用 AI 帮助修复
+- ask_ai: 遇到困难时推荐，会打开 AI 对话
+- take_break: 疲劳/压力大时推荐，会提醒休息
+- focus_mode: 专注/心流时推荐，会隐藏干扰面板
+- switch_theme: 无聊/疲劳时推荐，换个环境
+- none: 不需要操作时`
 
 class EmotionLLMAnalyzer {
   private lastCallTime = 0
@@ -176,13 +193,13 @@ class EmotionLLMAnalyzer {
   ): Promise<LLMEmotionResult | null> {
     const prompt = this.buildPrompt(ruleDetection, context, summary)
 
+    // 选择轻量模型 — 情绪分类不需要顶级模型
+    const lightConfig = this.pickLightModel(llmConfig)
+
     try {
       const result = await api.llm.generateObject({
         config: {
-          provider: llmConfig.provider,
-          model: llmConfig.model,
-          apiKey: llmConfig.apiKey,
-          baseUrl: llmConfig.baseUrl,
+          ...lightConfig,
           timeout: LLM_TIMEOUT,
           maxTokens: MAX_TOKENS,
           temperature: TEMPERATURE,
@@ -207,6 +224,7 @@ class EmotionLLMAnalyzer {
         confidence: clamp(obj.confidence, 0, 1),
         reasoning: obj.reasoning || '',
         suggestion: obj.suggestion || '',
+        action: (obj.action || 'none') as LLMEmotionResult['action'],
       }
     } catch (err) {
       logger.agent.warn('[EmotionLLM] generateObject failed:', err)
@@ -268,6 +286,38 @@ class EmotionLLMAnalyzer {
     lines.push(`请综合以上信息，给出你的独立判断。你可以同意规则引擎，也可以推翻它。`)
 
     return lines.join('\n')
+  }
+
+  /**
+   * 为情绪分类任务选择轻量模型
+   *
+   * 策略：
+   *  - 如果用户用 OpenAI → 降级到 gpt-4o-mini（便宜 10 倍）
+   *  - 如果用户用 Anthropic → 降级到 claude-3-haiku
+   *  - 如果用户用 Google → 降级到 gemini-2.0-flash
+   *  - 其他 provider → 保持原模型（无法确定有什么小模型）
+   */
+  private pickLightModel(
+    config: { provider: string; model: string; apiKey: string; baseUrl?: string }
+  ): { provider: string; model: string; apiKey: string; baseUrl?: string } {
+    const provider = config.provider.toLowerCase()
+
+    const lightModels: Record<string, string> = {
+      openai: 'gpt-4o-mini',
+      anthropic: 'claude-3-haiku-20240307',
+      google: 'gemini-2.0-flash',
+      gemini: 'gemini-2.0-flash',
+      groq: 'llama-3.1-8b-instant',
+      deepseek: 'deepseek-chat',
+    }
+
+    const lightModel = lightModels[provider]
+    if (lightModel) {
+      return { ...config, model: lightModel }
+    }
+
+    // 未知 provider → 保持原模型
+    return config
   }
 }
 
