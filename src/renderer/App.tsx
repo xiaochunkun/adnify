@@ -10,6 +10,8 @@ import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { GlobalErrorHandler } from './components/common/GlobalErrorHandler'
 import { ThemeManager } from './components/editor/ThemeManager'
 import { EditorSkeleton, PanelSkeleton, ChatSkeleton, FullScreenLoading, SettingsSkeleton } from './components/ui/Loading'
+import { EmotionAmbientGlow } from './components/agent/EmotionAmbientGlow'
+import { EmotionCompanion } from './components/agent/EmotionCompanion'
 import { startupMetrics } from '@shared/utils/startupMetrics'
 
 startupMetrics.mark('app-module-loaded')
@@ -124,6 +126,9 @@ function AppContent() {
               )}
 
               <div className="flex-1 flex min-w-0 bg-background relative">
+                {/* 情绪环境光效 */}
+                <EmotionAmbientGlow />
+
                 <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
                   <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">
                     <ErrorBoundary>
@@ -212,6 +217,9 @@ function AppContent() {
         </Suspense>
       )}
       <GlobalConfirmDialog />
+
+      {/* 情绪伙伴浮窗 - 在合适时机弹出建议 */}
+      <EmotionCompanion />
     </div>
   )
 }
