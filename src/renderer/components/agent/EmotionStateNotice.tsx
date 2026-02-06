@@ -45,6 +45,7 @@ export const EmotionStateNotice: React.FC = () => {
   const prevStateRef = useRef<EmotionState>('neutral')
   const lastNoticeTimeRef = useRef(0)
   const dismissTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const fadeTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const unsubscribe = EventBus.on('emotion:changed', (event) => {
@@ -85,15 +86,17 @@ export const EmotionStateNotice: React.FC = () => {
 
       // 自动消失
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current)
       dismissTimerRef.current = setTimeout(() => {
         setIsVisible(false)
-        setTimeout(() => setNotice(null), 400)
+        fadeTimerRef.current = setTimeout(() => setNotice(null), 400)
       }, NOTICE_DURATION)
     })
 
     return () => {
       unsubscribe()
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current)
     }
   }, [])
 
@@ -159,16 +162,13 @@ export const EmotionStateNotice: React.FC = () => {
 
 /**
  * 构建状态变化原因文案
- * 优先用 LLM 推理，没有的话用上下文信号拼接
+ * 优先用上下文建议，没有的话用影响因子拼接
  */
 function buildReason(
   detection: EmotionDetection,
   _prevState: EmotionState,
   newState: EmotionState,
 ): string {
-  // 有 LLM 推理直接用
-  if (detection.llmReasoning) return detection.llmReasoning
-
   // 有上下文建议直接用
   if (detection.suggestions && detection.suggestions.length > 0) {
     return detection.suggestions[0]

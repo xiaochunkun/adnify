@@ -105,7 +105,8 @@ class EmotionFeedbackStore {
     try {
       const data = localStorage.getItem(STORAGE_KEY)
       if (data) {
-        this.records = JSON.parse(data)
+        const parsed = JSON.parse(data)
+        this.records = Array.isArray(parsed) ? parsed : []
       }
     } catch {
       this.records = []

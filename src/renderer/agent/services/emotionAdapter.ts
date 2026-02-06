@@ -294,6 +294,10 @@ class EmotionAdapter {
   private microBreakTimer: NodeJS.Timeout | null = null
   private audioContext: AudioContext | null = null
   private unsubscribeEmotionChanged: (() => void) | null = null
+  /** 跟踪所有待执行的 setTimeout，cleanup 时统一清理 */
+  private pendingTimeouts: NodeJS.Timeout[] = []
+  /** 当前正在播放的 oscillator 引用 */
+  private currentOscillator: OscillatorNode | null = null
 
   /**
    * 初始化适配器
@@ -328,6 +332,10 @@ class EmotionAdapter {
       clearInterval(this.microBreakTimer)
       this.microBreakTimer = null
     }
+
+    // 清理所有待执行的 setTimeout（消息延迟发送、音频自动停止等）
+    for (const t of this.pendingTimeouts) clearTimeout(t)
+    this.pendingTimeouts = []
 
     // 停止环境音
     this.stopAmbientSound()
@@ -420,14 +428,14 @@ class EmotionAdapter {
     // 优先使用上下文分析器产生的真实建议
     const contextSuggestions = detection.suggestions || []
     if (contextSuggestions.length > 0) {
-      // 延迟显示，避免打断工作
-      setTimeout(() => {
+      const t = setTimeout(() => {
         EventBus.emit({
           type: 'emotion:message',
           message: contextSuggestions[0],
           state,
         })
       }, 2000)
+      this.pendingTimeouts.push(t)
       return
     }
 
@@ -436,13 +444,14 @@ class EmotionAdapter {
     if (messages.length > 0) {
       const randomIndex = Math.floor(Math.random() * messages.length)
       const message = messages[randomIndex]
-      setTimeout(() => {
+      const t = setTimeout(() => {
         EventBus.emit({
           type: 'emotion:message',
           message,
           state,
         })
       }, 3000)
+      this.pendingTimeouts.push(t)
     }
   }
 
@@ -534,47 +543,56 @@ class EmotionAdapter {
       return
     }
 
-    // 简化的环境音效实现
-    // 实际项目中可以集成 Tone.js 或其他音频库
+    // 先停掉之前的，避免堆积
+    this.stopCurrentOscillator()
+
     try {
       if (!this.audioContext) {
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
       }
 
-      // 创建简单的背景音
       const oscillator = this.audioContext.createOscillator()
       const gainNode = this.audioContext.createGain()
 
-      // 根据类型设置不同频率
       const frequencies: Record<string, number> = {
-        focus: 432, // 432Hz 被认为有助于专注
-        relax: 528, // 528Hz 放松
-        energize: 639, // 639Hz 能量
+        focus: 432,
+        relax: 528,
+        energize: 639,
       }
 
       oscillator.frequency.value = frequencies[type] || 432
       oscillator.type = 'sine'
-      
-      gainNode.gain.value = volume * 0.1 // 很低的音量
+      gainNode.gain.value = volume * 0.1
 
       oscillator.connect(gainNode)
       gainNode.connect(this.audioContext.destination)
-
       oscillator.start()
 
-      // 5分钟后自动停止
-      setTimeout(() => {
-        oscillator.stop()
+      // 保存引用，以便清理
+      this.currentOscillator = oscillator
+
+      // 5 分钟后自动停止（tracked）
+      const t = setTimeout(() => {
+        this.stopCurrentOscillator()
       }, 5 * 60 * 1000)
+      this.pendingTimeouts.push(t)
 
     } catch (error) {
       logger.agent.error('[EmotionAdapter] Failed to play sound:', error)
     }
   }
 
+  private stopCurrentOscillator(): void {
+    if (this.currentOscillator) {
+      try { this.currentOscillator.stop() } catch { /* already stopped */ }
+      this.currentOscillator = null
+    }
+  }
+
   private stopAmbientSound(): void {
+    this.stopCurrentOscillator()
     if (this.audioContext) {
-      this.audioContext.close()
+      try { this.audioContext.close() } catch { /* ignore */ }
       this.audioContext = null
     }
   }

@@ -171,19 +171,6 @@ export const EmotionStatusIndicator: React.FC = () => {
                 </div>
               )}
 
-              {/* LLM 推理（如果有） */}
-              {emotion.llmReasoning && (
-                <div className="mt-2 pt-2 border-t border-white/5">
-                  <div className="flex items-center gap-1 mb-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                    <span className="text-[9px] text-indigo-400 font-medium">AI 分析</span>
-                  </div>
-                  <p className="text-[10px] text-text-secondary leading-relaxed">
-                    {emotion.llmReasoning}
-                  </p>
-                </div>
-              )}
-
               {/* 建议 */}
               {emotion.suggestions && emotion.suggestions.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-white/5">

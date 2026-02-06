@@ -1,28 +1,25 @@
 /**
- * 情绪伙伴（Companion）v3
+ * 情绪伙伴（Companion）v4
  *
  * 变化：
- *  - 直接订阅 emotion:changed，捕获 LLM 推理和上下文建议
- *  - insight 消息展示 AI 推理过程 + 建议 + 可操作按钮
+ *  - 订阅 emotion:changed，展示上下文建议 + 可操作按钮
  *  - 每条消息底部有 👍/👎 反馈按钮（存储到 emotionFeedback）
- *  - LLM 推荐的 action 直接变成可点击按钮
+ *  - 规则引擎 + 上下文分析器直接产出建议，无 LLM 依赖
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ThumbsUp, ThumbsDown, Coffee, Sparkles, AlertTriangle, Brain } from 'lucide-react'
+import { X, ThumbsUp, ThumbsDown, Coffee, Sparkles, AlertTriangle } from 'lucide-react'
 import { EventBus } from '@/renderer/agent/core/EventBus'
 import { emotionFeedback } from '@/renderer/agent/services/emotionFeedback'
-import { getRecommendedActions, getActionByType } from '@/renderer/agent/services/emotionActions'
-import { emotionLLMAnalyzer } from '@/renderer/agent/services/emotionLLMAnalyzer'
+import { getRecommendedActions } from '@/renderer/agent/services/emotionActions'
 import type { EmotionState, EmotionDetection } from '@/renderer/agent/types/emotion'
 import type { EmotionActionDef } from '@/renderer/agent/services/emotionActions'
 
 interface CompanionMessage {
   id: string
   text: string
-  subText?: string
-  type: 'encouragement' | 'suggestion' | 'warning' | 'break' | 'insight'
+  type: 'encouragement' | 'suggestion' | 'warning' | 'break'
   state: EmotionState
   priority: number
   dismissable: boolean
@@ -42,7 +39,6 @@ const COOLDOWN: Record<CompanionMessage['type'], number> = {
   suggestion: 5 * 60 * 1000,
   warning: 2 * 60 * 1000,
   break: 20 * 60 * 1000,
-  insight: 2 * 60 * 1000,
 }
 
 // 自动消失时间
@@ -51,7 +47,6 @@ const AUTO_DISMISS: Record<CompanionMessage['type'], number> = {
   suggestion: 10000,
   warning: 15000,
   break: 20000,
-  insight: 14000,
 }
 
 const TYPE_STYLES: Record<CompanionMessage['type'], {
@@ -84,12 +79,6 @@ const TYPE_STYLES: Record<CompanionMessage['type'], {
     bgAccent: 'bg-purple-500/5',
     icon: <Coffee className="w-4 h-4" />,
   },
-  insight: {
-    borderColor: 'border-indigo-500/30',
-    iconColor: 'text-indigo-400',
-    bgAccent: 'bg-indigo-500/5',
-    icon: <Brain className="w-4 h-4" />,
-  },
 }
 
 export const EmotionCompanion: React.FC = () => {
@@ -100,11 +89,13 @@ export const EmotionCompanion: React.FC = () => {
   const dismissTimerRef = useRef<NodeJS.Timeout | null>(null)
   const shownMessagesRef = useRef<Set<string>>(new Set())
   const prevEmotionStateRef = useRef<EmotionState>('neutral')
+  const activeMessageRef = useRef<CompanionMessage | null>(null)
 
   const dismiss = useCallback(() => {
     setIsVisible(false)
     setTimeout(() => {
       setActiveMessage(null)
+      activeMessageRef.current = null
       setFeedbackGiven(false)
     }, 300)
     if (dismissTimerRef.current) {
@@ -118,19 +109,15 @@ export const EmotionCompanion: React.FC = () => {
     const cooldown = COOLDOWN[msg.type]
     if (Date.now() - lastTime < cooldown) return
 
-    const msgKey = msg.type === 'insight'
-      ? `${msg.state}:insight:${msg.text.slice(0, 30)}`
-      : `${msg.state}:${msg.text}`
+    const msgKey = `${msg.state}:${msg.text}`
     if (shownMessagesRef.current.has(msgKey)) return
 
-    if (activeMessage) {
-      if (msg.type === 'insight' && activeMessage.type !== 'insight') {
-        // insight can interrupt non-insight
-      } else if (activeMessage.priority > msg.priority) {
-        return
-      }
+    const current = activeMessageRef.current
+    if (current && current.priority > msg.priority) {
+      return
     }
 
+    activeMessageRef.current = msg
     setActiveMessage(msg)
     setIsVisible(true)
     setFeedbackGiven(false)
@@ -144,7 +131,7 @@ export const EmotionCompanion: React.FC = () => {
 
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
     dismissTimerRef.current = setTimeout(dismiss, AUTO_DISMISS[msg.type])
-  }, [activeMessage, dismiss])
+  }, [dismiss])
 
   /**
    * 把 EmotionActionDef 转换成 CompanionMessage action
@@ -164,7 +151,7 @@ export const EmotionCompanion: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    // ===== 1. 订阅 emotion:changed — LLM 洞察 + 可操作建议 =====
+    // ===== 1. 订阅 emotion:changed — 上下文建议 + 可操作按钮 =====
     const unsubChanged = EventBus.on('emotion:changed', (event) => {
       const detection: EmotionDetection = event.emotion
       if (!detection || detection.state === 'flow') return
@@ -172,38 +159,10 @@ export const EmotionCompanion: React.FC = () => {
       const prevState = prevEmotionStateRef.current
       prevEmotionStateRef.current = detection.state
 
-      // 获取可操作按钮
-      let emotionActions: EmotionActionDef[] = []
+      // 获取可操作按钮（规则推荐）
+      const emotionActions = getRecommendedActions(detection)
 
-      // 优先用 LLM 推荐的 action
-      const llmResult = emotionLLMAnalyzer.getLastResult()
-      if (llmResult?.action && llmResult.action !== 'none') {
-        const llmAction = getActionByType(llmResult.action)
-        if (llmAction) emotionActions = [llmAction]
-      }
-
-      // LLM 没推荐 action → 用规则推荐
-      if (emotionActions.length === 0) {
-        emotionActions = getRecommendedActions(detection)
-      }
-
-      // 有 LLM 推理 → insight 消息
-      if (detection.llmReasoning && detection.suggestions && detection.suggestions.length > 0) {
-        showMessage({
-          id: `insight-${Date.now()}`,
-          text: detection.suggestions[0],
-          subText: detection.llmReasoning,
-          type: 'insight',
-          state: detection.state,
-          priority: 8,
-          dismissable: true,
-          showFeedback: true,
-          actions: buildActionButtons(emotionActions, dismiss),
-        })
-        return
-      }
-
-      // 有上下文建议 + 状态变化 → suggestion 消息
+      // 有上下文建议 + 状态变化 → 显示建议消息
       if (detection.suggestions && detection.suggestions.length > 0 && prevState !== detection.state) {
         showMessage({
           id: `ctx-${Date.now()}`,
@@ -281,7 +240,6 @@ export const EmotionCompanion: React.FC = () => {
       accurate ? 'accurate' : 'inaccurate',
     )
     setFeedbackGiven(true)
-    // 给 2 秒看反馈确认，然后消失
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
     dismissTimerRef.current = setTimeout(dismiss, 2000)
   }, [activeMessage, feedbackGiven, dismiss])
@@ -311,24 +269,8 @@ export const EmotionCompanion: React.FC = () => {
                   {style.icon}
                 </div>
 
-                {/* 文字内容 */}
+                {/* 主消息 */}
                 <div className="flex-1 min-w-0">
-                  {/* LLM 推理 */}
-                  {activeMessage.subText && (
-                    <div className={`mb-2.5 px-2.5 py-2 rounded-lg ${style.bgAccent}`}>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                        <span className="text-[10px] text-indigo-400 font-semibold tracking-wide uppercase">
-                          AI 分析
-                        </span>
-                      </div>
-                      <p className="text-xs text-text-secondary leading-relaxed">
-                        {activeMessage.subText}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* 主消息 */}
                   <p className="text-sm text-text-primary leading-relaxed">
                     {activeMessage.text}
                   </p>
@@ -400,7 +342,7 @@ export const EmotionCompanion: React.FC = () => {
 
             {/* 进度条 */}
             <motion.div
-              className={`h-0.5 ${activeMessage.type === 'insight' ? 'bg-indigo-500/30' : 'bg-white/10'}`}
+              className="h-0.5 bg-white/10"
               initial={{ width: '100%' }}
               animate={{ width: '0%' }}
               transition={{

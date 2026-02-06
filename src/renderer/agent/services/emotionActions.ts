@@ -22,7 +22,6 @@ export type EmotionActionType =
   | 'take_break'
   | 'focus_mode'
   | 'switch_theme'
-  | 'none'
 
 export interface EmotionActionDef {
   type: EmotionActionType
@@ -33,7 +32,7 @@ export interface EmotionActionDef {
 
 // ===== Action 执行器 =====
 
-const actions: Record<Exclude<EmotionActionType, 'none'>, () => EmotionActionDef> = {
+const actions: Record<EmotionActionType, () => EmotionActionDef> = {
 
   ai_fix: () => ({
     type: 'ai_fix',
@@ -158,10 +157,3 @@ export function getRecommendedActions(
   return result.slice(0, 2)
 }
 
-/**
- * 根据 LLM 建议的 action type 获取 action
- */
-export function getActionByType(type: EmotionActionType): EmotionActionDef | null {
-  if (type === 'none' || !actions[type]) return null
-  return actions[type]()
-}

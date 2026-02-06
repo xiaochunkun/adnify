@@ -165,13 +165,17 @@ class EmotionBaseline {
       this.data.stdTypingSpeed = 10 // 默认标准差
     }
 
-    // 平均退格率
-    const bsRates = samples.map(s => s.backspaceRate)
-    this.data.avgBackspaceRate = bsRates.reduce((a, b) => a + b, 0) / bsRates.length
+    // 平均退格率（过滤非法值）
+    const bsRates = samples.map(s => s.backspaceRate).filter(v => Number.isFinite(v))
+    this.data.avgBackspaceRate = bsRates.length > 0
+      ? bsRates.reduce((a, b) => a + b, 0) / bsRates.length
+      : 0
 
-    // 平均文件切换率
-    const fsRates = samples.map(s => s.fileSwitchesPerMin)
-    this.data.avgFileSwitchRate = fsRates.reduce((a, b) => a + b, 0) / fsRates.length
+    // 平均文件切换率（过滤非法值）
+    const fsRates = samples.map(s => s.fileSwitchesPerMin).filter(v => Number.isFinite(v))
+    this.data.avgFileSwitchRate = fsRates.length > 0
+      ? fsRates.reduce((a, b) => a + b, 0) / fsRates.length
+      : 0
 
     // 活跃时段：统计每个小时的样本数，取前 8 个
     const hourCounts = new Array(24).fill(0)
