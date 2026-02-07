@@ -111,7 +111,7 @@ function isProduction(): boolean {
       return true
     }
   }
-  
+
   // 2. Electron 主进程 - 检查是否打包后运行
   if (typeof process !== 'undefined') {
     try {
@@ -124,12 +124,12 @@ function isProduction(): boolean {
       // 不在 Electron 主进程环境中，继续其他检查
     }
   }
-  
+
   // 3. 检查 NODE_ENV（适用于所有环境）
   if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') {
     return true
   }
-  
+
   // 4. 检查是否在打包后的环境中（通过检查路径，作为后备方案）
   if (typeof process !== 'undefined' && process.execPath) {
     const execPath = process.execPath.toLowerCase()
@@ -140,10 +140,10 @@ function isProduction(): boolean {
     }
     // 检查是否不在典型的开发环境中
     const cwd = (process.cwd?.() || '').toLowerCase()
-    if (!execPath.includes('node_modules') && 
-        !execPath.includes('electron') && 
-        !cwd.includes('src') &&
-        !cwd.includes('node_modules')) {
+    if (!execPath.includes('node_modules') &&
+      !execPath.includes('electron') &&
+      !cwd.includes('src') &&
+      !cwd.includes('node_modules')) {
       // 可能是生产环境，但需要更严格的检查
       // 只有在明确不是开发环境时才返回 true
       if (!execPath.includes('dev') && !cwd.includes('dev')) {
@@ -151,7 +151,7 @@ function isProduction(): boolean {
       }
     }
   }
-  
+
   return false
 }
 
@@ -163,88 +163,136 @@ interface PerformanceTimer {
   metadata?: Record<string, unknown>
 }
 
+// ANSI 颜色代码 (更加丰富的调色盘)
+const ANSI_COLORS = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+
+  // 前景色
+  gray: '\x1b[90m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan: '\x1b[36m',
+  white: '\x1b[37m',
+
+  // 背景色 (Badge 风格)
+  bgRed: '\x1b[41m',
+  bgGreen: '\x1b[42m',
+  bgYellow: '\x1b[43m',
+  bgBlue: '\x1b[44m',
+  bgMagenta: '\x1b[45m',
+  bgCyan: '\x1b[46m',
+  bgGray: '\x1b[100m',
+
+  // 明亮背景色 (黑字)
+  bgBrightInfo: '\x1b[106m\x1b[30m',
+  bgBrightWarn: '\x1b[103m\x1b[30m',
+  bgBrightError: '\x1b[41m\x1b[97m',
+  bgBrightDebug: '\x1b[47m\x1b[30m',
+}
+
+const LEVEL_ANSI: Record<LogLevel, string> = {
+  debug: ANSI_COLORS.bgBrightDebug,
+  info: ANSI_COLORS.bgBrightInfo,
+  warn: ANSI_COLORS.bgBrightWarn,
+  error: ANSI_COLORS.bgBrightError,
+}
+
+const CATEGORY_ANSI: Record<LogCategory | string, string> = {
+  Agent: ANSI_COLORS.magenta,
+  LLM: ANSI_COLORS.blue,
+  Tool: ANSI_COLORS.green,
+  LSP: ANSI_COLORS.yellow,
+  UI: ANSI_COLORS.magenta,
+  System: ANSI_COLORS.white,
+  IPC: ANSI_COLORS.blue,
+  Index: ANSI_COLORS.cyan,
+  Terminal: ANSI_COLORS.cyan,
+  Performance: ANSI_COLORS.red,
+  Plan: ANSI_COLORS.magenta,
+  Security: ANSI_COLORS.red,
+}
+
+// 日志配置
+interface LoggerConfig {
+  // ... (previous interfaces)
+  minLevel: LogLevel
+  enabled: boolean
+  maxLogs: number
+  fileLogging: boolean
+  consoleLogging: boolean
+  logFilePath?: string
+  maxFileSize: number  // 最大文件大小（字节）
+  maxFiles: number     // 最大文件数量（轮转）
+}
+
+// ... (other internal interfaces/functions)
+
 class LoggerClass {
   private config: LoggerConfig
   private logs: LogEntry[] = []
   private timers: Map<string, PerformanceTimer> = new Map()
   private fileWriteQueue: LogEntry[] = []
   private isWriting = false
-  
+
   // 检测是否在主进程中运行
-  private isMain = typeof process !== 'undefined' && process.versions?.node && !(globalThis as Record<string, unknown>).window
-  
-  // 缓存生产环境检测结果（延迟初始化）
+  private isMain = typeof process !== 'undefined' && process.versions?.node && !(globalThis as any).window
+
+  // 缓存生产环境检测结果
   private _isProd: boolean | null = null
-  
+
   constructor() {
-    // 立即检测生产环境并初始化配置
     const isProd = isProduction()
     this._isProd = isProd
     this.config = {
-      minLevel: isProd ? 'warn' : 'info',  // 生产环境只显示警告和错误
+      minLevel: isProd ? 'warn' : 'info',
       enabled: true,
       maxLogs: 1000,
       fileLogging: false,
-      consoleLogging: !isProd,  // 生产环境默认关闭控制台日志
-      maxFileSize: 10 * 1024 * 1024, // 10MB
+      consoleLogging: !isProd,
+      maxFileSize: 10 * 1024 * 1024,
       maxFiles: 5,
     }
   }
-  
-  // 获取生产环境状态（延迟检测，确保环境变量已设置）
+
+  // 获取生产环境状态
   private get isProd(): boolean {
     if (this._isProd === null) {
       this._isProd = isProduction()
-      // 如果是生产环境，更新配置
       if (this._isProd) {
-        this.config.minLevel = 'warn'  // 生产环境只显示警告和错误
-        this.config.consoleLogging = false  // 生产环境默认关闭控制台日志
+        this.config.minLevel = 'warn'
+        this.config.consoleLogging = false
       }
     }
     return this._isProd
   }
 
-  /**
-   * 配置日志器
-   */
   configure(config: Partial<LoggerConfig>): void {
     this.config = { ...this.config, ...config }
   }
 
-  /**
-   * 设置最低日志级别
-   */
   setMinLevel(level: LogLevel): void {
     this.config.minLevel = level
   }
 
-  /**
-   * 启用/禁用日志
-   */
   setEnabled(enabled: boolean): void {
     this.config.enabled = enabled
   }
 
-  /**
-   * 启用/禁用控制台日志
-   */
   setConsoleLogging(enabled: boolean): void {
     this.config.consoleLogging = enabled
   }
 
-  /**
-   * 检查是否为生产环境
-   */
   isProductionMode(): boolean {
     return this.isProd
   }
-  
-  /**
-   * 重新检测生产环境（用于环境变量延迟设置的情况）
-   */
+
   refreshProductionMode(): void {
     this._isProd = null
-    // 触发 getter 以更新配置
     const wasProd = this.isProd
     if (wasProd) {
       this.config.minLevel = 'warn'
@@ -252,65 +300,40 @@ class LoggerClass {
     }
   }
 
-  /**
-   * 启用文件日志
-   */
   enableFileLogging(logFilePath: string): void {
     this.config.fileLogging = true
     this.config.logFilePath = logFilePath
-    // 文件日志默认只记录 warn 和 error，避免文件过大
     if (this.config.minLevel === 'debug' || this.config.minLevel === 'info') {
       this.config.minLevel = 'warn'
     }
   }
 
-  /**
-   * 获取所有日志
-   */
   getLogs(): LogEntry[] {
     return [...this.logs]
   }
 
-  /**
-   * 按分类获取日志
-   */
   getLogsByCategory(category: LogCategory): LogEntry[] {
     return this.logs.filter(log => log.category === category)
   }
 
-  /**
-   * 按级别获取日志
-   */
   getLogsByLevel(level: LogLevel): LogEntry[] {
     return this.logs.filter(log => log.level === level)
   }
 
-  /**
-   * 获取最近的错误日志
-   */
   getRecentErrors(count: number = 10): LogEntry[] {
     return this.logs
       .filter(log => log.level === 'error')
       .slice(-count)
   }
 
-  /**
-   * 清空日志
-   */
   clearLogs(): void {
     this.logs = []
   }
 
-  /**
-   * 导出日志为 JSON
-   */
   exportLogs(): string {
     return JSON.stringify(this.logs, null, 2)
   }
 
-  /**
-   * 开始性能计时
-   */
   startTimer(name: string, category: LogCategory = 'Performance', metadata?: Record<string, unknown>): void {
     this.timers.set(name, {
       name,
@@ -320,9 +343,6 @@ class LoggerClass {
     })
   }
 
-  /**
-   * 结束性能计时并记录
-   */
   endTimer(name: string, additionalData?: Record<string, unknown>): number | null {
     const timer = this.timers.get(name)
     if (!timer) {
@@ -339,9 +359,6 @@ class LoggerClass {
     return duration
   }
 
-  /**
-   * 测量异步函数执行时间
-   */
   async measure<T>(
     name: string,
     fn: () => Promise<T>,
@@ -358,9 +375,6 @@ class LoggerClass {
     }
   }
 
-  /**
-   * 测量同步函数执行时间
-   */
   measureSync<T>(
     name: string,
     fn: () => T,
@@ -377,9 +391,6 @@ class LoggerClass {
     }
   }
 
-  /**
-   * 核心日志方法
-   */
   private log(
     level: LogLevel,
     category: LogCategory,
@@ -388,10 +399,7 @@ class LoggerClass {
     duration?: number
   ): void {
     if (!this.config.enabled) return
-    
-    // 确保生产环境检测已完成（延迟初始化）
-    this.isProd // 触发 getter，确保配置已更新
-    
+    this.isProd
     if (LEVEL_PRIORITY[level] < LEVEL_PRIORITY[this.config.minLevel]) return
 
     const entry: LogEntry = {
@@ -404,36 +412,26 @@ class LoggerClass {
       source: this.isMain ? 'main' : 'renderer',
     }
 
-    // 添加到内存日志
     this.logs.push(entry)
     if (this.logs.length > this.config.maxLogs) {
       this.logs.shift()
     }
 
-    // 控制台输出
     if (this.config.consoleLogging) {
       this.printToConsole(entry)
     }
 
-    // 文件日志（仅主进程）
     if (this.config.fileLogging && this.isMain) {
       this.queueFileWrite(entry)
     }
   }
 
-  /**
-   * 队列文件写入
-   */
   private queueFileWrite(entry: LogEntry): void {
     this.fileWriteQueue.push(entry)
     this.processFileWriteQueue()
   }
 
-  /**
-   * 处理文件写入队列（仅主进程）
-   */
   private async processFileWriteQueue(): Promise<void> {
-    // 仅在主进程中执行文件写入
     if (!this.isMain) return
     if (this.isWriting || this.fileWriteQueue.length === 0) return
     if (!this.config.logFilePath) return
@@ -441,19 +439,16 @@ class LoggerClass {
     this.isWriting = true
 
     try {
-      // 动态导入 fs 和 path（仅主进程）
       const fs = await import('fs')
       const path = await import('path')
 
       const logPath = this.config.logFilePath
       const logDir = path.dirname(logPath)
 
-      // 确保目录存在
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true })
       }
 
-      // 检查文件大小，需要轮转
       if (fs.existsSync(logPath)) {
         const stats = fs.statSync(logPath)
         if (stats.size >= this.config.maxFileSize) {
@@ -461,27 +456,21 @@ class LoggerClass {
         }
       }
 
-      // 写入日志
-      const entries = this.fileWriteQueue.splice(0, 100) // 批量写入
+      const entries = this.fileWriteQueue.splice(0, 100)
       const lines = entries.map(e => this.formatLogLine(e)).join('\n') + '\n'
       fs.appendFileSync(logPath, lines, 'utf-8')
     } catch (error) {
       console.error('[Logger] Failed to write to file:', error)
     } finally {
       this.isWriting = false
-      // 如果还有待写入的日志，继续处理
       if (this.fileWriteQueue.length > 0) {
         setTimeout(() => this.processFileWriteQueue(), 100)
       }
     }
   }
 
-  /**
-   * 日志文件轮转（仅主进程）
-   */
   private async rotateLogFiles(logPath: string): Promise<void> {
     if (!this.isMain) return
-    
     const fs = await import('fs')
     const path = await import('path')
 
@@ -489,13 +478,11 @@ class LoggerClass {
     const ext = path.extname(logPath)
     const base = path.basename(logPath, ext)
 
-    // 删除最旧的文件
     const oldestPath = path.join(dir, `${base}.${this.config.maxFiles}${ext}`)
     if (fs.existsSync(oldestPath)) {
       fs.unlinkSync(oldestPath)
     }
 
-    // 重命名现有文件
     for (let i = this.config.maxFiles - 1; i >= 1; i--) {
       const oldPath = path.join(dir, `${base}.${i}${ext}`)
       const newPath = path.join(dir, `${base}.${i + 1}${ext}`)
@@ -504,14 +491,10 @@ class LoggerClass {
       }
     }
 
-    // 重命名当前文件
     const newPath = path.join(dir, `${base}.1${ext}`)
     fs.renameSync(logPath, newPath)
   }
 
-  /**
-   * 格式化日志行（用于文件）
-   */
   private formatLogLine(entry: LogEntry): string {
     const time = entry.timestamp.toISOString()
     const source = entry.source === 'main' ? 'M' : 'R'
@@ -520,9 +503,6 @@ class LoggerClass {
     return `${time} [${source}] [${entry.category}] [${entry.level.toUpperCase()}] ${entry.message}${duration}${data}`
   }
 
-  /**
-   * 格式化控制台输出
-   */
   private printToConsole(entry: LogEntry): void {
     const time = entry.timestamp.toLocaleTimeString('zh-CN', {
       hour12: false,
@@ -532,32 +512,90 @@ class LoggerClass {
       fractionalSecondDigits: 3,
     })
 
-    const levelColor = LEVEL_COLORS[entry.level]
-    const categoryColor = CATEGORY_COLORS[entry.category]
-    const sourceTag = this.isMain ? '[M]' : '[R]'
-
-    const prefix = `%c${time}%c ${sourceTag}%c [${entry.category}]%c [${entry.level.toUpperCase()}]`
-    const styles = [
-      'color: #888',
-      'color: #666',
-      `color: ${categoryColor}; font-weight: bold`,
-      `color: ${levelColor}; font-weight: bold`,
-    ]
-
-    const durationStr = entry.duration !== undefined ? ` (${entry.duration}ms)` : ''
-    const fullMessage = `${entry.message}${durationStr}`
-
     const consoleMethod =
       entry.level === 'error' ? 'error' : entry.level === 'warn' ? 'warn' : 'log'
 
-    if (entry.data !== undefined) {
-      console[consoleMethod](prefix, ...styles, fullMessage, entry.data)
+    if (this.isMain) {
+      // Node.js (Main Process) - 使用干净的 ANSI 颜色
+      const levelBadge = LEVEL_ANSI[entry.level] || ANSI_COLORS.bgBrightDebug
+      const catColor = CATEGORY_ANSI[entry.category] || ANSI_COLORS.white
+      const reset = ANSI_COLORS.reset
+      const dim = ANSI_COLORS.dim
+      const bold = ANSI_COLORS.bold
+
+      const sourceTag = `${dim}M${reset}`
+      const timeStr = `${dim}${time}${reset}`
+
+      // Level Badge: " INFO  "
+      const levelStr = `${levelBadge} ${entry.level.toUpperCase().padEnd(5)} ${reset}`
+
+      // Category: " INDEX "
+      const categoryStr = `${catColor}${bold}${entry.category.toUpperCase().padEnd(10)}${reset}`
+
+      const durationStr = entry.duration !== undefined ? ` ${ANSI_COLORS.yellow}(${entry.duration}ms)${reset}` : ''
+
+      const messageColor = entry.level === 'error' ? ANSI_COLORS.red : entry.level === 'warn' ? ANSI_COLORS.yellow : ''
+      const coloredMessage = `${messageColor}${entry.message}${reset}`
+
+      const prefix = `${timeStr} ${sourceTag} ${levelStr} ${categoryStr}`
+
+      if (entry.data !== undefined) {
+        console[consoleMethod](`${prefix} ${coloredMessage}${durationStr}`, entry.data)
+      } else {
+        console[consoleMethod](`${prefix} ${coloredMessage}${durationStr}`)
+      }
     } else {
-      console[consoleMethod](prefix, ...styles, fullMessage)
+      // Browser (Renderer Process) - 简约现代的 CSS 样式
+      const levelColor = LEVEL_COLORS[entry.level]
+      const categoryColor = CATEGORY_COLORS[entry.category]
+      const sourceTag = 'R'
+
+      // 定义样式
+      const timeStyle = 'color: #888; font-family: monospace; font-size: 10px;'
+      const sourceStyle = 'color: #aaa; font-weight: bold; font-family: monospace; font-size: 10px; margin-right: 4px;'
+      const levelStyle = `
+        background: ${levelColor}22; 
+        color: ${levelColor}; 
+        border: 1px solid ${levelColor}44; 
+        padding: 1px 6px; 
+        border-radius: 4px; 
+        font-weight: 800; 
+        font-size: 10px; 
+        text-transform: uppercase;
+        margin-right: 4px;
+      `
+      const categoryStyle = `
+        color: ${categoryColor}; 
+        font-weight: 800; 
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      `
+      const messageStyle = `
+        color: ${entry.level === 'error' ? '#ff4d4f' : entry.level === 'warn' ? '#faad14' : 'inherit'};
+        font-weight: ${entry.level === 'info' ? '400' : '500'};
+        margin-left: 8px;
+      `
+
+      const prefix = `%c${time} %c${sourceTag} %c${entry.level.toUpperCase()} %c${entry.category.toUpperCase()} %c`
+      const styles = [
+        timeStyle,
+        sourceStyle,
+        levelStyle,
+        categoryStyle,
+        messageStyle
+      ]
+
+      const durationStr = entry.duration !== undefined ? ` (${entry.duration}ms)` : ''
+      const fullMessage = `${entry.message}${durationStr}`
+
+      if (entry.data !== undefined) {
+        console[consoleMethod](prefix, ...styles, fullMessage, entry.data)
+      } else {
+        console[consoleMethod](prefix, ...styles, fullMessage)
+      }
     }
   }
-
-  // ===== 分类快捷方法 =====
 
   private createCategoryLogger(category: LogCategory) {
     return {
@@ -590,14 +628,10 @@ class LoggerClass {
   mcp = this.createCategoryLogger('MCP')
   plan = this.createCategoryLogger('Plan')
 
-  // 通用方法（用于动态分类）
   logWithCategory(level: LogLevel, category: LogCategory, message: string, data?: unknown): void {
     this.log(level, category, message, data)
   }
 }
 
-// 单例导出
 export const logger = new LoggerClass()
-
-// 默认导出
-export default logger
+export default logger;
