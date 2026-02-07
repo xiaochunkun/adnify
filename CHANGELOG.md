@@ -11,7 +11,60 @@
 <!-- ALL-CONTRIBUTORS-LIST:START -->
 <a href="https://github.com/adnaan-worker"><img src="https://github.com/adnaan-worker.png" width="50" height="50" style="border-radius:50%" alt="adnaan"/></a>
 <a href="https://github.com/kerwin2046"><img src="https://github.com/kerwin2046.png" width="50" height="50" style="border-radius:50%" alt="kerwin"/></a>
+<a href="https://github.com/cniu6"><img src="https://github.com/cniu6.png" width="50" height="50" style="border-radius:50%" alt="cniu6"/></a>
 <!-- ALL-CONTRIBUTORS-LIST:END -->
+
+---
+
+## [1.6.11] - 2026-02-07 🎭 情感计算与编排增强
+
+> "不仅能干活，还能懂你的情绪" —— Agent 智商情商双提升
+
+### ✨ 新功能
+- 🧠 **Orchestrator 编排系统** (adnaan)
+  - 增强的任务看板 UI，Markdown 需求文档渲染
+  - 交互式 `ask_user` 卡片组件重构
+  - 任务计划持久化与 EditorTabs 友好显示
+  - 多轮任务规划与并行执行支持
+- 🎭 **情感计算模块** (kerwin)
+  - 引入情感检测与适应系统
+  - 实时上下文情感分析与 LLM 集成
+  - 情感状态指示器与编辑器栏集成
+  - 情感反馈机制（含音频播放）与本地化支持
+- 🏥 **模型健康检查** (cniu6)
+  - 添加模型测试功能
+  - 获取模型列表支持
+- 🌐 **国际化** (cniu6)
+  - 检查点面板添加 i18n 支持
+- 🔒 **安全 HTML渲染** (kerwin)
+  - 新增 SafeHTML 和 SafeMarkdownHTML 组件
+- 📂 **文件操作增强** (kerwin)
+  - 支持在浏览器中打开文件功能
+
+### 🔧 技术改进 / 重构
+- 🏗️ **Agent 架构优化** (adnaan)
+  - 移除旧版 Plan 模式，为新设计铺路
+  - 简化 LLM 流式架构，修复首轮对话挂起
+  - 线程隔离与上下文警告系统
+  - 压缩预测器与 StreamingBuffer 优化
+- 📂 **文件缓存服务** (kerwin)
+  - 替换 CacheService 为 fileCacheService
+
+### 🐛 Bug 修复
+- 🔧 **Shell 执行错误处理** (adnaan)
+  - 改进 Shell 命令错误捕获
+
+---
+
+## [1.6.10] - 2026-01-30 🐛 问题修复
+
+> "小步快跑，持续迭代" —— Bug 修复
+
+### 🐛 Bug 修复
+- 🔧 **LLM 设置** (adnaan)
+  - 修复无法删除自定义模型提供商的问题
+- 🎨 **主题样式** (adnaan)
+  - 修复 Dawn 主题下的聊天消息显示样式
 
 ---
 
