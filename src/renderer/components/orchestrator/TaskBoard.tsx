@@ -63,7 +63,39 @@ const ModelSelector = memo(function ModelSelector({
     onChange: (provider: string, model: string) => void
     disabled?: boolean
 }) {
-    const providers = Object.values(BUILTIN_PROVIDERS)
+    // 从 store 获取用户配置的厂商
+    const providerConfigs = useStore((s) => s.providerConfigs)
+
+    // 合并内置厂商和用户配置的厂商
+    const allProviders = useMemo(() => {
+        const result: { id: string; displayName: string; models: string[] }[] = []
+
+        // 添加内置厂商
+        for (const [id, config] of Object.entries(BUILTIN_PROVIDERS)) {
+            const userConfig = providerConfigs[id]
+            const models = [...config.models, ...(userConfig?.customModels || [])]
+            result.push({ id, displayName: config.displayName, models })
+        }
+
+        // 添加自定义厂商
+        for (const [id, config] of Object.entries(providerConfigs)) {
+            if (id.startsWith('custom-')) {
+                result.push({
+                    id,
+                    displayName: config.displayName || id,
+                    models: config.customModels || [],
+                })
+            }
+        }
+
+        return result
+    }, [providerConfigs])
+
+    // 获取当前厂商的模型列表
+    const currentModels = useMemo(() => {
+        const providerConfig = allProviders.find(p => p.id === provider)
+        return providerConfig?.models || []
+    }, [allProviders, provider])
 
     return (
         <div className="flex gap-2">
@@ -72,12 +104,13 @@ const ModelSelector = memo(function ModelSelector({
                 value={provider}
                 onChange={(e) => {
                     const newProvider = e.target.value
-                    const defaultModel = BUILTIN_PROVIDERS[newProvider]?.defaultModel || ''
+                    const newProviderConfig = allProviders.find(p => p.id === newProvider)
+                    const defaultModel = newProviderConfig?.models[0] || ''
                     onChange(newProvider, defaultModel)
                 }}
                 disabled={disabled}
             >
-                {providers.map((p) => (
+                {allProviders.map((p) => (
                     <option key={p.id} value={p.id}>
                         {p.displayName}
                     </option>
@@ -89,7 +122,7 @@ const ModelSelector = memo(function ModelSelector({
                 onChange={(e) => onChange(provider, e.target.value)}
                 disabled={disabled}
             >
-                {BUILTIN_PROVIDERS[provider]?.models.map((m) => (
+                {currentModels.map((m) => (
                     <option key={m} value={m}>
                         {m}
                     </option>
@@ -249,8 +282,6 @@ export const TaskBoard = memo(function TaskBoard({ planId }: TaskBoardProps) {
     const plan = useAgentStore((s) => s.plans.find((p) => p.id === planId))
     const isExecuting = useAgentStore((s) => s.isExecuting)
     const updatePlan = useAgentStore((s) => s.updatePlan)
-    const startExecution = useAgentStore((s) => s.startExecution)
-    const stopExecution = useAgentStore((s) => s.stopExecution)
     const workspacePath = useStore((s) => s.workspacePath)
 
     // 加载需求文档内容
@@ -290,17 +321,22 @@ export const TaskBoard = memo(function TaskBoard({ planId }: TaskBoardProps) {
         [plan, updatePlan]
     )
 
-    const handleStart = useCallback(() => {
+    const handleStart = useCallback(async () => {
         if (plan) {
-            startExecution(plan.id)
-            // TODO: 触发 Agent 执行循环
+            // 使用 orchestratorExecutor 启动执行
+            const { startPlanExecution } = await import('@/renderer/agent/services/orchestratorExecutor')
+            const result = startPlanExecution(plan.id)
+            if (!result.success) {
+                console.error('Failed to start execution:', result.message)
+            }
         }
-    }, [plan, startExecution])
+    }, [plan])
 
-    const handleStop = useCallback(() => {
-        stopExecution()
-        // TODO: 中断执行
-    }, [stopExecution])
+    const handleStop = useCallback(async () => {
+        // 使用 orchestratorExecutor 停止执行
+        const { stopPlanExecution } = await import('@/renderer/agent/services/orchestratorExecutor')
+        stopPlanExecution()
+    }, [])
 
     if (!plan) {
         return (

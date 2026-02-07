@@ -861,6 +861,95 @@ TIPS:
         },
     },
 
+    update_task_plan: {
+        name: 'update_task_plan',
+        displayName: 'Update Task Plan',
+        description: 'Update an existing task plan based on user feedback. Can modify requirements, add/remove/update tasks.',
+        detailedDescription: `Use this tool to modify an existing task plan when user requests changes.
+You can:
+- Update the requirements document
+- Add new tasks
+- Remove existing tasks
+- Modify task details (title, description, model, role)
+- Change execution mode`,
+        examples: [
+            'update_task_plan planId="login-1234" updateRequirements="增加密码强度验证" addTasks=[{title: "密码验证", ...}]',
+            'update_task_plan planId="login-1234" removeTasks=["task-001"]',
+        ],
+        category: 'orchestrator',
+        approvalType: 'none',
+        parallel: false,
+        requiresWorkspace: true,
+        enabled: true,
+        parameters: {
+            planId: { type: 'string', description: 'Plan ID to update', required: true },
+            updateRequirements: { type: 'string', description: 'Additional requirements to append (markdown)' },
+            addTasks: {
+                type: 'array',
+                description: 'New tasks to add',
+                items: {
+                    type: 'object',
+                    description: 'Task definition',
+                    properties: {
+                        title: { type: 'string', description: 'Task title', required: true },
+                        description: { type: 'string', description: 'Task description', required: true },
+                        suggestedProvider: { type: 'string', description: 'Provider' },
+                        suggestedModel: { type: 'string', description: 'Model' },
+                        suggestedRole: { type: 'string', description: 'Role' },
+                        insertAfter: { type: 'string', description: 'Insert after this task ID' },
+                    },
+                },
+            },
+            removeTasks: {
+                type: 'array',
+                description: 'Task IDs to remove',
+                items: { type: 'string', description: 'Task ID to remove' },
+            },
+            updateTasks: {
+                type: 'array',
+                description: 'Tasks to update',
+                items: {
+                    type: 'object',
+                    description: 'Task update',
+                    properties: {
+                        taskId: { type: 'string', description: 'Task ID', required: true },
+                        title: { type: 'string', description: 'New title' },
+                        description: { type: 'string', description: 'New description' },
+                        provider: { type: 'string', description: 'New provider' },
+                        model: { type: 'string', description: 'New model' },
+                        role: { type: 'string', description: 'New role' },
+                    },
+                },
+            },
+            executionMode: { type: 'string', description: 'New execution mode', enum: ['sequential', 'parallel'] },
+        },
+    },
+
+    start_task_execution: {
+        name: 'start_task_execution',
+        displayName: 'Start Task Execution',
+        description: 'Start executing tasks in the active plan. Call this when user confirms they want to proceed.',
+        detailedDescription: `Use this tool when user says things like:
+- "开始执行"
+- "执行" / "run"
+- "开始" / "start"
+- "Go ahead" / "Proceed"
+
+This will trigger the task executor to run through the plan.`,
+        examples: [
+            'start_task_execution',
+            'start_task_execution planId="login-1234"',
+        ],
+        category: 'orchestrator',
+        approvalType: 'none',
+        parallel: false,
+        requiresWorkspace: true,
+        enabled: true,
+        parameters: {
+            planId: { type: 'string', description: 'Plan ID (optional, uses active plan if not specified)' },
+        },
+    },
+
     // ===== UI/UX 设计工具 =====
     uiux_search: {
         name: 'uiux_search',

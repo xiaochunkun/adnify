@@ -590,9 +590,9 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
                 id: `task-${idx + 1}`,
                 title: t.title,
                 description: t.description,
-                provider: t.suggestedProvider,
-                model: t.suggestedModel,
-                role: t.suggestedRole,
+                provider: t.suggestedProvider || 'anthropic',
+                model: t.suggestedModel || 'claude-3-5-sonnet-20240620',
+                role: t.suggestedRole || 'coder',
                 dependencies: t.dependencies || [],
                 status: 'pending' as const,
             }))
@@ -624,6 +624,138 @@ export const toolExecutors: Record<string, (args: Record<string, unknown>, ctx: 
                 success: true,
                 result: `Created task plan "${name}" with ${tasks.length} tasks.\nPlan file: ${jsonPath}\nRequirements: ${mdPath}\n\nThe TaskBoard has been opened for user review. Please review the plan and click "开始执行" to proceed.`,
                 meta: { planId, planPath: jsonPath, stopLoop: true },
+            }
+        } catch (err) {
+            const error = toAppError(err)
+            return { success: false, result: error.message }
+        }
+    },
+
+    async update_task_plan(args, ctx) {
+        try {
+            const planId = args.planId as string
+            const updateRequirements = args.updateRequirements as string | undefined
+            const addTasks = args.addTasks as Array<{
+                title: string
+                description: string
+                suggestedProvider?: string
+                suggestedModel?: string
+                suggestedRole?: string
+                insertAfter?: string
+            }> | undefined
+            const removeTasks = args.removeTasks as string[] | undefined
+            const updateTasks = args.updateTasks as Array<{
+                taskId: string
+                title?: string
+                description?: string
+                provider?: string
+                model?: string
+                role?: string
+            }> | undefined
+            const executionMode = args.executionMode as 'sequential' | 'parallel' | undefined
+
+            const { useAgentStore } = await import('../store/AgentStore')
+            const store = useAgentStore.getState()
+            const plan = store.plans.find(p => p.id === planId)
+
+            if (!plan) {
+                return { success: false, result: `Plan not found: ${planId}` }
+            }
+
+            const changes: string[] = []
+
+            // 更新需求文档
+            if (updateRequirements) {
+                const mdPath = `${ctx.workspacePath}/.adnify/plan/${plan.requirementsDoc}`
+                const existingContent = await api.file.read(mdPath)
+                const newContent = `${existingContent}\n\n---\n## Updates\n${updateRequirements}`
+                await api.file.write(mdPath, newContent)
+                changes.push('Updated requirements document')
+            }
+
+            // 删除任务
+            if (removeTasks?.length) {
+                const newTasks = plan.tasks.filter(t => !removeTasks.includes(t.id))
+                store.updatePlan(planId, { tasks: newTasks })
+                changes.push(`Removed ${removeTasks.length} tasks`)
+            }
+
+            // 添加任务
+            if (addTasks?.length) {
+                const timestamp = Date.now()
+                const newTasks = addTasks.map((t, i) => ({
+                    id: `task-${timestamp}-${i}`,
+                    title: t.title,
+                    description: t.description,
+                    provider: t.suggestedProvider || 'anthropic',
+                    model: t.suggestedModel || 'claude-sonnet-4-20250514',
+                    role: t.suggestedRole || 'coder',
+                    status: 'pending' as const,
+                    dependencies: [],
+                }))
+
+                const currentPlan = store.plans.find(p => p.id === planId)
+                if (currentPlan) {
+                    store.updatePlan(planId, { tasks: [...currentPlan.tasks, ...newTasks] })
+                }
+                changes.push(`Added ${addTasks.length} tasks`)
+            }
+
+            // 更新任务
+            if (updateTasks?.length) {
+                for (const update of updateTasks) {
+                    store.updateTask(planId, update.taskId, {
+                        title: update.title,
+                        description: update.description,
+                        provider: update.provider,
+                        model: update.model,
+                        role: update.role,
+                    })
+                }
+                changes.push(`Updated ${updateTasks.length} tasks`)
+            }
+
+            // 更新执行模式
+            if (executionMode) {
+                store.updatePlan(planId, { executionMode })
+                changes.push(`Changed execution mode to ${executionMode}`)
+            }
+
+            // 更新 JSON 文件
+            const updatedPlan = store.plans.find(p => p.id === planId)
+            if (updatedPlan) {
+                const jsonPath = `${ctx.workspacePath}/.adnify/plan/${planId}.json`
+                await api.file.write(jsonPath, JSON.stringify(updatedPlan, null, 2))
+            }
+
+            return {
+                success: true,
+                result: `Plan updated:\n${changes.map(c => `- ${c}`).join('\n')}\n\nPlease review the changes in the TaskBoard.`,
+                meta: { stopLoop: true },
+            }
+        } catch (err) {
+            const error = toAppError(err)
+            return { success: false, result: error.message }
+        }
+    },
+
+    async start_task_execution(args) {
+        try {
+            const planId = args.planId as string | undefined
+
+            const { startPlanExecution } = await import('../services/orchestratorExecutor')
+
+            // 异步启动执行（不等待完成）
+            const result = await startPlanExecution(planId)
+
+            if (!result.success) {
+                return { success: false, result: result.message }
+            }
+
+            return {
+                success: true,
+                result: `Started executing plan. Progress will be shown in the TaskBoard.\n\n${result.message}`,
+                meta: { stopLoop: true },
             }
         } catch (err) {
             const error = toAppError(err)

@@ -16,6 +16,9 @@ export type OrchestratorTaskStatus = 'pending' | 'running' | 'completed' | 'fail
 /** 执行模式 */
 export type ExecutionMode = 'sequential' | 'parallel'
 
+/** Orchestrator 阶段 */
+export type OrchestratorPhase = 'planning' | 'executing'
+
 /** 规划状态 */
 export type PlanStatus = 'draft' | 'approved' | 'executing' | 'completed' | 'failed'
 
@@ -70,6 +73,8 @@ export interface OrchestratorState {
     plans: TaskPlan[]
     /** 当前活跃的规划 ID */
     activePlanId: string | null
+    /** 当前阶段：planning = 规划/收集需求, executing = 执行任务 */
+    phase: OrchestratorPhase
     /** 是否正在执行 */
     isExecuting: boolean
     /** 当前执行的任务 ID */
@@ -82,6 +87,8 @@ export interface OrchestratorActions {
     addPlan: (plan: TaskPlan) => void
     /** 设置活跃规划 */
     setActivePlan: (planId: string | null) => void
+    /** 设置阶段 */
+    setPhase: (phase: OrchestratorPhase) => void
     /** 更新规划 */
     updatePlan: (planId: string, updates: Partial<TaskPlan>) => void
     /** 删除规划 */
@@ -115,6 +122,7 @@ export const createOrchestratorSlice: StateCreator<
     // ===== 初始状态 =====
     plans: [],
     activePlanId: null,
+    phase: 'planning' as OrchestratorPhase,
     isExecuting: false,
     currentTaskId: null,
 
@@ -128,6 +136,10 @@ export const createOrchestratorSlice: StateCreator<
 
     setActivePlan: (planId) => {
         set({ activePlanId: planId })
+    },
+
+    setPhase: (phase) => {
+        set({ phase })
     },
 
     updatePlan: (planId, updates) => {
@@ -163,6 +175,7 @@ export const createOrchestratorSlice: StateCreator<
     startExecution: (planId) => {
         set((state) => ({
             isExecuting: true,
+            phase: 'executing' as OrchestratorPhase,
             plans: state.plans.map((p) =>
                 p.id === planId ? { ...p, status: 'executing' as PlanStatus } : p
             ),
@@ -170,7 +183,7 @@ export const createOrchestratorSlice: StateCreator<
     },
 
     stopExecution: () => {
-        set({ isExecuting: false, currentTaskId: null })
+        set({ isExecuting: false, currentTaskId: null, phase: 'planning' as OrchestratorPhase })
     },
 
     setCurrentTask: (taskId) => {
